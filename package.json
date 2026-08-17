@@ -1,0 +1,25 @@
+{
+  "name": "bukioo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm install && npm --prefix frontend install && npm --prefix backend install",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:ps": "docker compose ps",
+    "dev": "npm run docker:up && concurrently -n BACKEND,FRONTEND,BROWSER \"npm --prefix backend run start:dev\" \"npm --prefix frontend run dev\" \"node scripts/open-dev.mjs\"",
+    "compile": "npm run compile:backend && npm run compile:frontend",
+    "compile:backend": "npm --prefix backend run build",
+    "compile:frontend": "npm --prefix frontend run build",
+    "check": "npm run check:backend && npm run check:frontend && npm run compile",
+    "check:backend": "npm --prefix backend run lint:check && npm --prefix backend run test -- --runInBand",
+    "check:frontend": "npm --prefix frontend run lint",
+    "docs:update": "node scripts/update-readmes.mjs",
+    "commit": "node scripts/commit.mjs",
+    "stop": "npm run docker:down"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

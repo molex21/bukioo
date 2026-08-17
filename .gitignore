@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Builds
+dist/
+frontend/dist/
+backend/dist/
+
+# Testing
+coverage/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+
+.idea/
+
+# Temporary
+tmp/
+temp/

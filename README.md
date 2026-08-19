@@ -14,16 +14,30 @@ Actualmente, el backend no incluye una integración con PostgreSQL en su módulo
 
 ## Estructura
 
-- `frontend/`: aplicación web React con Vite y TypeScript.
-- `backend/`: API REST NestJS con TypeScript.
-- `scripts/`: automatizaciones para desarrollo, documentación y commits.
-- `docker-compose.yml`: servicio PostgreSQL para desarrollo.
-- `.env.example`: ejemplo de configuración para Docker Compose.
+* `frontend/`: aplicación web React con Vite y TypeScript.
+* `backend/`: API REST NestJS con TypeScript.
+* `backend/db/migrations/`: migraciones SQL de PostgreSQL gestionadas con dbmate.
+* `scripts/`: automatizaciones para desarrollo, documentación y commits.
+* `docker-compose.yml`: servicio PostgreSQL para desarrollo.
+* `.env.example`: ejemplo de configuración para Docker Compose.
 
 ## Requisitos
 
-- Node.js LTS y npm
-- Docker Desktop con Docker Compose
+* Node.js LTS y npm.
+* Docker Desktop con Docker Compose.
+* Docker Desktop iniciado y con Docker Engine en ejecución antes de levantar el proyecto.
+
+En Linux, en lugar de Docker Desktop, asegúrate de que el daemon de Docker esté iniciado:
+
+```bash
+sudo systemctl start docker
+```
+
+Puedes comprobar que Docker está funcionando con:
+
+```bash
+docker info
+```
 
 ## Instalación
 
@@ -47,15 +61,195 @@ Copy-Item .env.example .env
 
 No subas el archivo `.env` al repositorio.
 
+## Base de datos
+
+PostgreSQL se ejecuta mediante Docker Compose.
+
+Antes de trabajar con la base de datos, asegúrate de que Docker Desktop esté iniciado.
+
+Desde la raíz del proyecto:
+
+```bash
+npm run docker:up
+```
+
+Comprueba el estado del contenedor:
+
+```bash
+npm run docker:ps
+```
+
+El contenedor debería aparecer como iniciado y, tras unos segundos, saludable.
+
+Para consultar sus logs:
+
+```bash
+npm run docker:logs
+```
+
+## Migraciones de base de datos
+
+BUKIOO utiliza `dbmate` para gestionar la evolución del esquema de PostgreSQL mediante migraciones escritas directamente en SQL.
+
+Las migraciones se almacenan en:
+
+```text
+backend/db/migrations/
+```
+
+### Crear una migración
+
+Antes de crear o ejecutar migraciones, PostgreSQL debe estar iniciado:
+
+```bash
+npm run docker:up
+```
+
+Después entra en el backend:
+
+```bash
+cd backend
+```
+
+Crea una migración con:
+
+```bash
+npx dbmate new nombre_migracion
+```
+
+Por ejemplo, para crear el esquema inicial:
+
+```bash
+npx dbmate new init_schema
+```
+
+Dbmate generará un archivo similar a:
+
+```text
+backend/db/migrations/20260819090000_init_schema.sql
+```
+
+Dentro del archivo se escribirá directamente el SQL.
+
+Ejemplo:
+
+```sql
+-- migrate:up
+
+CREATE TABLE ejemplo (
+    id UUID PRIMARY KEY
+);
+
+-- migrate:down
+
+DROP TABLE ejemplo;
+```
+
+La sección `migrate:up` contiene los cambios que deben aplicarse.
+
+La sección `migrate:down` contiene los cambios necesarios para revertir la migración.
+
+### Aplicar migraciones
+
+Desde:
+
+```text
+backend/
+```
+
+ejecuta:
+
+```bash
+npx dbmate up
+```
+
+Dbmate comprobará qué migraciones todavía no se han ejecutado y las aplicará en orden.
+
+### Consultar el estado
+
+```bash
+npx dbmate status
+```
+
+Esto permite comprobar qué migraciones están aplicadas y cuáles siguen pendientes.
+
+### Revertir la última migración
+
+```bash
+npx dbmate rollback
+```
+
+Esto ejecutará la sección `migrate:down` de la última migración aplicada.
+
+### Crear cambios posteriores
+
+Una migración que ya haya sido aplicada no debe modificarse.
+
+Si posteriormente hay que añadir una tabla o modificar el esquema, se crea una migración nueva.
+
+Ejemplo:
+
+```bash
+npx dbmate new add_loyalty_levels
+```
+
+La estructura podría quedar:
+
+```text
+backend/
+└── db/
+    └── migrations/
+        ├── 20260819090000_init_schema.sql
+        ├── 20260820100000_add_loyalty_levels.sql
+        └── 20260821120000_add_notifications.sql
+```
+
+Después se aplican los cambios:
+
+```bash
+npx dbmate up
+```
+
 ## Desarrollo
 
-El siguiente comando inicia PostgreSQL, el backend en modo observación y el frontend de Vite. Cuando ambos servicios responden, abre `http://localhost:5173` y `http://localhost:3000` en el navegador.
+Antes de iniciar BUKIOO en local, abre **Docker Desktop** y espera a que Docker Engine esté completamente iniciado.
+
+Puedes comprobarlo con:
+
+```bash
+docker info
+```
+
+Si Docker no está funcionando, el proyecto no podrá iniciar PostgreSQL.
+
+En Linux:
+
+```bash
+sudo systemctl start docker
+```
+
+Una vez Docker esté funcionando, inicia el proyecto desde la raíz:
 
 ```bash
 npm run dev
 ```
 
-También puedes controlar únicamente el servicio Docker:
+El comando inicia:
+
+```text
+PostgreSQL mediante Docker
+        +
+Backend NestJS en modo desarrollo
+        +
+Frontend Vite en modo desarrollo
+```
+
+Cuando los servicios estén disponibles:
+
+* Frontend: `http://localhost:5173`
+* API: `http://localhost:3000`
+
+También puedes controlar únicamente PostgreSQL mediante los scripts Docker:
 
 ```bash
 npm run docker:up
@@ -64,7 +258,88 @@ npm run docker:logs
 npm run docker:down
 ```
 
-`npm run stop` es un alias de `npm run docker:down`.
+`npm run stop` es un alias de:
+
+```bash
+npm run docker:down
+```
+
+## Flujo recomendado para iniciar el proyecto
+
+Cada vez que quieras trabajar en BUKIOO en local:
+
+### 1. Iniciar Docker Desktop
+
+Abre Docker Desktop y espera hasta que Docker Engine esté funcionando.
+
+Comprueba:
+
+```bash
+docker info
+```
+
+### 2. Abrir el proyecto
+
+Abre la carpeta de BUKIOO en VS Code.
+
+### 3. Comprobar variables de entorno
+
+Verifica que exista:
+
+```text
+.env
+```
+
+en la raíz del proyecto.
+
+Si no existe:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+En Linux/macOS:
+
+```bash
+cp .env.example .env
+```
+
+### 4. Iniciar BUKIOO
+
+Desde la raíz:
+
+```bash
+npm run dev
+```
+
+### 5. Aplicar migraciones si existen cambios pendientes
+
+En otra terminal:
+
+```bash
+cd backend
+npx dbmate status
+```
+
+Si existen migraciones pendientes:
+
+```bash
+npx dbmate up
+```
+
+### 6. Abrir la aplicación
+
+Frontend:
+
+```text
+http://localhost:5173
+```
+
+Backend:
+
+```text
+http://localhost:3000
+```
 
 ## Compilación y comprobaciones
 
@@ -75,22 +350,121 @@ npm run compile:frontend
 npm run check:frontend
 ```
 
-El script `npm run check` está definido para ejecutar las comprobaciones y la compilación, pero actualmente no es operativo: `check:backend` llama a `npm run lint:check` dentro de `backend`, y ese script no existe en `backend/package.json`. Consulta el README del backend para ejecutar sus comprobaciones disponibles por separado.
+El script:
+
+```bash
+npm run check
+```
+
+está definido para ejecutar las comprobaciones y la compilación, pero actualmente no es operativo.
+
+`check:backend` llama a:
+
+```bash
+npm run lint:check
+```
+
+dentro de `backend`, pero ese script no existe actualmente en `backend/package.json`.
+
+Consulta el README del backend para ejecutar sus comprobaciones disponibles por separado.
 
 ## Docker y variables de entorno
 
-`docker-compose.yml` crea un contenedor `bukioo-postgres` con la imagen `postgres:17`, un volumen persistente llamado `bukioo_postgres_data` y un healthcheck con `pg_isready`.
+`docker-compose.yml` crea un contenedor:
 
-Las variables que utiliza el servicio son:
+```text
+bukioo-postgres
+```
 
-| Variable | Uso | Valor de ejemplo |
-| --- | --- | --- |
-| `POSTGRES_DB` | Nombre de la base de datos | `bukioo` |
-| `POSTGRES_USER` | Usuario de PostgreSQL | `bukioo` |
-| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL | `change_me` |
-| `POSTGRES_PORT` | Puerto publicado en el host | `5432` |
+utilizando:
 
-Si `POSTGRES_PORT` no está definido, Docker Compose publica el puerto `5432`.
+```text
+postgres:17
+```
+
+También crea:
+
+* un volumen persistente `bukioo_postgres_data`;
+* un healthcheck mediante `pg_isready`.
+
+Las variables utilizadas por PostgreSQL son:
+
+| Variable            | Uso                         | Valor de ejemplo |
+| ------------------- | --------------------------- | ---------------- |
+| `POSTGRES_DB`       | Nombre de la base de datos  | `bukioo`         |
+| `POSTGRES_USER`     | Usuario de PostgreSQL       | `bukioo`         |
+| `POSTGRES_PASSWORD` | Contraseña de PostgreSQL    | `change_me`      |
+| `POSTGRES_PORT`     | Puerto publicado en el host | `5432`           |
+
+Si `POSTGRES_PORT` no está definido, Docker Compose publica el puerto:
+
+```text
+5432
+```
+
+## Acceso manual a PostgreSQL
+
+Si necesitas entrar directamente en PostgreSQL para comprobar tablas o ejecutar consultas:
+
+```bash
+docker exec -it bukioo-postgres psql -U bukioo -d bukioo
+```
+
+Una vez dentro de `psql`, puedes listar las tablas con:
+
+```sql
+\dt
+```
+
+Consultar información de una tabla:
+
+```sql
+\d nombre_tabla
+```
+
+Salir de PostgreSQL:
+
+```sql
+\q
+```
+
+## Comandos habituales
+
+### Proyecto completo
+
+```bash
+npm run setup
+npm run dev
+npm run stop
+```
+
+### Docker
+
+```bash
+npm run docker:up
+npm run docker:ps
+npm run docker:logs
+npm run docker:down
+```
+
+### Migraciones
+
+Desde `backend/`:
+
+```bash
+npx dbmate new nombre_migracion
+npx dbmate up
+npx dbmate status
+npx dbmate rollback
+```
+
+### Compilación
+
+```bash
+npm run compile
+npm run compile:backend
+npm run compile:frontend
+```
 
 ## Scripts de mantenimiento
 
@@ -99,7 +473,31 @@ npm run docs:update
 npm run commit
 ```
 
-`docs:update` ejecuta una revisión de los README mediante Codex. `commit` ejecuta la automatización de commits del proyecto.
+`docs:update` ejecuta una revisión de los README mediante Codex.
+
+`commit` ejecuta la automatización de commits del proyecto.
+
+## Seguridad
+
+No subir al repositorio:
+
+* `.env`
+* contraseñas
+* tokens
+* credenciales
+* secretos de API
+
+El archivo:
+
+```text
+.env.example
+```
+
+debe contener únicamente valores de ejemplo.
+
+PostgreSQL se expone actualmente en desarrollo mediante el puerto configurado por `POSTGRES_PORT`.
+
+En producción, PostgreSQL no deberá exponerse directamente a Internet.
 
 ## License
 

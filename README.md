@@ -100,3 +100,13 @@ npm run commit
 ```
 
 `docs:update` ejecuta una revisión de los README mediante Codex. `commit` ejecuta la automatización de commits del proyecto.
+
+## License
+
+Copyright © 2026 Alejandro Hernandez. All Rights Reserved.
+
+BUKIOO is proprietary software. The source code is publicly available
+for portfolio and demonstration purposes only.
+
+No permission is granted to copy, modify, distribute or use the
+software without prior written authorization.

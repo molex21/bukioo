@@ -1,12 +1,13 @@
-import { Module } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { DatabaseModule } from './database/database.module';
-import { ConfigModule } from '@nestjs/config';
-import { HealthModule } from './health/health.module';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import Joi from 'joi';
+import { Module } from "@nestjs/common";
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
+import { DatabaseModule } from "./database/database.module";
+import { ConfigModule } from "@nestjs/config";
+import { HealthModule } from "./health/health.module";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { AuthModule } from "./auth/auth.module";
+import Joi from "joi";
 
 @Module({
   imports: [
@@ -14,8 +15,8 @@ import Joi from 'joi';
       isGlobal: true,
       validationSchema: Joi.object({
         NODE_ENV: Joi.string()
-          .valid('development', 'production', 'test')
-          .default('development'),
+          .valid("development", "production", "test")
+          .default("development"),
 
         PORT: Joi.number().port().default(3000),
 
@@ -40,6 +41,7 @@ import Joi from 'joi';
         return `Demasiadas peticiones. Inténtalo de nuevo en ${seconds} segundos.`;
       },
     }),
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [

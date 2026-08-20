@@ -1,17 +1,17 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Pool, QueryResult, QueryResultRow } from "pg";
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly pool: Pool;
 
   constructor(private readonly configService: ConfigService) {
-    const connectionString = this.configService.get<string>('DATABASE_URL');
+    const connectionString = this.configService.get<string>("DATABASE_URL");
 
     if (!connectionString) {
       throw new Error(
-        'DATABASE_URL no está definida en las variables de entorno',
+        "DATABASE_URL no está definida en las variables de entorno",
       );
     }
 
@@ -21,8 +21,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.pool.query('SELECT 1');
-    console.log('PostgreSQL conectado correctamente');
+    await this.pool.query("SELECT 1");
+    console.log("PostgreSQL conectado correctamente");
   }
 
   async query<T extends QueryResultRow>(

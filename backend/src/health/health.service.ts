@@ -1,5 +1,5 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { DatabaseService } from '../database/databse.service';
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { DatabaseService } from "../database/database.service";
 
 @Injectable()
 export class HealthService {
@@ -7,16 +7,16 @@ export class HealthService {
 
   async check() {
     try {
-      await this.databaseService.query('SELECT 1');
+      await this.databaseService.query("SELECT 1");
 
       return {
-        status: 'healthy',
-        database: 'connected',
+        status: "healthy",
+        database: "connected",
       };
     } catch {
       throw new ServiceUnavailableException({
-        status: 'error',
-        database: 'disconnected',
+        status: "error",
+        database: "disconnected",
       });
     }
   }

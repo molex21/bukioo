@@ -33,6 +33,7 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 * PostgreSQL
 * `pg` como cliente PostgreSQL
 * `dbmate` para migraciones SQL
+* `@nestjs/jwt` para access tokens JWT de corta duracion
 * Supertest para pruebas de API
 * ESLint
 * TypeScript ESLint
@@ -480,6 +481,26 @@ La mayor parte de las entidades de negocio estarán asociadas a:
 ```text
 organization_id
 ```
+
+## JWT
+
+La infraestructura de JWT usa `@nestjs/jwt` y firma los access tokens con
+`JWT_ACCESS_SECRET` y `JWT_REFRESH_SECRET`. Define valores aleatorios,
+distintos y de al menos 32 caracteres en `backend/.env` para cada entorno.
+Estas variables se validan al arrancar y nunca deben subirse al repositorio.
+
+Los access tokens tienen una duracion de 15 minutos. El endpoint
+`POST /api/v1/auth/login` valida las credenciales y responde con un access
+token Bearer.
+
+`POST /api/v1/auth/onboard` crea en una transaccion un usuario, una empresa,
+sus settings iniciales, el locale `es` y una membresia `OWNER`.
+
+Al iniciar sesion, BUKIOO guarda el hash del refresh token en `user_sessions`
+y envia el token raw en una cookie HttpOnly. `POST /api/v1/auth/refresh`
+verifica y rota el token, actualiza su hash y devuelve un access token nuevo.
+`POST /api/v1/auth/logout` revoca la sesion del refresh token y elimina la
+cookie HttpOnly.
 
 Esto permitirá mantener aislados los datos de cada negocio.
 

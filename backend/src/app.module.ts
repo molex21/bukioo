@@ -23,6 +23,10 @@ import Joi from "joi";
         DATABASE_URL: Joi.string().uri().required(),
 
         FRONTEND_URL: Joi.string().uri().required(),
+
+        JWT_ACCESS_SECRET: Joi.string().min(32).required(),
+
+        JWT_REFRESH_SECRET: Joi.string().min(32).required(),
       }),
     }),
     DatabaseModule,

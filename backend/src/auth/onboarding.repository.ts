@@ -23,6 +23,13 @@ export interface OnboardingRecord {
     timezone: string;
     created_at: Date;
   };
+  business: {
+    id: string;
+    name: string;
+    slug: string;
+    timezone: string;
+    created_at: Date;
+  };
 }
 
 @Injectable()
@@ -32,8 +39,8 @@ export class OnboardingRepository {
   async create(input: CreateOnboardingInput): Promise<OnboardingRecord> {
     return this.databaseService.transaction(async (client) => {
       const userResult = await client.query<OnboardingRecord["user"]>(
-        `INSERT INTO users (email, password_hash)
-        VALUES ($1, $2)
+        `INSERT INTO users (email, password_hash, password_change_required)
+        VALUES ($1, $2, TRUE)
         RETURNING id, email, email_verified_at, created_at`,
         [input.email, input.passwordHash],
       );
@@ -54,6 +61,20 @@ export class OnboardingRepository {
       );
       const organization = organizationResult.rows[0];
 
+      const businessResult = await client.query<OnboardingRecord["business"]>(
+        `INSERT INTO businesses (organization_id, name, slug, email, timezone)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, name, slug, timezone, created_at`,
+        [
+          organization.id,
+          organization.name,
+          organization.slug,
+          input.email,
+          organization.timezone,
+        ],
+      );
+      const business = businessResult.rows[0];
+
       await client.query(
         "INSERT INTO organization_settings (organization_id) VALUES ($1)",
         [organization.id],
@@ -66,8 +87,12 @@ export class OnboardingRepository {
         "INSERT INTO organization_memberships (organization_id, user_id, role) VALUES ($1, $2, 'OWNER')",
         [organization.id, user.id],
       );
+      await client.query(
+        "INSERT INTO business_memberships (business_id, user_id, organization_id) VALUES ($1, $2, $3)",
+        [business.id, user.id, organization.id],
+      );
 
-      return { user, organization };
+      return { user, organization, business };
     });
   }
 }

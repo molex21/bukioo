@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
+import { JwtService } from "@nestjs/jwt";
 import type { Response } from "express";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
@@ -13,10 +14,19 @@ describe("AuthController", () => {
     login: jest.fn(),
     refresh: jest.fn(),
     logout: jest.fn(),
+    me: jest.fn(),
+    requestEmailVerification: jest.fn(),
+    verifyEmail: jest.fn(),
+    verifyInitialEmail: jest.fn(),
+    setInitialPassword: jest.fn(),
   };
 
   const configServiceMock = {
     get: jest.fn(),
+  };
+
+  const jwtServiceMock = {
+    verifyAsync: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -31,6 +41,10 @@ describe("AuthController", () => {
           provide: ConfigService,
           useValue: configServiceMock,
         },
+        {
+          provide: JwtService,
+          useValue: jwtServiceMock,
+        },
       ],
     }).compile();
 
@@ -44,7 +58,6 @@ describe("AuthController", () => {
   it("delegates onboarding requests to the auth service", async () => {
     const onboardDto = {
       email: "owner@example.com",
-      password: "a-secure-password",
       organizationName: "Example Company",
       organizationSlug: "example-company",
       timezone: "Atlantic/Canary",
@@ -59,8 +72,13 @@ describe("AuthController", () => {
     };
     authServiceMock.onboard.mockResolvedValue(response);
 
-    await expect(controller.onboard(onboardDto)).resolves.toEqual(response);
-    expect(authServiceMock.onboard).toHaveBeenCalledWith(onboardDto);
+    await expect(
+      controller.onboard(onboardDto, "onboarding-secret"),
+    ).resolves.toEqual(response);
+    expect(authServiceMock.onboard).toHaveBeenCalledWith(
+      onboardDto,
+      "onboarding-secret",
+    );
   });
 
   it("stores the refresh token in an HttpOnly cookie", async () => {
@@ -99,6 +117,40 @@ describe("AuthController", () => {
         httpOnly: true,
         sameSite: "lax",
         secure: false,
+      }),
+    );
+  });
+
+  it("pauses a temporary-password login and stores its attempt in a cookie", async () => {
+    const loginDto = {
+      email: "user@example.com",
+      password: "temporary-password",
+    };
+    const cookie = jest.fn();
+    const status = jest.fn();
+    const httpResponse = {
+      cookie,
+      status,
+    } as unknown as Response;
+    authServiceMock.login.mockResolvedValue({
+      emailVerificationRequired: true,
+      verificationAttemptToken: "verification-attempt-token",
+    });
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.login(loginDto, "test-agent", "127.0.0.1", httpResponse),
+    ).resolves.toEqual({ emailVerificationRequired: true });
+
+    expect(status).toHaveBeenCalledWith(202);
+    expect(cookie).toHaveBeenCalledWith(
+      "email_verification_attempt",
+      "verification-attempt-token",
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        path: "/api/v1/auth/activate/verify",
       }),
     );
   });
@@ -167,6 +219,129 @@ describe("AuthController", () => {
         sameSite: "lax",
         secure: false,
         path: "/api/v1/auth",
+      }),
+    );
+  });
+
+  it("returns the authenticated user profile", async () => {
+    const profile = {
+      id: "user-id",
+      email: "user@example.com",
+      emailVerified: true,
+      preferredLocale: "es",
+      isSuperadmin: false,
+      status: "ACTIVE",
+      createdAt: new Date("2026-08-22T10:00:00.000Z"),
+    };
+    authServiceMock.me.mockResolvedValue(profile);
+
+    await expect(controller.me({ userId: profile.id })).resolves.toEqual(
+      profile,
+    );
+    expect(authServiceMock.me).toHaveBeenCalledWith(profile.id);
+  });
+
+  it("accepts an email-verification request without revealing user state", async () => {
+    const requestDto = { email: "user@example.com" };
+    authServiceMock.requestEmailVerification.mockResolvedValue(undefined);
+
+    await expect(
+      controller.requestEmailVerification(requestDto),
+    ).resolves.toEqual({ status: "accepted" });
+    expect(authServiceMock.requestEmailVerification).toHaveBeenCalledWith(
+      requestDto,
+    );
+  });
+
+  it("delegates email-token verification to the auth service", async () => {
+    const verifyEmailDto = { token: "verification-token" };
+    authServiceMock.verifyEmail.mockResolvedValue({ emailVerified: true });
+
+    await expect(controller.verifyEmail(verifyEmailDto)).resolves.toEqual({
+      emailVerified: true,
+    });
+    expect(authServiceMock.verifyEmail).toHaveBeenCalledWith(verifyEmailDto);
+  });
+
+  it("verifies the email code and exchanges its cookie for password activation", async () => {
+    const verifyEmailDto = { token: "verification-token" };
+    const cookie = jest.fn();
+    const clearCookie = jest.fn();
+    const httpResponse = { cookie, clearCookie } as unknown as Response;
+    authServiceMock.verifyInitialEmail.mockResolvedValue(
+      "password-attempt-token",
+    );
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.verifyInitialEmail(
+        verifyEmailDto,
+        "email_verification_attempt=verification-attempt-token",
+        httpResponse,
+      ),
+    ).resolves.toEqual({ emailVerified: true, passwordChangeRequired: true });
+
+    expect(authServiceMock.verifyInitialEmail).toHaveBeenCalledWith(
+      verifyEmailDto,
+      "verification-attempt-token",
+    );
+    expect(cookie).toHaveBeenCalledWith(
+      "password_activation_attempt",
+      "password-attempt-token",
+      expect.objectContaining({ path: "/api/v1/auth/activate/password" }),
+    );
+    expect(clearCookie).toHaveBeenCalledWith(
+      "email_verification_attempt",
+      expect.objectContaining({ path: "/api/v1/auth/activate/verify" }),
+    );
+  });
+
+  it("sets the initial password, creates a session and clears its attempt cookie", async () => {
+    const setInitialPasswordDto = { password: "a-new-secure-password" };
+    const response = {
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      tokenType: "Bearer",
+      expiresIn: 900,
+    };
+    const cookie = jest.fn();
+    const clearCookie = jest.fn();
+    const httpResponse = {
+      cookie,
+      clearCookie,
+    } as unknown as Response;
+    authServiceMock.setInitialPassword.mockResolvedValue(response);
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.setInitialPassword(
+        setInitialPasswordDto,
+        "password_activation_attempt=password-attempt-token",
+        "test-agent",
+        "127.0.0.1",
+        httpResponse,
+      ),
+    ).resolves.toEqual({
+      accessToken: "access-token",
+      tokenType: "Bearer",
+      expiresIn: 900,
+    });
+
+    expect(authServiceMock.setInitialPassword).toHaveBeenCalledWith(
+      setInitialPasswordDto,
+      "password-attempt-token",
+      { userAgent: "test-agent", ipAddress: "127.0.0.1" },
+    );
+    expect(cookie).toHaveBeenCalledWith(
+      "refresh_token",
+      "refresh-token",
+      expect.objectContaining({ httpOnly: true, path: "/api/v1/auth" }),
+    );
+    expect(clearCookie).toHaveBeenCalledWith(
+      "password_activation_attempt",
+      expect.objectContaining({
+        httpOnly: true,
+        path: "/api/v1/auth/activate/password",
       }),
     );
   });

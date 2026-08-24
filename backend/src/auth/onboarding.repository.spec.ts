@@ -59,6 +59,17 @@ describe("OnboardingRepository", () => {
           },
         ],
       })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "business-id",
+            name: "Example Company",
+            slug: "example-company",
+            timezone: "Atlantic/Canary",
+            created_at: createdAt,
+          },
+        ],
+      })
       .mockResolvedValue({ rows: [] });
 
     await expect(
@@ -72,13 +83,14 @@ describe("OnboardingRepository", () => {
     ).resolves.toMatchObject({
       user: { id: "user-id" },
       organization: { id: "organization-id" },
+      business: { id: "business-id" },
     });
 
     expect(databaseServiceMock.transaction).toHaveBeenCalledTimes(1);
-    expect(clientMock.query).toHaveBeenCalledTimes(5);
+    expect(clientMock.query).toHaveBeenCalledTimes(7);
     expect(clientMock.query).toHaveBeenLastCalledWith(
-      expect.stringContaining("organization_memberships"),
-      ["organization-id", "user-id"],
+      expect.stringContaining("business_memberships"),
+      ["business-id", "user-id", "organization-id"],
     );
   });
 });

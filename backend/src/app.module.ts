@@ -27,6 +27,22 @@ import Joi from "joi";
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
 
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
+
+        JWT_EMAIL_VERIFICATION_SECRET: Joi.string().min(32).required(),
+
+        ONBOARDING_SECRET: Joi.string().min(32).required(),
+
+        RESEND_API_KEY: Joi.string().when("NODE_ENV", {
+          is: "production",
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
+
+        RESEND_FROM_EMAIL: Joi.string().email().when("NODE_ENV", {
+          is: "production",
+          then: Joi.required(),
+          otherwise: Joi.optional(),
+        }),
       }),
     }),
     DatabaseModule,

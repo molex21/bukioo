@@ -2,8 +2,11 @@ import { ConfigModule } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Test } from "@nestjs/testing";
 import { AuthModule } from "./auth.module";
+import { EmailProvider } from "./email.provider";
+import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
+import { UserTokensRepository } from "./user-tokens.repository";
 import { UsersRepository } from "./users.repository";
 
 describe("AuthModule", () => {
@@ -25,9 +28,15 @@ describe("AuthModule", () => {
     })
       .overrideProvider(UsersRepository)
       .useValue({})
+      .overrideProvider(EmployeeRegistrationRepository)
+      .useValue({})
       .overrideProvider(UserSessionsRepository)
       .useValue({})
       .overrideProvider(OnboardingRepository)
+      .useValue({})
+      .overrideProvider(UserTokensRepository)
+      .useValue({})
+      .overrideProvider(EmailProvider)
       .useValue({})
       .compile();
 

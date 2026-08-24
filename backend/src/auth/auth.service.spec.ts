@@ -13,7 +13,10 @@ import * as argon2 from "argon2";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { OnboardingRepository } from "./onboarding.repository";
+import { EmailProvider } from "./email.provider";
+import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
+import { UserTokensRepository } from "./user-tokens.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 describe("AuthService", () => {
@@ -21,6 +24,7 @@ describe("AuthService", () => {
 
   const usersRepositoryMock = {
     findByEmail: jest.fn(),
+    findById: jest.fn(),
     create: jest.fn(),
   };
 
@@ -40,6 +44,23 @@ describe("AuthService", () => {
     create: jest.fn(),
   };
 
+  const employeeRegistrationRepositoryMock = {
+    canManageEmployees: jest.fn(),
+    create: jest.fn(),
+  };
+
+  const userTokensRepositoryMock = {
+    replaceEmailVerificationToken: jest.fn(),
+    consumeEmailVerificationToken: jest.fn(),
+    verifyInitialEmail: jest.fn(),
+    completeInitialPassword: jest.fn(),
+  };
+
+  const emailProviderMock = {
+    sendEmailVerification: jest.fn(),
+    sendAccountCredentials: jest.fn(),
+  };
+
   const configServiceMock = {
     getOrThrow: jest.fn(),
   };
@@ -48,6 +69,7 @@ describe("AuthService", () => {
     id: "c8fdcddd-9d7f-4ebf-b11e-a02821e2ca04",
     email: "user@example.com",
     password_hash: "hashed-password",
+    password_change_required: false,
     email_verified_at: null,
     preferred_locale: "es",
     is_superadmin: false,
@@ -65,12 +87,24 @@ describe("AuthService", () => {
           useValue: usersRepositoryMock,
         },
         {
+          provide: EmployeeRegistrationRepository,
+          useValue: employeeRegistrationRepositoryMock,
+        },
+        {
           provide: UserSessionsRepository,
           useValue: userSessionsRepositoryMock,
         },
         {
           provide: OnboardingRepository,
           useValue: onboardingRepositoryMock,
+        },
+        {
+          provide: UserTokensRepository,
+          useValue: userTokensRepositoryMock,
+        },
+        {
+          provide: EmailProvider,
+          useValue: emailProviderMock,
         },
         {
           provide: JwtService,
@@ -90,7 +124,10 @@ describe("AuthService", () => {
     jest.mocked(argon2.hash).mockReset();
     jest.mocked(argon2.verify).mockReset();
     usersRepositoryMock.findByEmail.mockReset();
+    usersRepositoryMock.findById.mockReset();
     usersRepositoryMock.create.mockReset();
+    employeeRegistrationRepositoryMock.canManageEmployees.mockReset();
+    employeeRegistrationRepositoryMock.create.mockReset();
     jwtServiceMock.signAsync.mockReset();
     jwtServiceMock.verifyAsync.mockReset();
     userSessionsRepositoryMock.create.mockReset();
@@ -98,19 +135,32 @@ describe("AuthService", () => {
     userSessionsRepositoryMock.rotate.mockReset();
     userSessionsRepositoryMock.revoke.mockReset();
     onboardingRepositoryMock.create.mockReset();
+    userTokensRepositoryMock.replaceEmailVerificationToken.mockReset();
+    userTokensRepositoryMock.consumeEmailVerificationToken.mockReset();
+    userTokensRepositoryMock.verifyInitialEmail.mockReset();
+    userTokensRepositoryMock.completeInitialPassword.mockReset();
+    emailProviderMock.sendEmailVerification.mockReset();
+    emailProviderMock.sendAccountCredentials.mockReset();
     configServiceMock.getOrThrow.mockReset();
   });
 
   it("registers a normalized email without returning the password hash", async () => {
     jest.mocked(argon2.hash).mockResolvedValue("hashed-password");
     usersRepositoryMock.findByEmail.mockResolvedValue(null);
-    usersRepositoryMock.create.mockResolvedValue(user);
+    employeeRegistrationRepositoryMock.canManageEmployees.mockResolvedValue(
+      true,
+    );
+    employeeRegistrationRepositoryMock.create.mockResolvedValue(user);
 
     await expect(
-      service.register({
-        email: "  USER@EXAMPLE.COM  ",
-        password: "a-secure-password",
-      }),
+      service.register(
+        {
+          email: "  USER@EXAMPLE.COM  ",
+          organizationId: "11111111-1111-4111-8111-111111111111",
+          businessIds: ["22222222-2222-4222-8222-222222222222"],
+        },
+        "actor-id",
+      ),
     ).resolves.toEqual({
       id: user.id,
       email: user.email,
@@ -121,23 +171,34 @@ describe("AuthService", () => {
     expect(usersRepositoryMock.findByEmail).toHaveBeenCalledWith(
       "user@example.com",
     );
-    expect(argon2.hash).toHaveBeenCalledWith("a-secure-password", {
-      type: argon2.argon2id,
-    });
-    expect(usersRepositoryMock.create).toHaveBeenCalledWith(
-      "user@example.com",
-      "hashed-password",
+    expect(argon2.hash).toHaveBeenCalledWith(
+      expect.stringMatching(/^[A-Za-z0-9_-]{8}$/),
+      { type: argon2.argon2id },
     );
+    expect(employeeRegistrationRepositoryMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "user@example.com",
+        passwordHash: "hashed-password",
+      }),
+    );
+    expect(emailProviderMock.sendAccountCredentials).toHaveBeenCalledTimes(1);
   });
 
   it("rejects an email that already exists before hashing a password", async () => {
     usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    employeeRegistrationRepositoryMock.canManageEmployees.mockResolvedValue(
+      true,
+    );
 
     await expect(
-      service.register({
-        email: "user@example.com",
-        password: "a-secure-password",
-      }),
+      service.register(
+        {
+          email: "user@example.com",
+          organizationId: "11111111-1111-4111-8111-111111111111",
+          businessIds: ["22222222-2222-4222-8222-222222222222"],
+        },
+        "actor-id",
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
 
     expect(argon2.hash).not.toHaveBeenCalled();
@@ -147,13 +208,22 @@ describe("AuthService", () => {
   it("maps a concurrent duplicate-email insert to a conflict", async () => {
     jest.mocked(argon2.hash).mockResolvedValue("hashed-password");
     usersRepositoryMock.findByEmail.mockResolvedValue(null);
-    usersRepositoryMock.create.mockRejectedValue({ code: "23505" });
+    employeeRegistrationRepositoryMock.canManageEmployees.mockResolvedValue(
+      true,
+    );
+    employeeRegistrationRepositoryMock.create.mockRejectedValue({
+      code: "23505",
+    });
 
     await expect(
-      service.register({
-        email: "user@example.com",
-        password: "a-secure-password",
-      }),
+      service.register(
+        {
+          email: "user@example.com",
+          organizationId: "11111111-1111-4111-8111-111111111111",
+          businessIds: ["22222222-2222-4222-8222-222222222222"],
+        },
+        "actor-id",
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -192,19 +262,31 @@ describe("AuthService", () => {
         timezone: "Atlantic/Canary",
         created_at: new Date("2026-08-21T10:00:00.000Z"),
       },
+      business: {
+        id: "business-id",
+        name: "Example Company",
+        slug: "example-company",
+        timezone: "Atlantic/Canary",
+        created_at: new Date("2026-08-21T10:00:00.000Z"),
+      },
     };
     usersRepositoryMock.findByEmail.mockResolvedValue(null);
     jest.mocked(argon2.hash).mockResolvedValue("onboarding-password-hash");
     onboardingRepositoryMock.create.mockResolvedValue(onboarding);
+    configServiceMock.getOrThrow.mockReturnValue(
+      "onboarding-secret-with-at-least-32-characters",
+    );
 
     await expect(
-      service.onboard({
-        email: "  OWNER@EXAMPLE.COM  ",
-        password: "a-secure-password",
-        organizationName: " Example Company ",
-        organizationSlug: "example-company",
-        timezone: "Atlantic/Canary",
-      }),
+      service.onboard(
+        {
+          email: "  OWNER@EXAMPLE.COM  ",
+          organizationName: " Example Company ",
+          organizationSlug: "example-company",
+          timezone: "Atlantic/Canary",
+        },
+        "onboarding-secret-with-at-least-32-characters",
+      ),
     ).resolves.toEqual({
       user: {
         id: onboarding.user.id,
@@ -219,6 +301,13 @@ describe("AuthService", () => {
         timezone: onboarding.organization.timezone,
         createdAt: onboarding.organization.created_at,
       },
+      business: {
+        id: onboarding.business.id,
+        name: onboarding.business.name,
+        slug: onboarding.business.slug,
+        timezone: onboarding.business.timezone,
+        createdAt: onboarding.business.created_at,
+      },
       membership: { role: "OWNER" },
     });
 
@@ -229,6 +318,27 @@ describe("AuthService", () => {
       organizationSlug: "example-company",
       timezone: "Atlantic/Canary",
     });
+    expect(emailProviderMock.sendAccountCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects initial onboarding without the configured secret", async () => {
+    configServiceMock.getOrThrow.mockReturnValue(
+      "onboarding-secret-with-at-least-32-characters",
+    );
+
+    await expect(
+      service.onboard(
+        {
+          email: "any-email@example.com",
+          organizationName: "Example Company",
+          organizationSlug: "example-company",
+        },
+        "wrong-secret",
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+
+    expect(usersRepositoryMock.findByEmail).not.toHaveBeenCalled();
+    expect(onboardingRepositoryMock.create).not.toHaveBeenCalled();
   });
 
   it("rejects credentials when the user does not exist", async () => {
@@ -272,7 +382,10 @@ describe("AuthService", () => {
   });
 
   it("returns an access token after validating credentials", async () => {
-    usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    usersRepositoryMock.findByEmail.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    });
     jest.mocked(argon2.verify).mockResolvedValue(true);
     jest.mocked(argon2.hash).mockResolvedValue("refresh-token-hash");
     jwtServiceMock.signAsync
@@ -315,6 +428,102 @@ describe("AuthService", () => {
     expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
   });
 
+  it("sends email verification and pauses login for a temporary password", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue({
+      ...user,
+      password_change_required: true,
+    });
+    jest.mocked(argon2.verify).mockResolvedValue(true);
+    userTokensRepositoryMock.replaceEmailVerificationToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendEmailVerification.mockResolvedValue(undefined);
+    jwtServiceMock.signAsync.mockResolvedValue("verification-attempt-token");
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: "a-secure-password",
+      }),
+    ).resolves.toEqual({
+      emailVerificationRequired: true,
+      verificationAttemptToken: "verification-attempt-token",
+    });
+
+    expect(
+      userTokensRepositoryMock.replaceEmailVerificationToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(emailProviderMock.sendEmailVerification).toHaveBeenCalledTimes(1);
+    expect(jwtServiceMock.signAsync).toHaveBeenCalledTimes(1);
+    expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("verifies an initial email and creates a password-activation attempt", async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      purpose: "EMAIL_VERIFICATION_ATTEMPT",
+      jti: "attempt-id",
+    });
+    userTokensRepositoryMock.verifyInitialEmail.mockResolvedValue(true);
+    jwtServiceMock.signAsync.mockResolvedValue("password-activation-token");
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.verifyInitialEmail(
+        { token: "verification-token" },
+        "verification-attempt-token",
+      ),
+    ).resolves.toBe("password-activation-token");
+
+    expect(userTokensRepositoryMock.verifyInitialEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: user.id }),
+    );
+  });
+
+  it("sets the initial password and creates a session", async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      purpose: "PASSWORD_ACTIVATION_ATTEMPT",
+      jti: "attempt-id",
+    });
+    jest
+      .mocked(argon2.hash)
+      .mockResolvedValueOnce("new-password-hash")
+      .mockResolvedValueOnce("refresh-token-hash");
+    userTokensRepositoryMock.completeInitialPassword.mockResolvedValue(true);
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+      password_change_required: false,
+    });
+    jwtServiceMock.signAsync
+      .mockResolvedValueOnce("access-token")
+      .mockResolvedValueOnce("refresh-token");
+    userSessionsRepositoryMock.create.mockResolvedValue(undefined);
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.setInitialPassword(
+        { password: "new-secure-password" },
+        "password-activation-token",
+      ),
+    ).resolves.toEqual({
+      accessToken: "access-token",
+      tokenType: "Bearer",
+      expiresIn: 900,
+      refreshToken: "refresh-token",
+    });
+
+    expect(
+      userTokensRepositoryMock.completeInitialPassword,
+    ).toHaveBeenCalledWith({
+      userId: user.id,
+      passwordHash: "new-password-hash",
+    });
+    expect(userSessionsRepositoryMock.create).toHaveBeenCalledTimes(1);
+  });
+
   it("rotates an active refresh token and returns a new access token", async () => {
     const session = {
       id: "session-id",
@@ -322,6 +531,8 @@ describe("AuthService", () => {
       refresh_token_hash: "current-refresh-token-hash",
       expires_at: new Date("2026-09-20T10:00:00.000Z"),
       user_status: "ACTIVE",
+      user_email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+      user_password_change_required: false,
     };
     jwtServiceMock.verifyAsync.mockResolvedValue({
       sub: user.id,
@@ -359,6 +570,30 @@ describe("AuthService", () => {
     expect(jwtServiceMock.verifyAsync).not.toHaveBeenCalled();
   });
 
+  it("rejects refresh for an unverified user session", async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      sid: "session-id",
+      jti: "refresh-token-id",
+    });
+    userSessionsRepositoryMock.findActiveById.mockResolvedValue({
+      id: "session-id",
+      user_id: user.id,
+      refresh_token_hash: "refresh-token-hash",
+      expires_at: new Date("2026-09-20T10:00:00.000Z"),
+      user_status: "ACTIVE",
+      user_email_verified_at: null,
+      user_password_change_required: false,
+    });
+    configServiceMock.getOrThrow.mockReturnValue("refresh-secret");
+
+    await expect(
+      service.refresh("current-refresh-token"),
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(argon2.verify).not.toHaveBeenCalled();
+  });
+
   it("revokes the session associated with a valid refresh token on logout", async () => {
     jwtServiceMock.verifyAsync.mockResolvedValue({
       sub: user.id,
@@ -388,5 +623,103 @@ describe("AuthService", () => {
     ).resolves.toBeUndefined();
 
     expect(userSessionsRepositoryMock.revoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe profile for an active user", async () => {
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    });
+
+    await expect(service.me(user.id)).resolves.toEqual({
+      id: user.id,
+      email: user.email,
+      emailVerified: true,
+      preferredLocale: user.preferred_locale,
+      isSuperadmin: false,
+      status: "ACTIVE",
+      createdAt: user.created_at,
+    });
+  });
+
+  it("rejects a missing or inactive user profile", async () => {
+    usersRepositoryMock.findById.mockResolvedValueOnce(null);
+
+    await expect(service.me("missing-user-id")).rejects.toMatchObject({
+      status: 401,
+    });
+
+    usersRepositoryMock.findById.mockResolvedValueOnce({
+      ...user,
+      status: "BLOCKED",
+    });
+
+    await expect(service.me(user.id)).rejects.toMatchObject({ status: 401 });
+
+    usersRepositoryMock.findById.mockResolvedValueOnce(user);
+
+    await expect(service.me(user.id)).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("creates and dispatches a hashed six-digit email-verification code", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    userTokensRepositoryMock.replaceEmailVerificationToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendEmailVerification.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestEmailVerification({ email: " USER@EXAMPLE.COM " }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replaceEmailVerificationToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(emailProviderMock.sendEmailVerification).toHaveBeenCalledTimes(1);
+    expect(emailProviderMock.sendEmailVerification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: user.email,
+      }),
+    );
+    expect(usersRepositoryMock.findByEmail).toHaveBeenCalledWith(
+      "user@example.com",
+    );
+  });
+
+  it("does not issue an email-verification code for unknown users", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.requestEmailVerification({ email: "missing@example.com" }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replaceEmailVerificationToken,
+    ).not.toHaveBeenCalled();
+    expect(emailProviderMock.sendEmailVerification).not.toHaveBeenCalled();
+  });
+
+  it("marks an email as verified when its code is valid", async () => {
+    userTokensRepositoryMock.consumeEmailVerificationToken.mockResolvedValue(
+      true,
+    );
+
+    await expect(service.verifyEmail({ token: "123456" })).resolves.toEqual({
+      emailVerified: true,
+    });
+
+    expect(
+      userTokensRepositoryMock.consumeEmailVerificationToken,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a reused, expired, or unknown email-verification code", async () => {
+    userTokensRepositoryMock.consumeEmailVerificationToken.mockResolvedValue(
+      false,
+    );
+
+    await expect(
+      service.verifyEmail({ token: "000000" }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 });

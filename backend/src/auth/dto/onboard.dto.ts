@@ -1,13 +1,17 @@
 import {
+  IsEmail,
   IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from "class-validator";
-import { RegisterDto } from "./register.dto";
 
-export class OnboardDto extends RegisterDto {
+export class OnboardDto {
+  @IsEmail()
+  @MaxLength(320)
+  email!: string;
+
   @IsString()
   @MinLength(2)
   @MaxLength(150)

@@ -3,10 +3,14 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
+import { JwtAuthGuard } from "./jwt-auth.guard";
+import { EmailProvider, ResendEmailProvider } from "./email.provider";
 import { ACCESS_TOKEN_EXPIRES_IN_SECONDS } from "./auth.constants";
 import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
+import { UserTokensRepository } from "./user-tokens.repository";
 import { UsersRepository } from "./users.repository";
+import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 
 @Module({
   imports: [
@@ -24,9 +28,16 @@ import { UsersRepository } from "./users.repository";
   controllers: [AuthController],
   providers: [
     AuthService,
+    JwtAuthGuard,
     UsersRepository,
+    EmployeeRegistrationRepository,
     UserSessionsRepository,
     OnboardingRepository,
+    UserTokensRepository,
+    {
+      provide: EmailProvider,
+      useClass: ResendEmailProvider,
+    },
   ],
 })
 export class AuthModule {}

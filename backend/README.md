@@ -476,7 +476,16 @@ Nunca subir al repositorio:
 
 ## Base de datos multiempresa
 
-La mayor parte de las entidades de negocio estarán asociadas a:
+La organización es la cuenta titular, la suscripción y el límite principal de
+aislamiento. Cada organización contiene uno o varios negocios (`businesses`).
+Las entidades operativas conservan `organization_id` y ahora incorporan
+`business_id`; un negocio siempre pertenece a la organización indicada.
+
+Las personas tienen una membresía de organización y una o varias asignaciones
+en `business_memberships`. Esto permite que una cuenta gestione varios negocios
+sin poder acceder a los de otra organización.
+
+El aislamiento principal sigue asociado a:
 
 ```text
 organization_id
@@ -485,22 +494,64 @@ organization_id
 ## JWT
 
 La infraestructura de JWT usa `@nestjs/jwt` y firma los access tokens con
-`JWT_ACCESS_SECRET` y `JWT_REFRESH_SECRET`. Define valores aleatorios,
+`JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` y `JWT_EMAIL_VERIFICATION_SECRET`.
+Define valores aleatorios,
 distintos y de al menos 32 caracteres en `backend/.env` para cada entorno.
 Estas variables se validan al arrancar y nunca deben subirse al repositorio.
+
+Para enviar correos de verificacion, configura tambien estas variables:
+
+```env
+JWT_EMAIL_VERIFICATION_SECRET=replace_with_another_random_value_at_least_32_characters
+ONBOARDING_SECRET=replace_with_a_random_onboarding_value_at_least_32_characters
+RESEND_API_KEY=re_replace_with_your_resend_api_key
+RESEND_FROM_EMAIL=no-reply@your-verified-domain.example
+```
+
+En produccion ambas son obligatorias. `RESEND_FROM_EMAIL` debe pertenecer a un
+dominio verificado en Resend.
 
 Los access tokens tienen una duracion de 15 minutos. El endpoint
 `POST /api/v1/auth/login` valida las credenciales y responde con un access
 token Bearer.
 
-`POST /api/v1/auth/onboard` crea en una transaccion un usuario, una empresa,
-sus settings iniciales, el locale `es` y una membresia `OWNER`.
+`POST /api/v1/auth/onboard` crea en una transaccion un usuario, una
+organización, su primer negocio con el mismo nombre y slug, sus settings
+iniciales, el locale `es`, una membresía `OWNER` y el acceso del OWNER a ese
+negocio. Exige la cabecera `X-Onboarding-Key` con el valor de
+`ONBOARDING_SECRET`. La misma clave permite crear varias organizaciones; debe
+tratarse como una credencial administrativa privada y no enviarse al frontend.
+
+`POST /api/v1/auth/register` requiere `Authorization: Bearer <accessToken>`.
+Un `OWNER` o `ADMIN` activo puede crear un empleado indicando `organizationId`,
+uno o más `businessIds` a los que ya tenga acceso y el rol `EMPLOYEE` o
+`MANAGER`. La API rechaza altas en negocios ajenos.
 
 Al iniciar sesion, BUKIOO guarda el hash del refresh token en `user_sessions`
 y envia el token raw en una cookie HttpOnly. `POST /api/v1/auth/refresh`
 verifica y rota el token, actualiza su hash y devuelve un access token nuevo.
 `POST /api/v1/auth/logout` revoca la sesion del refresh token y elimina la
 cookie HttpOnly.
+`GET /api/v1/auth/me` requiere `Authorization: Bearer <accessToken>` y
+devuelve el perfil seguro del usuario autenticado.
+
+`POST /api/v1/auth/email/verification/request` genera un codigo numerico de
+seis digitos, de un solo uso y 10 minutos de validez para un email activo no
+verificado. El hash se guarda en `user_tokens`; `POST /api/v1/auth/email/verify`
+consume el codigo y marca `email_verified_at`. Los correos se envian con Resend mediante
+`EmailProvider`; el texto plano de cada correo reside en `src/email/templates`.
+
+Las cuentas creadas por Register u Onboard reciben por email una contrasena
+temporal de ocho caracteres y un solo uso. El primer `POST /auth/login` con esa contrasena envia
+el token de verificacion y responde `202`; tambien guarda una cookie HttpOnly
+temporal ligada al navegador. `POST /auth/activate/verify` recibe el codigo de
+email y exige esa cookie. Si es correcto, crea una segunda cookie HttpOnly de
+corta duración. `POST /auth/activate/password` recibe la contrasena definitiva,
+exige la segunda cookie, invalida la contrasena temporal y crea la sesion sin un
+segundo Login.
+
+`POST /auth/refresh` y `GET /auth/me` rechazan cuentas sin email verificado o
+pendientes de cambiar su contrasena temporal.
 
 Esto permitirá mantener aislados los datos de cada negocio.
 

@@ -34,6 +34,8 @@ describe("UserSessionsRepository", () => {
       refresh_token_hash: "refresh-token-hash",
       expires_at: new Date("2026-09-20T10:00:00.000Z"),
       user_status: "ACTIVE",
+      user_email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+      user_password_change_required: false,
     };
     databaseServiceMock.query.mockResolvedValue({ rows: [session] });
 

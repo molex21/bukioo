@@ -16,6 +16,8 @@ export interface UserSessionRecord {
   refresh_token_hash: string;
   expires_at: Date;
   user_status: string;
+  user_email_verified_at: Date | null;
+  user_password_change_required: boolean;
 }
 
 export interface RotateUserSessionInput {
@@ -56,7 +58,9 @@ export class UserSessionsRepository {
         user_sessions.user_id,
         user_sessions.refresh_token_hash,
         user_sessions.expires_at,
-        users.status AS user_status
+        users.status AS user_status,
+        users.email_verified_at AS user_email_verified_at,
+        users.password_change_required AS user_password_change_required
       FROM user_sessions
       INNER JOIN users ON users.id = user_sessions.user_id
       WHERE user_sessions.id = $1

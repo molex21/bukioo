@@ -56,6 +56,24 @@ interface PasswordActivationAttemptPayload {
   jti: string;
 }
 
+export interface InviteEmployeeInput {
+  email: string;
+  organizationId: string;
+  businessId: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  color?: string;
+  notes?: string;
+}
+
+export interface InviteExistingEmployeeInput {
+  email: string;
+  organizationId: string;
+  businessId: string;
+  employeeId: string;
+}
+
 const EMAIL_VERIFICATION_TOKEN_EXPIRES_IN_SECONDS = 10 * 60;
 
 @Injectable()
@@ -128,6 +146,91 @@ export class AuthService {
       emailVerified: user.email_verified_at !== null,
       createdAt: user.created_at,
     };
+  }
+
+  async inviteEmployee(input: InviteEmployeeInput) {
+    const email = input.email.trim().toLowerCase();
+    const existingUser = await this.usersRepository.findByEmail(email);
+
+    if (existingUser) {
+      throw new ConflictException("Ya existe una cuenta con este email");
+    }
+
+    const temporaryPassword = this.createTemporaryPassword();
+    const passwordHash = await argon2.hash(temporaryPassword, {
+      type: argon2.argon2id,
+    });
+
+    try {
+      const invitation =
+        await this.employeeRegistrationRepository.createWithEmployee({
+          email,
+          passwordHash,
+          organizationId: input.organizationId,
+          businessIds: [input.businessId],
+          role: "EMPLOYEE",
+          employee: {
+            businessId: input.businessId,
+            firstName: input.firstName,
+            lastName: input.lastName,
+            email,
+            phone: input.phone,
+            color: input.color,
+            notes: input.notes,
+          },
+        });
+
+      await this.emailProvider.sendAccountCredentials({
+        email,
+        temporaryPassword,
+      });
+
+      return invitation.employee;
+    } catch (error: unknown) {
+      if (this.isDuplicateEmailError(error)) {
+        throw new ConflictException("Ya existe una cuenta con este email");
+      }
+
+      throw error;
+    }
+  }
+
+  async inviteExistingEmployee(input: InviteExistingEmployeeInput) {
+    const email = input.email.trim().toLowerCase();
+    const existingUser = await this.usersRepository.findByEmail(email);
+
+    if (existingUser) {
+      throw new ConflictException("Ya existe una cuenta con este email");
+    }
+
+    const temporaryPassword = this.createTemporaryPassword();
+    const passwordHash = await argon2.hash(temporaryPassword, {
+      type: argon2.argon2id,
+    });
+
+    try {
+      const employee =
+        await this.employeeRegistrationRepository.inviteExistingEmployee({
+          email,
+          passwordHash,
+          organizationId: input.organizationId,
+          businessId: input.businessId,
+          employeeId: input.employeeId,
+        });
+
+      await this.emailProvider.sendAccountCredentials({
+        email,
+        temporaryPassword,
+      });
+
+      return employee;
+    } catch (error: unknown) {
+      if (this.isDuplicateEmailError(error)) {
+        throw new ConflictException("Ya existe una cuenta con este email");
+      }
+
+      throw error;
+    }
   }
 
   async validateCredentials(loginDto: LoginDto): Promise<UserRecord> {
@@ -402,6 +505,11 @@ export class AuthService {
       throw new UnauthorizedException("Access token invalido");
     }
 
+    const organizations =
+      await this.usersRepository.findActiveOrganizationsByUserId(user.id);
+    const businesses =
+      await this.usersRepository.findAccessibleBusinessesByUserId(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -410,6 +518,19 @@ export class AuthService {
       isSuperadmin: user.is_superadmin,
       status: user.status,
       createdAt: user.created_at,
+      organizations: organizations.map((organization) => ({
+        id: organization.id,
+        name: organization.name,
+        role: organization.role,
+        businesses: businesses
+          .filter((business) => business.organization_id === organization.id)
+          .map((business) => ({
+            id: business.id,
+            name: business.name,
+            slug: business.slug,
+            status: business.status,
+          })),
+      })),
     };
   }
 

@@ -26,18 +26,18 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 
 ## Tecnologías y dependencias relevantes
 
-* Node.js
-* NestJS 11
-* TypeScript 5
-* Express como adaptador HTTP de NestJS
-* PostgreSQL
-* `pg` como cliente PostgreSQL
-* `dbmate` para migraciones SQL
-* `@nestjs/jwt` para access tokens JWT de corta duracion
-* Supertest para pruebas de API
-* ESLint
-* TypeScript ESLint
-* Prettier
+- Node.js
+- NestJS 11
+- TypeScript 5
+- Express como adaptador HTTP de NestJS
+- PostgreSQL
+- `pg` como cliente PostgreSQL
+- `dbmate` para migraciones SQL
+- `@nestjs/jwt` para access tokens JWT de corta duracion
+- Supertest para pruebas de API
+- ESLint
+- TypeScript ESLint
+- Prettier
 
 Actualmente `pg` está instalado, pero todavía debe implementarse la capa de conexión de NestJS con PostgreSQL.
 
@@ -286,10 +286,10 @@ npm run start:debug
 npm run start:prod
 ```
 
-* `start`: inicia NestJS.
-* `start:dev`: inicia NestJS en modo observación.
-* `start:debug`: inicia NestJS en modo depuración y observación.
-* `start:prod`: ejecuta `dist/main`; requiere haber compilado previamente.
+- `start`: inicia NestJS.
+- `start:dev`: inicia NestJS en modo observación.
+- `start:debug`: inicia NestJS en modo depuración y observación.
+- `start:prod`: ejecuta `dist/main`; requiere haber compilado previamente.
 
 Por defecto, la API escucha en:
 
@@ -442,37 +442,37 @@ No utilizar concatenación directa de valores introducidos por usuarios.
 Incorrecto:
 
 ```ts
-`SELECT * FROM appointments WHERE employee_id = '${employeeId}'`
+`SELECT * FROM appointments WHERE employee_id = '${employeeId}'`;
 ```
 
 ## Seguridad
 
 El backend deberá aplicar como mínimo:
 
-* validación mediante DTOs;
-* `class-validator`;
-* `class-transformer`;
-* `ValidationPipe`;
-* autenticación JWT;
-* refresh token mediante cookie HttpOnly;
-* autorización mediante roles y permisos;
-* aislamiento por `organization_id`;
-* SQL parametrizado;
-* rate limiting;
-* Helmet;
-* CORS configurado;
-* protección frente a brute force;
-* 2FA TOTP;
-* secretos mediante variables de entorno.
+- validación mediante DTOs;
+- `class-validator`;
+- `class-transformer`;
+- `ValidationPipe`;
+- autenticación JWT;
+- refresh token mediante cookie HttpOnly;
+- autorización mediante roles y permisos;
+- aislamiento por `organization_id`;
+- SQL parametrizado;
+- rate limiting;
+- Helmet;
+- CORS configurado;
+- protección frente a brute force;
+- 2FA TOTP;
+- secretos mediante variables de entorno.
 
 Nunca subir al repositorio:
 
-* contraseñas;
-* tokens;
-* secretos TOTP;
-* claves API;
-* `.env` reales;
-* credenciales de PostgreSQL.
+- contraseñas;
+- tokens;
+- secretos TOTP;
+- claves API;
+- `.env` reales;
+- credenciales de PostgreSQL.
 
 ## Base de datos multiempresa
 
@@ -526,6 +526,75 @@ tratarse como una credencial administrativa privada y no enviarse al frontend.
 Un `OWNER` o `ADMIN` activo puede crear un empleado indicando `organizationId`,
 uno o más `businessIds` a los que ya tenga acceso y el rol `EMPLOYEE` o
 `MANAGER`. La API rechaza altas en negocios ajenos.
+
+`GET /api/v1/auth/me` incluye las organizaciones activas asociadas al usuario,
+con su `id`, `name` y `role`, para que el cliente pueda seleccionar el contexto
+de trabajo sin recibir datos de organizaciones ajenas.
+
+Los endpoints de negocios requieren `Authorization: Bearer <accessToken>` y
+un rol activo `OWNER` o `ADMIN` de la organización:
+
+```text
+POST   /api/v1/businesses
+GET    /api/v1/businesses?organizationId=<uuid>
+GET    /api/v1/businesses/<businessId>
+PATCH  /api/v1/businesses/<businessId>
+DELETE /api/v1/businesses/<businessId>
+```
+
+Al crear un negocio, el creador queda asignado automáticamente. Los slugs son
+únicos dentro de cada organización. `DELETE` solo elimina negocios sin datos
+asociados y nunca permite eliminar el último negocio de una organización; usa
+`PATCH` con `status: "SUSPENDED"` para retirar un negocio con actividad.
+La consulta por ID admite tanto usuarios asignados directamente al negocio como
+`OWNER` y `ADMIN` de su organización.
+
+`GET /api/v1/auth/me` incluye las organizaciones activas del usuario y, dentro
+de cada una, sus negocios accesibles. `OWNER` y `ADMIN` reciben todos los
+negocios activos de su organización; el resto de roles solo sus asignaciones
+directas.
+
+Los perfiles operativos de empleados se gestionan por negocio. `OWNER` y
+`ADMIN` pueden crearlos, editarlos y archivarlos; los usuarios con acceso al
+negocio pueden consultarlos. La eliminación es lógica: el empleado conserva su
+historial y deja de aparecer en las consultas normales.
+
+Al crear un empleado, `inviteUser: true` requiere su email y crea también su
+cuenta, membresías y perfil en una transacción. Recibe por email una contraseña
+temporal de un solo uso y completa el flujo de verificación y nueva contraseña
+en su primer acceso. Si se omite o es `false`, se crea únicamente el perfil.
+
+```text
+GET    /api/v1/businesses/<businessId>/employees
+POST   /api/v1/businesses/<businessId>/employees
+POST   /api/v1/businesses/<businessId>/employees/<employeeId>/invite
+GET    /api/v1/businesses/<businessId>/employees/<employeeId>
+PATCH  /api/v1/businesses/<businessId>/employees/<employeeId>
+DELETE /api/v1/businesses/<businessId>/employees/<employeeId>
+```
+
+Las categorias de servicios se gestionan por negocio. `PATCH` permite activar o
+desactivar una categoria mediante `isActive`. `DELETE` solo se permite cuando
+no hay servicios asociados; en caso contrario devuelve `409 Conflict`.
+
+```text
+GET    /api/v1/businesses/<businessId>/service-categories
+POST   /api/v1/businesses/<businessId>/service-categories
+PATCH  /api/v1/businesses/<businessId>/service-categories/<categoryId>
+DELETE /api/v1/businesses/<businessId>/service-categories/<categoryId>
+```
+
+Los servicios se gestionan por negocio y pueden pertenecer opcionalmente a una
+categoria del mismo negocio. `PATCH` permite activar o desactivar un servicio.
+`DELETE` lo elimina fisicamente solo cuando no tiene empleados ni citas
+asociadas; de otro modo devuelve `409 Conflict`.
+
+```text
+GET    /api/v1/businesses/<businessId>/services
+POST   /api/v1/businesses/<businessId>/services
+PATCH  /api/v1/businesses/<businessId>/services/<serviceId>
+DELETE /api/v1/businesses/<businessId>/services/<serviceId>
+```
 
 Al iniciar sesion, BUKIOO guarda el hash del refresh token en `user_sessions`
 y envia el token raw en una cookie HttpOnly. `POST /api/v1/auth/refresh`

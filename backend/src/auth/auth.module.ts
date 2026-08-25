@@ -39,5 +39,6 @@ import { EmployeeRegistrationRepository } from "./employee-registration.reposito
       useClass: ResendEmailProvider,
     },
   ],
+  exports: [AuthService, JwtAuthGuard, JwtModule],
 })
 export class AuthModule {}

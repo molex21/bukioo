@@ -84,4 +84,71 @@ describe("EmployeeRegistrationRepository", () => {
       ["user-id", "organization-id", ["business-id"]],
     );
   });
+
+  it("creates the employee profile with its user and memberships in one transaction", async () => {
+    clientMock.query
+      .mockResolvedValueOnce({
+        rows: [{ id: "user-id", email: "employee@example.com" }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "employee-id", user_id: "user-id" }],
+      });
+
+    await expect(
+      repository.createWithEmployee({
+        email: "employee@example.com",
+        passwordHash: "password-hash",
+        organizationId: "organization-id",
+        businessIds: ["business-id"],
+        role: "EMPLOYEE",
+        employee: {
+          businessId: "business-id",
+          firstName: "Ada",
+          lastName: "Lovelace",
+          email: "employee@example.com",
+        },
+      }),
+    ).resolves.toMatchObject({
+      user: { id: "user-id" },
+      employee: { id: "employee-id", user_id: "user-id" },
+    });
+
+    expect(databaseServiceMock.transaction).toHaveBeenCalledTimes(1);
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("INSERT INTO employees"),
+      expect.arrayContaining(["organization-id", "business-id", "user-id"]),
+    );
+  });
+
+  it("links an existing employee to its new user in one transaction", async () => {
+    clientMock.query
+      .mockResolvedValueOnce({
+        rows: [{ id: "user-id", email: "employee@example.com" }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: "employee-id", user_id: "user-id" }],
+      });
+
+    await expect(
+      repository.inviteExistingEmployee({
+        email: "employee@example.com",
+        passwordHash: "password-hash",
+        organizationId: "organization-id",
+        businessId: "business-id",
+        employeeId: "employee-id",
+      }),
+    ).resolves.toMatchObject({ id: "employee-id", user_id: "user-id" });
+
+    expect(databaseServiceMock.transaction).toHaveBeenCalledTimes(1);
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("SET user_id = $1"),
+      ["user-id", "employee-id", "organization-id", "business-id"],
+    );
+  });
 });

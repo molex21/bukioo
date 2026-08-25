@@ -7,6 +7,10 @@ import { HealthModule } from "./health/health.module";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AuthModule } from "./auth/auth.module";
+import { BusinessesModule } from "./businesses/businesses.module";
+import { EmployeesModule } from "./employees/employees.module";
+import { ServiceCategoriesModule } from "./service-categories/service-categories.module";
+import { ServicesModule } from "./services/services.module";
 import Joi from "joi";
 
 @Module({
@@ -62,6 +66,10 @@ import Joi from "joi";
       },
     }),
     AuthModule,
+    BusinessesModule,
+    EmployeesModule,
+    ServiceCategoriesModule,
+    ServicesModule,
   ],
   controllers: [AppController],
   providers: [

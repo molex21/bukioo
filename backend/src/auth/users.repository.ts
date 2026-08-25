@@ -14,6 +14,20 @@ export interface UserRecord {
   updated_at: Date;
 }
 
+export interface UserOrganizationRecord {
+  id: string;
+  name: string;
+  role: "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "CLIENT";
+}
+
+export interface UserBusinessRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  status: "ACTIVE" | "SUSPENDED";
+}
+
 @Injectable()
 export class UsersRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -32,6 +46,51 @@ export class UsersRepository {
       [id],
     );
     return result.rows[0] ?? null;
+  }
+
+  async findActiveOrganizationsByUserId(
+    userId: string,
+  ): Promise<UserOrganizationRecord[]> {
+    const result = await this.databaseService.query<UserOrganizationRecord>(
+      `SELECT organizations.id, organizations.name, organization_memberships.role
+      FROM organization_memberships
+      INNER JOIN organizations
+        ON organizations.id = organization_memberships.organization_id
+      WHERE organization_memberships.user_id = $1
+        AND organization_memberships.status = 'ACTIVE'
+        AND organizations.status = 'ACTIVE'
+      ORDER BY organizations.name ASC`,
+      [userId],
+    );
+
+    return result.rows;
+  }
+
+  async findAccessibleBusinessesByUserId(
+    userId: string,
+  ): Promise<UserBusinessRecord[]> {
+    const result = await this.databaseService.query<UserBusinessRecord>(
+      `SELECT businesses.id, businesses.organization_id, businesses.name,
+        businesses.slug, businesses.status
+      FROM businesses
+      INNER JOIN organization_memberships
+        ON organization_memberships.organization_id = businesses.organization_id
+      LEFT JOIN business_memberships
+        ON business_memberships.business_id = businesses.id
+        AND business_memberships.organization_id = businesses.organization_id
+        AND business_memberships.user_id = $1
+      WHERE organization_memberships.user_id = $1
+        AND organization_memberships.status = 'ACTIVE'
+        AND businesses.status = 'ACTIVE'
+        AND (
+          organization_memberships.role IN ('OWNER', 'ADMIN')
+          OR business_memberships.user_id IS NOT NULL
+        )
+      ORDER BY businesses.name ASC`,
+      [userId],
+    );
+
+    return result.rows;
   }
 
   async create(email: string, passwordHash: string): Promise<UserRecord> {

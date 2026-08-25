@@ -25,6 +25,8 @@ describe("AuthService", () => {
   const usersRepositoryMock = {
     findByEmail: jest.fn(),
     findById: jest.fn(),
+    findActiveOrganizationsByUserId: jest.fn(),
+    findAccessibleBusinessesByUserId: jest.fn(),
     create: jest.fn(),
   };
 
@@ -47,6 +49,8 @@ describe("AuthService", () => {
   const employeeRegistrationRepositoryMock = {
     canManageEmployees: jest.fn(),
     create: jest.fn(),
+    createWithEmployee: jest.fn(),
+    inviteExistingEmployee: jest.fn(),
   };
 
   const userTokensRepositoryMock = {
@@ -125,9 +129,13 @@ describe("AuthService", () => {
     jest.mocked(argon2.verify).mockReset();
     usersRepositoryMock.findByEmail.mockReset();
     usersRepositoryMock.findById.mockReset();
+    usersRepositoryMock.findActiveOrganizationsByUserId.mockReset();
+    usersRepositoryMock.findAccessibleBusinessesByUserId.mockReset();
     usersRepositoryMock.create.mockReset();
     employeeRegistrationRepositoryMock.canManageEmployees.mockReset();
     employeeRegistrationRepositoryMock.create.mockReset();
+    employeeRegistrationRepositoryMock.createWithEmployee.mockReset();
+    employeeRegistrationRepositoryMock.inviteExistingEmployee.mockReset();
     jwtServiceMock.signAsync.mockReset();
     jwtServiceMock.verifyAsync.mockReset();
     userSessionsRepositoryMock.create.mockReset();
@@ -203,6 +211,72 @@ describe("AuthService", () => {
 
     expect(argon2.hash).not.toHaveBeenCalled();
     expect(usersRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("creates and emails an employee invitation with a temporary password", async () => {
+    jest.mocked(argon2.hash).mockResolvedValue("hashed-password");
+    usersRepositoryMock.findByEmail.mockResolvedValue(null);
+    employeeRegistrationRepositoryMock.createWithEmployee.mockResolvedValue({
+      user,
+      employee: { id: "employee-id", user_id: user.id },
+    });
+
+    await expect(
+      service.inviteEmployee({
+        email: " EMPLOYEE@EXAMPLE.COM ",
+        organizationId: "organization-id",
+        businessId: "business-id",
+        firstName: "Ada",
+        lastName: "Lovelace",
+      }),
+    ).resolves.toEqual({ id: "employee-id", user_id: user.id });
+
+    expect(
+      employeeRegistrationRepositoryMock.createWithEmployee,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "employee@example.com",
+        organizationId: "organization-id",
+        businessIds: ["business-id"],
+      }),
+    );
+    expect(emailProviderMock.sendAccountCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "employee@example.com" }),
+    );
+  });
+
+  it("invites an existing employee and emails the temporary password", async () => {
+    jest.mocked(argon2.hash).mockResolvedValue("hashed-password");
+    usersRepositoryMock.findByEmail.mockResolvedValue(null);
+    employeeRegistrationRepositoryMock.inviteExistingEmployee.mockResolvedValue(
+      {
+        id: "employee-id",
+        user_id: user.id,
+      },
+    );
+
+    await expect(
+      service.inviteExistingEmployee({
+        email: " EMPLOYEE@EXAMPLE.COM ",
+        organizationId: "organization-id",
+        businessId: "business-id",
+        employeeId: "employee-id",
+      }),
+    ).resolves.toEqual({ id: "employee-id", user_id: user.id });
+
+    expect(
+      employeeRegistrationRepositoryMock.inviteExistingEmployee,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "employee@example.com",
+        organizationId: "organization-id",
+        businessId: "business-id",
+        employeeId: "employee-id",
+      }),
+    );
+    expect(emailProviderMock.sendAccountCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "employee@example.com" }),
+    );
   });
 
   it("maps a concurrent duplicate-email insert to a conflict", async () => {
@@ -630,6 +704,22 @@ describe("AuthService", () => {
       ...user,
       email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
     });
+    usersRepositoryMock.findActiveOrganizationsByUserId.mockResolvedValue([
+      {
+        id: "organization-id",
+        name: "Example Company",
+        role: "OWNER",
+      },
+    ]);
+    usersRepositoryMock.findAccessibleBusinessesByUserId.mockResolvedValue([
+      {
+        id: "business-id",
+        organization_id: "organization-id",
+        name: "Example Location",
+        slug: "example-location",
+        status: "ACTIVE",
+      },
+    ]);
 
     await expect(service.me(user.id)).resolves.toEqual({
       id: user.id,
@@ -639,6 +729,21 @@ describe("AuthService", () => {
       isSuperadmin: false,
       status: "ACTIVE",
       createdAt: user.created_at,
+      organizations: [
+        {
+          id: "organization-id",
+          name: "Example Company",
+          role: "OWNER",
+          businesses: [
+            {
+              id: "business-id",
+              name: "Example Location",
+              slug: "example-location",
+              status: "ACTIVE",
+            },
+          ],
+        },
+      ],
     });
   });
 

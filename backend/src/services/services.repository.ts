@@ -23,6 +23,13 @@ export interface ServiceRecord {
   archived_at: Date | null;
 }
 
+export interface ServiceEmployeeRecord {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+}
+
 @Injectable()
 export class ServicesRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -208,5 +215,75 @@ export class ServicesRepository {
       [service.id, service.business_id, service.organization_id],
     );
     return (result.rowCount ?? 0) === 1;
+  }
+
+  async listEmployees(
+    service: ServiceRecord,
+  ): Promise<ServiceEmployeeRecord[]> {
+    const result = await this.databaseService.query<ServiceEmployeeRecord>(
+      `SELECT employees.id, employees.first_name, employees.last_name, employees.email
+      FROM employee_services
+      INNER JOIN employees
+        ON employees.id = employee_services.employee_id
+        AND employees.organization_id = employee_services.organization_id
+        AND employees.business_id = employee_services.business_id
+      WHERE employee_services.service_id = $1
+        AND employee_services.organization_id = $2
+        AND employee_services.business_id = $3
+        AND employees.is_active = TRUE
+      ORDER BY employees.first_name ASC, employees.last_name ASC`,
+      [service.id, service.organization_id, service.business_id],
+    );
+
+    return result.rows;
+  }
+
+  async findActiveEmployeeIds(
+    businessId: string,
+    employeeIds: string[],
+  ): Promise<string[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+
+    const result = await this.databaseService.query<{ id: string }>(
+      `SELECT id FROM employees
+      WHERE business_id = $1
+        AND id = ANY($2::uuid[])
+        AND is_active = TRUE`,
+      [businessId, employeeIds],
+    );
+
+    return result.rows.map((employee) => employee.id);
+  }
+
+  async replaceEmployees(
+    service: ServiceRecord,
+    employeeIds: string[],
+  ): Promise<void> {
+    await this.databaseService.transaction(async (client) => {
+      await client.query(
+        `DELETE FROM employee_services
+        WHERE service_id = $1
+          AND organization_id = $2
+          AND business_id = $3`,
+        [service.id, service.organization_id, service.business_id],
+      );
+
+      if (employeeIds.length > 0) {
+        await client.query(
+          `INSERT INTO employee_services
+            (organization_id, business_id, employee_id, service_id)
+          SELECT $1, $2, employee_id, $3
+          FROM UNNEST($4::uuid[]) AS employee_id`,
+          [
+            service.organization_id,
+            service.business_id,
+            service.id,
+            employeeIds,
+          ],
+        );
+      }
+    });
   }
 }

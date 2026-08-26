@@ -596,6 +596,72 @@ PATCH  /api/v1/businesses/<businessId>/services/<serviceId>
 DELETE /api/v1/businesses/<businessId>/services/<serviceId>
 ```
 
+Los empleados habilitados para un servicio se consultan y reemplazan con:
+
+```text
+GET /api/v1/businesses/<businessId>/services/<serviceId>/employees
+PUT /api/v1/businesses/<businessId>/services/<serviceId>/employees
+```
+
+Los clientes se gestionan por negocio. `DELETE` anonimiza sus datos personales
+para conservar el historial sin retener nombre, email, teléfono ni notas.
+
+```text
+GET    /api/v1/businesses/<businessId>/customers
+POST   /api/v1/businesses/<businessId>/customers
+GET    /api/v1/businesses/<businessId>/customers/<customerId>
+PATCH  /api/v1/businesses/<businessId>/customers/<customerId>
+DELETE /api/v1/businesses/<businessId>/customers/<customerId>
+```
+
+Los horarios semanales de empleados usan la convención de JavaScript: `0` es
+domingo y `6` sábado. El `PUT` reemplaza todos los turnos del empleado y admite
+turnos partidos sin solapamientos.
+
+```text
+GET /api/v1/businesses/<businessId>/employees/<employeeId>/working-hours
+PUT /api/v1/businesses/<businessId>/employees/<employeeId>/working-hours
+```
+
+Los bloqueos de calendario siempre pertenecen a un empleado activo del negocio.
+Pueden representar vacaciones, descansos, reuniones o ausencias y se eliminan
+físicamente con `DELETE`.
+
+```text
+GET    /api/v1/businesses/<businessId>/calendar/blocks
+POST   /api/v1/businesses/<businessId>/calendar/blocks
+PATCH  /api/v1/businesses/<businessId>/calendar/blocks/<blockId>
+DELETE /api/v1/businesses/<businessId>/calendar/blocks/<blockId>
+```
+
+Los `GET` de bloqueos aceptan `from` y `to` ISO opcionales y devuelven los
+bloqueos que se solapan con el rango. Para un empleado concreto:
+
+```text
+GET /api/v1/businesses/<businessId>/calendar/blocks/employees/<employeeId>?from=<iso>&to=<iso>
+```
+
+Las citas se crean a partir de un cliente, empleado, servicio y un instante de
+inicio. El backend toma el precio, duracion y buffers como una instantanea del
+servicio; comprueba que el empleado presta ese servicio, su horario local, los
+bloqueos y las citas solapadas. PostgreSQL aplica tambien una exclusion para
+que dos solicitudes simultaneas no puedan reservar el mismo intervalo ocupado.
+
+```text
+GET    /api/v1/businesses/<businessId>/appointments?from=<iso>&to=<iso>&employeeId=<uuid>&customerId=<uuid>&status=<status>
+POST   /api/v1/businesses/<businessId>/appointments
+GET    /api/v1/businesses/<businessId>/appointments/<appointmentId>
+PATCH  /api/v1/businesses/<businessId>/appointments/<appointmentId>
+POST   /api/v1/businesses/<businessId>/appointments/<appointmentId>/confirm
+POST   /api/v1/businesses/<businessId>/appointments/<appointmentId>/complete
+POST   /api/v1/businesses/<businessId>/appointments/<appointmentId>/no-show
+DELETE /api/v1/businesses/<businessId>/appointments/<appointmentId>
+```
+
+`DELETE` cancela la cita y conserva su historico. Puede incluir opcionalmente
+`{ "reason": "..." }`. Los estados son `PENDING`, `CONFIRMED`, `COMPLETED`,
+`CANCELLED` y `NO_SHOW`.
+
 Al iniciar sesion, BUKIOO guarda el hash del refresh token en `user_sessions`
 y envia el token raw en una cookie HttpOnly. `POST /api/v1/auth/refresh`
 verifica y rota el token, actualiza su hash y devuelve un access token nuevo.

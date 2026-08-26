@@ -33,4 +33,19 @@ describe("ServicesRepository", () => {
       ["service-id", "business-id", "organization-id"],
     );
   });
+
+  it("finds active employees only in the selected business", async () => {
+    databaseServiceMock.query.mockResolvedValue({
+      rows: [{ id: "employee-id" }],
+    });
+
+    await expect(
+      repository.findActiveEmployeeIds("business-id", ["employee-id"]),
+    ).resolves.toEqual(["employee-id"]);
+
+    expect(databaseServiceMock.query).toHaveBeenCalledWith(
+      expect.stringContaining("AND is_active = TRUE"),
+      ["business-id", ["employee-id"]],
+    );
+  });
 });

@@ -14,6 +14,9 @@ describe("ServicesService", () => {
     update: jest.fn(),
     countReferences: jest.fn(),
     remove: jest.fn(),
+    listEmployees: jest.fn(),
+    findActiveEmployeeIds: jest.fn(),
+    replaceEmployees: jest.fn(),
   };
   const serviceRecord = {
     id: "11111111-1111-4111-8111-111111111111",
@@ -112,5 +115,45 @@ describe("ServicesService", () => {
     ).rejects.toMatchObject({ status: 409 });
 
     expect(repositoryMock.remove).not.toHaveBeenCalled();
+  });
+
+  it("replaces service employees only after validating all are active in the business", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findById.mockResolvedValue(serviceRecord);
+    repositoryMock.findActiveEmployeeIds.mockResolvedValue([
+      "employee-one",
+      "employee-two",
+    ]);
+
+    await expect(
+      service.replaceEmployees(
+        serviceRecord.business_id,
+        serviceRecord.id,
+        { employeeIds: ["employee-one", "employee-two", "employee-one"] },
+        "actor-id",
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(repositoryMock.replaceEmployees).toHaveBeenCalledWith(
+      serviceRecord,
+      ["employee-one", "employee-two"],
+    );
+  });
+
+  it("rejects employees outside the business or inactive", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findById.mockResolvedValue(serviceRecord);
+    repositoryMock.findActiveEmployeeIds.mockResolvedValue(["employee-one"]);
+
+    await expect(
+      service.replaceEmployees(
+        serviceRecord.business_id,
+        serviceRecord.id,
+        { employeeIds: ["employee-one", "other-business-employee"] },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(repositoryMock.replaceEmployees).not.toHaveBeenCalled();
   });
 });

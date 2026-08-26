@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { CreateServiceDto } from "./dto/create-service.dto";
+import { ReplaceServiceEmployeesDto } from "./dto/replace-service-employees.dto";
 import { UpdateServiceDto } from "./dto/update-service.dto";
 import { ServicesRepository, type ServiceRecord } from "./services.repository";
 
@@ -66,6 +67,36 @@ export class ServicesService {
     if (!(await this.servicesRepository.remove(service))) {
       throw new NotFoundException("Servicio no encontrado");
     }
+  }
+
+  async listEmployees(businessId: string, serviceId: string, userId: string) {
+    await this.assertCanAccess(userId, businessId);
+    const service = await this.getService(businessId, serviceId);
+    return this.servicesRepository.listEmployees(service);
+  }
+
+  async replaceEmployees(
+    businessId: string,
+    serviceId: string,
+    dto: ReplaceServiceEmployeesDto,
+    userId: string,
+  ): Promise<void> {
+    await this.assertCanManage(userId, businessId);
+    const service = await this.getService(businessId, serviceId);
+    const employeeIds = [...new Set(dto.employeeIds)];
+    const activeEmployeeIds =
+      await this.servicesRepository.findActiveEmployeeIds(
+        businessId,
+        employeeIds,
+      );
+
+    if (activeEmployeeIds.length !== employeeIds.length) {
+      throw new BadRequestException(
+        "Todos los empleados deben estar activos y pertenecer a este negocio",
+      );
+    }
+
+    await this.servicesRepository.replaceEmployees(service, employeeIds);
   }
 
   private async assertCanAccess(

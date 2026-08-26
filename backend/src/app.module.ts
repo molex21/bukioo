@@ -11,6 +11,10 @@ import { BusinessesModule } from "./businesses/businesses.module";
 import { EmployeesModule } from "./employees/employees.module";
 import { ServiceCategoriesModule } from "./service-categories/service-categories.module";
 import { ServicesModule } from "./services/services.module";
+import { CustomersModule } from "./customers/customers.module";
+import { WorkingHoursModule } from "./working-hours/working-hours.module";
+import { CalendarBlocksModule } from "./calendar-blocks/calendar-blocks.module";
+import { AppointmentsModule } from "./appointments/appointments.module";
 import Joi from "joi";
 
 @Module({
@@ -70,6 +74,10 @@ import Joi from "joi";
     EmployeesModule,
     ServiceCategoriesModule,
     ServicesModule,
+    CustomersModule,
+    WorkingHoursModule,
+    CalendarBlocksModule,
+    AppointmentsModule,
   ],
   controllers: [AppController],
   providers: [

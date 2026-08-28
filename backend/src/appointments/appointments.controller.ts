@@ -10,13 +10,13 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { AppointmentsService } from "./appointments.service";
 import { CancelAppointmentDto } from "./dto/cancel-appointment.dto";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
@@ -26,40 +26,42 @@ import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
 import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dto";
 
 @Controller("businesses/:businessId/appointments")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
   @Post()
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   create(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Body() dto: CreateAppointmentDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.create(businessId, dto, request.userId!);
+    return this.appointmentsService.create(businessId, dto, userId);
   }
 
   @Get()
   list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Query() filters: ListAppointmentsDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.list(businessId, filters, request.userId!);
+    return this.appointmentsService.list(businessId, filters, userId);
   }
 
   @Get("occupancy")
   occupancy(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Query() filters: ListAppointmentOccupancyDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
     return this.appointmentsService.occupancy(
       businessId,
       filters.from,
       filters.to,
       filters.employeeId,
-      request.userId!,
+      userId,
     );
   }
 
@@ -67,27 +69,25 @@ export class AppointmentsController {
   get(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.get(
-      businessId,
-      appointmentId,
-      request.userId!,
-    );
+    return this.appointmentsService.get(businessId, appointmentId, userId);
   }
 
   @Patch(":appointmentId")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   update(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
     @Body() dto: UpdateAppointmentDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
     return this.appointmentsService.update(
       businessId,
       appointmentId,
       dto,
-      request.userId!,
+      userId,
     );
   }
 
@@ -95,13 +95,9 @@ export class AppointmentsController {
   confirm(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.confirm(
-      businessId,
-      appointmentId,
-      request.userId!,
-    );
+    return this.appointmentsService.confirm(businessId, appointmentId, userId);
   }
 
   @Post(":appointmentId/reschedule-proposals")
@@ -109,54 +105,52 @@ export class AppointmentsController {
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
     @Body() dto: CreateRescheduleProposalDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
     return this.appointmentsService.createRescheduleProposal(
       businessId,
       appointmentId,
       dto,
-      request.userId!,
+      userId,
     );
   }
 
   @Post(":appointmentId/complete")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   complete(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.complete(
-      businessId,
-      appointmentId,
-      request.userId!,
-    );
+    return this.appointmentsService.complete(businessId, appointmentId, userId);
   }
 
   @Post(":appointmentId/no-show")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   noShow(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.appointmentsService.noShow(
-      businessId,
-      appointmentId,
-      request.userId!,
-    );
+    return this.appointmentsService.noShow(businessId, appointmentId, userId);
   }
 
   @Delete(":appointmentId")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async cancel(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
     @Body() dto: CancelAppointmentDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ): Promise<void> {
     await this.appointmentsService.cancel(
       businessId,
       appointmentId,
-      request.userId!,
+      userId,
       dto.reason,
     );
   }

@@ -544,6 +544,11 @@ PATCH  /api/v1/businesses/<businessId>
 DELETE /api/v1/businesses/<businessId>
 ```
 
+La autorización de las operaciones de gestión usa `RolesGuard`: resuelve el rol
+activo del usuario contra PostgreSQL usando el `organizationId` del body o query,
+o el `businessId` de la ruta. Las consultas del servicio mantienen sus propios
+filtros de tenant como segunda barrera.
+
 Al crear un negocio, el creador queda asignado automáticamente. Los slugs son
 únicos dentro de cada organización. `DELETE` solo elimina negocios sin datos
 asociados y nunca permite eliminar el último negocio de una organización; usa
@@ -560,6 +565,9 @@ Los perfiles operativos de empleados se gestionan por negocio. `OWNER` y
 `ADMIN` pueden crearlos, editarlos y archivarlos; los usuarios con acceso al
 negocio pueden consultarlos. La eliminación es lógica: el empleado conserva su
 historial y deja de aparecer en las consultas normales.
+
+Las operaciones de gestión de empleados usan `RolesGuard` con el `businessId`
+de la ruta. Los `GET` mantienen el acceso de los usuarios asignados al negocio.
 
 Al crear un empleado, `inviteUser: true` requiere su email y crea también su
 cuenta, membresías y perfil en una transacción. Recibe por email una contraseña
@@ -583,6 +591,8 @@ DELETE /api/v1/businesses/<businessId>/employees/<employeeId>
 Las categorias de servicios se gestionan por negocio. `PATCH` permite activar o
 desactivar una categoria mediante `isActive`. `DELETE` solo se permite cuando
 no hay servicios asociados; en caso contrario devuelve `409 Conflict`.
+Crear, editar y borrar categorias requiere `OWNER` o `ADMIN`; listarlas admite
+usuarios con acceso al negocio.
 
 ```text
 GET    /api/v1/businesses/<businessId>/service-categories
@@ -595,6 +605,8 @@ Los servicios se gestionan por negocio y pueden pertenecer opcionalmente a una
 categoria del mismo negocio. `PATCH` permite activar o desactivar un servicio.
 `DELETE` lo elimina fisicamente solo cuando no tiene empleados ni citas
 asociadas; de otro modo devuelve `409 Conflict`.
+Crear, editar, borrar y sustituir sus empleados requiere `OWNER` o `ADMIN`;
+las consultas admiten usuarios con acceso al negocio.
 
 ```text
 GET    /api/v1/businesses/<businessId>/services
@@ -621,6 +633,9 @@ PATCH  /api/v1/businesses/<businessId>/customers/<customerId>
 DELETE /api/v1/businesses/<businessId>/customers/<customerId>
 ```
 
+Crear, editar y anonimizar clientes requiere el rol `OWNER` o `ADMIN`; las
+consultas admiten a cualquier usuario con acceso al negocio.
+
 Los horarios semanales de empleados usan la convención de JavaScript: `0` es
 domingo y `6` sábado. El `PUT` reemplaza todos los turnos del empleado y admite
 turnos partidos sin solapamientos.
@@ -629,6 +644,9 @@ turnos partidos sin solapamientos.
 GET /api/v1/businesses/<businessId>/employees/<employeeId>/working-hours
 PUT /api/v1/businesses/<businessId>/employees/<employeeId>/working-hours
 ```
+
+Sustituir horarios requiere `OWNER` o `ADMIN`; la consulta admite a cualquier
+usuario con acceso al negocio.
 
 Los bloqueos de calendario siempre pertenecen a un empleado activo del negocio.
 Pueden representar vacaciones, descansos, reuniones o ausencias y se eliminan
@@ -640,6 +658,9 @@ POST   /api/v1/businesses/<businessId>/calendar/blocks
 PATCH  /api/v1/businesses/<businessId>/calendar/blocks/<blockId>
 DELETE /api/v1/businesses/<businessId>/calendar/blocks/<blockId>
 ```
+
+Crear, editar y eliminar bloqueos requiere `OWNER` o `ADMIN`; las consultas
+admiten a cualquier usuario con acceso al negocio.
 
 Los `GET` de bloqueos aceptan `from` y `to` ISO opcionales y devuelven los
 bloqueos que se solapan con el rango. Para un empleado concreto:
@@ -669,6 +690,11 @@ DELETE /api/v1/businesses/<businessId>/appointments/<appointmentId>
 `{ "reason": "..." }`. Los estados son `PENDING`, `CONFIRMED`, `COMPLETED`,
 `CANCELLED` y `NO_SHOW`.
 
+Crear, editar, completar, marcar ausencia y cancelar una cita requiere
+`OWNER` o `ADMIN`. Las consultas mantienen el acceso de usuarios asignados al
+negocio; la confirmacion y las propuestas de reubicacion tambien admiten al
+empleado asignado por la cita.
+
 Cada servicio puede definir `autoConfirmAppointments`: `true` crea sus citas
 como `CONFIRMED`, `false` como `PENDING` y, al omitirlo, hereda
 `organization_settings.auto_confirm_appointments`. En `PATCH`, enviar `null`
@@ -681,6 +707,26 @@ el rango solicitado:
 
 ```text
 GET /api/v1/businesses/<businessId>/appointments/occupancy?from=<iso>&to=<iso>&employeeId=<uuid>
+```
+
+La disponibilidad interna genera franjas para un empleado y servicio concretos
+en la zona horaria del negocio. Respeta turnos, buffers, antelacion, limite de
+reserva, bloqueos y citas `PENDING` o `CONFIRMED`. Solo la pueden consultar
+usuarios con acceso al negocio y el rango maximo es de 31 dias.
+
+```text
+GET /api/v1/businesses/<businessId>/availability?employeeId=<uuid>&serviceId=<uuid>&from=<iso>&to=<iso>
+```
+
+La reserva publica comienza con un catalogo sin autenticacion. Solo expone
+organizaciones y negocios activos, junto con servicios activos y sus datos de
+reserva. El `business.id` de cada servicio se usara para elegir empleado y
+consultar disponibilidad en los siguientes pasos.
+
+```text
+GET /api/v1/public/<organizationSlug>/services?businessId=<uuid>
+GET /api/v1/public/<organizationSlug>/employees?businessId=<uuid>&serviceId=<uuid>
+GET /api/v1/public/<organizationSlug>/availability?businessId=<uuid>&employeeId=<uuid>&serviceId=<uuid>&from=<iso>&to=<iso>
 ```
 
 Una cita solicitada sobre otra cita o un bloqueo se guarda como `PENDING` con

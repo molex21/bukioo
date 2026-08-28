@@ -10,66 +10,75 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { BusinessesService } from "./businesses.service";
 import { CreateBusinessDto } from "./dto/create-business.dto";
 import { ListBusinessesDto } from "./dto/list-businesses.dto";
 import { UpdateBusinessDto } from "./dto/update-business.dto";
 
 @Controller("businesses")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) {}
 
   @Post()
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({
+    resource: "organization",
+    source: "body",
+    key: "organizationId",
+  })
   create(
     @Body() createBusinessDto: CreateBusinessDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.businessesService.create(createBusinessDto, request.userId!);
+    return this.businessesService.create(createBusinessDto, userId);
   }
 
   @Get()
-  list(
-    @Query() query: ListBusinessesDto,
-    @Req() request: AuthenticatedRequest,
-  ) {
-    return this.businessesService.list(query.organizationId, request.userId!);
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({
+    resource: "organization",
+    source: "query",
+    key: "organizationId",
+  })
+  list(@Query() query: ListBusinessesDto, @CurrentUser() userId: string) {
+    return this.businessesService.list(query.organizationId, userId);
   }
 
   @Get(":businessId")
   get(
     @Param("businessId", ParseUUIDPipe) businessId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.businessesService.get(businessId, request.userId!);
+    return this.businessesService.get(businessId, userId);
   }
 
   @Patch(":businessId")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   update(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Body() updateBusinessDto: UpdateBusinessDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.businessesService.update(
-      businessId,
-      updateBusinessDto,
-      request.userId!,
-    );
+    return this.businessesService.update(businessId, updateBusinessDto, userId);
   }
 
   @Delete(":businessId")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async remove(
     @Param("businessId", ParseUUIDPipe) businessId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ): Promise<void> {
-    await this.businessesService.remove(businessId, request.userId!);
+    await this.businessesService.remove(businessId, userId);
   }
 }

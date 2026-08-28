@@ -8,6 +8,7 @@ import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
 import { TwoFactorRepository } from "./two-factor.repository";
+import { AuthorizationRepository } from "./authorization.repository";
 import { UsersRepository } from "./users.repository";
 
 describe("AuthModule", () => {
@@ -38,6 +39,8 @@ describe("AuthModule", () => {
       .overrideProvider(UserTokensRepository)
       .useValue({})
       .overrideProvider(TwoFactorRepository)
+      .useValue({})
+      .overrideProvider(AuthorizationRepository)
       .useValue({})
       .overrideProvider(EmailProvider)
       .useValue({})

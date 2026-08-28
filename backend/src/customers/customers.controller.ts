@@ -9,70 +9,71 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { CustomersService } from "./customers.service";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 
 @Controller("businesses/:businessId/customers")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   create(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Body() dto: CreateCustomerDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.customersService.create(businessId, dto, request.userId!);
+    return this.customersService.create(businessId, dto, userId);
   }
 
   @Get()
   list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.customersService.list(businessId, request.userId!);
+    return this.customersService.list(businessId, userId);
   }
 
   @Get(":customerId")
   get(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("customerId", ParseUUIDPipe) customerId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.customersService.get(businessId, customerId, request.userId!);
+    return this.customersService.get(businessId, customerId, userId);
   }
 
   @Patch(":customerId")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   update(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("customerId", ParseUUIDPipe) customerId: string,
     @Body() dto: UpdateCustomerDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.customersService.update(
-      businessId,
-      customerId,
-      dto,
-      request.userId!,
-    );
+    return this.customersService.update(businessId, customerId, dto, userId);
   }
 
   @Delete(":customerId")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async remove(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("customerId", ParseUUIDPipe) customerId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ): Promise<void> {
-    await this.customersService.remove(businessId, customerId, request.userId!);
+    await this.customersService.remove(businessId, customerId, userId);
   }
 }

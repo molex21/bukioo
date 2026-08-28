@@ -9,71 +9,69 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { CreateServiceCategoryDto } from "./dto/create-service-category.dto";
 import { UpdateServiceCategoryDto } from "./dto/update-service-category.dto";
 import { ServiceCategoriesService } from "./service-categories.service";
 
 @Controller("businesses/:businessId/service-categories")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class ServiceCategoriesController {
   constructor(
     private readonly serviceCategoriesService: ServiceCategoriesService,
   ) {}
 
   @Post()
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   create(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Body() createDto: CreateServiceCategoryDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.serviceCategoriesService.create(
-      businessId,
-      createDto,
-      request.userId!,
-    );
+    return this.serviceCategoriesService.create(businessId, createDto, userId);
   }
 
   @Get()
   list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.serviceCategoriesService.list(businessId, request.userId!);
+    return this.serviceCategoriesService.list(businessId, userId);
   }
 
   @Patch(":categoryId")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   update(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("categoryId", ParseUUIDPipe) categoryId: string,
     @Body() updateDto: UpdateServiceCategoryDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
     return this.serviceCategoriesService.update(
       businessId,
       categoryId,
       updateDto,
-      request.userId!,
+      userId,
     );
   }
 
   @Delete(":categoryId")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async remove(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("categoryId", ParseUUIDPipe) categoryId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ): Promise<void> {
-    await this.serviceCategoriesService.remove(
-      businessId,
-      categoryId,
-      request.userId!,
-    );
+    await this.serviceCategoriesService.remove(businessId, categoryId, userId);
   }
 }

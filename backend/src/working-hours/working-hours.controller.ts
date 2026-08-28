@@ -7,18 +7,18 @@ import {
   Param,
   ParseUUIDPipe,
   Put,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { ReplaceWorkingHoursDto } from "./dto/replace-working-hours.dto";
 import { WorkingHoursService } from "./working-hours.service";
 
 @Controller("businesses/:businessId/employees/:employeeId/working-hours")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class WorkingHoursController {
   constructor(private readonly workingHoursService: WorkingHoursService) {}
 
@@ -26,28 +26,21 @@ export class WorkingHoursController {
   list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("employeeId", ParseUUIDPipe) employeeId: string,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.workingHoursService.list(
-      businessId,
-      employeeId,
-      request.userId!,
-    );
+    return this.workingHoursService.list(businessId, employeeId, userId);
   }
 
   @Put()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async replace(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("employeeId", ParseUUIDPipe) employeeId: string,
     @Body() dto: ReplaceWorkingHoursDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ): Promise<void> {
-    await this.workingHoursService.replace(
-      businessId,
-      employeeId,
-      dto,
-      request.userId!,
-    );
+    await this.workingHoursService.replace(businessId, employeeId, dto, userId);
   }
 }

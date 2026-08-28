@@ -16,6 +16,8 @@ import { WorkingHoursModule } from "./working-hours/working-hours.module";
 import { CalendarBlocksModule } from "./calendar-blocks/calendar-blocks.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
 import { AuditModule } from "./audit/audit.module";
+import { AvailabilityModule } from "./availability/availability.module";
+import { PublicBookingModule } from "./public-booking/public-booking.module";
 import Joi from "joi";
 
 @Module({
@@ -82,6 +84,8 @@ import Joi from "joi";
     CalendarBlocksModule,
     AppointmentsModule,
     AuditModule,
+    AvailabilityModule,
+    PublicBookingModule,
   ],
   controllers: [AppController],
   providers: [

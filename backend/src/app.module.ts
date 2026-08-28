@@ -15,6 +15,7 @@ import { CustomersModule } from "./customers/customers.module";
 import { WorkingHoursModule } from "./working-hours/working-hours.module";
 import { CalendarBlocksModule } from "./calendar-blocks/calendar-blocks.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
+import { AuditModule } from "./audit/audit.module";
 import Joi from "joi";
 
 @Module({
@@ -37,6 +38,8 @@ import Joi from "joi";
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
 
         JWT_EMAIL_VERIFICATION_SECRET: Joi.string().min(32).required(),
+
+        TOTP_ENCRYPTION_KEY: Joi.string().min(32).required(),
 
         ONBOARDING_SECRET: Joi.string().min(32).required(),
 
@@ -78,6 +81,7 @@ import Joi from "joi";
     WorkingHoursModule,
     CalendarBlocksModule,
     AppointmentsModule,
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [

@@ -3,6 +3,8 @@ import { ConfigService } from "@nestjs/config";
 import {
   accountCredentialsTemplate,
   emailVerificationTemplate,
+  appointmentRescheduleTemplate,
+  passwordResetTemplate,
 } from "../email/templates";
 
 export interface EmailVerificationMessage {
@@ -15,12 +17,28 @@ export interface AccountCredentialsMessage {
   temporaryPassword: string;
 }
 
+export interface PasswordResetMessage {
+  email: string;
+  token: string;
+}
+export interface AppointmentRescheduleMessage {
+  email: string;
+  referenceCode: string;
+  startAt: Date;
+  url: string;
+  message?: string;
+}
+
 export abstract class EmailProvider {
   abstract sendEmailVerification(
     message: EmailVerificationMessage,
   ): Promise<void>;
   abstract sendAccountCredentials(
     message: AccountCredentialsMessage,
+  ): Promise<void>;
+  abstract sendPasswordReset(message: PasswordResetMessage): Promise<void>;
+  abstract sendAppointmentReschedule(
+    message: AppointmentRescheduleMessage,
   ): Promise<void>;
 }
 
@@ -40,6 +58,15 @@ export class ResendEmailProvider implements EmailProvider {
   ): Promise<void> {
     const template = accountCredentialsTemplate(message.temporaryPassword);
     await this.send(message.email, template);
+  }
+
+  async sendPasswordReset(message: PasswordResetMessage): Promise<void> {
+    await this.send(message.email, passwordResetTemplate(message.token));
+  }
+  async sendAppointmentReschedule(
+    message: AppointmentRescheduleMessage,
+  ): Promise<void> {
+    await this.send(message.email, appointmentRescheduleTemplate(message));
   }
 
   private async send(

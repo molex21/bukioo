@@ -17,6 +17,7 @@ export interface ServiceRecord {
   minimum_booking_notice_minutes: number | null;
   maximum_booking_advance_days: number | null;
   same_day_booking: boolean | null;
+  auto_confirm_appointments: boolean | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -102,12 +103,13 @@ export class ServicesRepository {
       `INSERT INTO services
         (organization_id, business_id, category_id, name, description, price,
          duration_minutes, buffer_before_minutes, buffer_after_minutes,
-         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking)
-       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments)
+       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
        FROM businesses WHERE id = $1
        RETURNING id, organization_id, business_id, category_id, name, description,
          price, duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
+         auto_confirm_appointments,
          is_active, created_at, updated_at, archived_at`,
       [
         businessId,
@@ -121,6 +123,7 @@ export class ServicesRepository {
         dto.minimumBookingNoticeMinutes ?? null,
         dto.maximumBookingAdvanceDays ?? null,
         dto.sameDayBooking ?? null,
+        dto.autoConfirmAppointments ?? null,
       ],
     );
     return result.rows[0];
@@ -130,7 +133,7 @@ export class ServicesRepository {
     const result = await this.databaseService.query<ServiceRecord>(
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
-        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
+        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE business_id = $1 AND archived_at IS NULL
       ORDER BY name ASC`,
@@ -146,7 +149,7 @@ export class ServicesRepository {
     const result = await this.databaseService.query<ServiceRecord>(
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
-        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
+        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE id = $1 AND business_id = $2 AND archived_at IS NULL LIMIT 1`,
       [serviceId, businessId],
@@ -166,12 +169,14 @@ export class ServicesRepository {
         buffer_after_minutes = COALESCE($7, buffer_after_minutes),
         minimum_booking_notice_minutes = COALESCE($8, minimum_booking_notice_minutes),
         maximum_booking_advance_days = COALESCE($9, maximum_booking_advance_days),
-        same_day_booking = COALESCE($10, same_day_booking), is_active = COALESCE($11, is_active),
+        same_day_booking = COALESCE($10, same_day_booking),
+        auto_confirm_appointments = CASE WHEN $12 THEN $11 ELSE auto_confirm_appointments END,
+        is_active = COALESCE($13, is_active),
         updated_at = NOW()
-      WHERE id = $12 AND business_id = $13 AND organization_id = $14 AND archived_at IS NULL
+      WHERE id = $14 AND business_id = $15 AND organization_id = $16 AND archived_at IS NULL
       RETURNING id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
-        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
+        minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         is_active, created_at, updated_at, archived_at`,
       [
         dto.categoryId,
@@ -184,6 +189,8 @@ export class ServicesRepository {
         dto.minimumBookingNoticeMinutes,
         dto.maximumBookingAdvanceDays,
         dto.sameDayBooking,
+        dto.autoConfirmAppointments ?? null,
+        Object.prototype.hasOwnProperty.call(dto, "autoConfirmAppointments"),
         dto.isActive,
         service.id,
         service.business_id,

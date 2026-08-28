@@ -21,7 +21,9 @@ import { AppointmentsService } from "./appointments.service";
 import { CancelAppointmentDto } from "./dto/cancel-appointment.dto";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { ListAppointmentsDto } from "./dto/list-appointments.dto";
+import { ListAppointmentOccupancyDto } from "./dto/list-appointment-occupancy.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
+import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dto";
 
 @Controller("businesses/:businessId/appointments")
 @UseGuards(JwtAuthGuard)
@@ -44,6 +46,21 @@ export class AppointmentsController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.appointmentsService.list(businessId, filters, request.userId!);
+  }
+
+  @Get("occupancy")
+  occupancy(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Query() filters: ListAppointmentOccupancyDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.appointmentsService.occupancy(
+      businessId,
+      filters.from,
+      filters.to,
+      filters.employeeId,
+      request.userId!,
+    );
   }
 
   @Get(":appointmentId")
@@ -83,6 +100,21 @@ export class AppointmentsController {
     return this.appointmentsService.confirm(
       businessId,
       appointmentId,
+      request.userId!,
+    );
+  }
+
+  @Post(":appointmentId/reschedule-proposals")
+  createRescheduleProposal(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
+    @Body() dto: CreateRescheduleProposalDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.appointmentsService.createRescheduleProposal(
+      businessId,
+      appointmentId,
+      dto,
       request.userId!,
     );
   }

@@ -4,8 +4,13 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
 } from "@nestjs/common";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
+import { ConfigService } from "@nestjs/config";
+import { EmailProvider } from "../auth/email.provider";
+import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dto";
+import { AuditService } from "../audit/audit.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { ListAppointmentsDto } from "./dto/list-appointments.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
@@ -27,7 +32,117 @@ interface AppointmentTimes {
 export class AppointmentsService {
   constructor(
     private readonly appointmentsRepository: AppointmentsRepository,
+    @Inject(EmailProvider) private readonly emailProvider: EmailProvider,
+    private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
   ) {}
+
+  async createRescheduleProposal(
+    businessId: string,
+    appointmentId: string,
+    dto: CreateRescheduleProposalDto,
+    userId: string,
+  ) {
+    const appointment = await this.getAppointment(businessId, appointmentId);
+    await this.assertCanConfirm(userId, businessId, appointment);
+    this.assertSchedulable(appointment);
+    const context = await this.getBookingContext(
+      businessId,
+      appointment.customer_id,
+      dto.employeeId ?? appointment.employee_id,
+      appointment.service_id,
+    );
+    const times = this.buildTimes(dto.startAt, context, appointment);
+    await this.assertWithinWorkingHours(context, times);
+    const conflicts = await this.getConflicts(context, times, appointment.id);
+    if (conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock)
+      throw new ConflictException("La propuesta debe usar un horario libre");
+    const email = await this.appointmentsRepository.customerEmail(appointment);
+    if (!email)
+      throw new BadRequestException("El cliente no tiene un email disponible");
+    const token = randomBytes(32).toString("base64url");
+    const hash = createHash("sha256").update(token).digest("hex");
+    await this.appointmentsRepository.createRescheduleProposal({
+      appointment,
+      employeeId: context.employee_id,
+      ...times,
+      tokenHash: hash,
+      expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      userId,
+      message: dto.message?.trim(),
+    });
+    await this.emailProvider.sendAppointmentReschedule({
+      email,
+      referenceCode: appointment.reference_code,
+      startAt: times.startAt,
+      url: `${this.configService.getOrThrow<string>("FRONTEND_URL")}/appointments/reschedule?token=${encodeURIComponent(token)}`,
+      message: dto.message?.trim(),
+    });
+    await this.auditService.record({
+      organizationId: appointment.organization_id,
+      businessId: appointment.business_id,
+      actorUserId: userId,
+      action: "APPOINTMENT_RESCHEDULE_PROPOSED",
+      entityType: "APPOINTMENT",
+      entityId: appointment.id,
+      newValues: { employeeId: context.employee_id, startAt: times.startAt },
+    });
+    return { status: "PENDING_CUSTOMER" };
+  }
+
+  async acceptRescheduleProposal(token: string) {
+    const proposal = await this.appointmentsRepository.findRescheduleProposal(
+      this.hashToken(token),
+    );
+    if (!proposal) throw new NotFoundException("Propuesta invalida o caducada");
+    const context = await this.getBookingContext(
+      proposal.business_id,
+      proposal.customer_id,
+      proposal.employee_id,
+      proposal.service_id,
+    );
+    const times = {
+      startAt: proposal.start_at,
+      endAt: proposal.end_at,
+      occupiedStartAt: proposal.occupied_start_at,
+      occupiedEndAt: proposal.occupied_end_at,
+    };
+    await this.assertWithinWorkingHours(context, times);
+    const conflicts = await this.getConflicts(
+      context,
+      times,
+      proposal.appointment_id,
+    );
+    if (conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock)
+      throw new ConflictException("El nuevo horario ya no esta disponible");
+    const appointment =
+      await this.appointmentsRepository.acceptRescheduleProposal(proposal);
+    if (!appointment)
+      throw new ConflictException("La propuesta ya no puede aplicarse");
+    await this.auditService.record({
+      organizationId: appointment.organization_id,
+      businessId: appointment.business_id,
+      actorUserId: null,
+      action: "APPOINTMENT_RESCHEDULE_ACCEPTED",
+      entityType: "APPOINTMENT",
+      entityId: appointment.id,
+      newValues: {
+        employeeId: appointment.employee_id,
+        startAt: appointment.start_at,
+      },
+    });
+    return appointment;
+  }
+
+  async rejectRescheduleProposal(token: string) {
+    if (
+      !(await this.appointmentsRepository.rejectRescheduleProposal(
+        this.hashToken(token),
+      ))
+    )
+      throw new NotFoundException("Propuesta invalida o caducada");
+    return { status: "REJECTED" };
+  }
 
   async create(businessId: string, dto: CreateAppointmentDto, userId: string) {
     await this.assertCanManage(userId, businessId);
@@ -38,9 +153,12 @@ export class AppointmentsService {
       dto.serviceId,
     );
     const times = this.buildTimes(dto.startAt, context);
-    await this.assertAvailable(context, times);
+    await this.assertWithinWorkingHours(context, times);
+    const conflicts = await this.getConflicts(context, times);
+    const requiresApproval =
+      conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock;
     try {
-      return await this.appointmentsRepository.create(
+      const appointment = await this.appointmentsRepository.create(
         context,
         this.normalize(dto),
         times.startAt,
@@ -49,7 +167,25 @@ export class AppointmentsService {
         times.occupiedEndAt,
         this.createReferenceCode(),
         userId,
+        context.auto_confirm_appointments && !requiresApproval
+          ? "CONFIRMED"
+          : "PENDING",
+        requiresApproval,
       );
+      await this.auditService.record({
+        organizationId: appointment.organization_id,
+        businessId: appointment.business_id,
+        actorUserId: userId,
+        action: "APPOINTMENT_CREATED",
+        entityType: "APPOINTMENT",
+        entityId: appointment.id,
+        newValues: {
+          status: appointment.status,
+          startAt: appointment.start_at,
+          employeeId: appointment.employee_id,
+        },
+      });
+      return appointment;
     } catch (error: unknown) {
       this.throwAppointmentConflict(error);
     }
@@ -91,9 +227,17 @@ export class AppointmentsService {
       replacesSnapshot ? undefined : appointment,
     );
 
-    if (dto.startAt || dto.employeeId || dto.serviceId) {
-      await this.assertAvailable(context, times, appointment.id);
-    }
+    const changesScheduling = dto.startAt || dto.employeeId || dto.serviceId;
+    const conflicts = changesScheduling
+      ? await this.getConflicts(context, times, appointment.id)
+      : { hasAppointmentOverlap: false, hasCalendarBlock: false };
+    if (changesScheduling) await this.assertWithinWorkingHours(context, times);
+    const requiresApproval =
+      conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock;
+    const status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED"> =
+      requiresApproval
+        ? "PENDING"
+        : (appointment.status as "PENDING" | "CONFIRMED");
 
     try {
       const updated = await this.appointmentsRepository.update(
@@ -105,9 +249,17 @@ export class AppointmentsService {
         times.occupiedStartAt,
         times.occupiedEndAt,
         replacesSnapshot,
+        status,
+        requiresApproval,
       );
       if (!updated)
         throw new ConflictException("La cita ya no puede modificarse");
+      await this.recordAppointmentAudit(
+        "APPOINTMENT_UPDATED",
+        userId,
+        appointment,
+        updated,
+      );
       return updated;
     } catch (error: unknown) {
       this.throwAppointmentConflict(error);
@@ -115,7 +267,29 @@ export class AppointmentsService {
   }
 
   async confirm(businessId: string, appointmentId: string, userId: string) {
-    return this.changeStatus(businessId, appointmentId, "CONFIRMED", userId);
+    const appointment = await this.getAppointment(businessId, appointmentId);
+    await this.assertCanConfirm(userId, businessId, appointment);
+    this.assertSchedulable(appointment);
+    const context =
+      await this.appointmentsRepository.findAppointmentContext(appointment);
+    if (!context) throw new NotFoundException("Negocio no encontrado");
+    const times = this.buildStoredTimes(appointment);
+    const conflicts = await this.getConflicts(context, times, appointment.id);
+    const updated = await this.appointmentsRepository.setStatus(
+      appointment,
+      "CONFIRMED",
+      undefined,
+      conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock,
+    );
+    if (!updated)
+      throw new ConflictException("La cita ya no puede actualizarse");
+    await this.recordAppointmentAudit(
+      "APPOINTMENT_CONFIRMED",
+      userId,
+      appointment,
+      updated,
+    );
+    return updated;
   }
 
   async complete(businessId: string, appointmentId: string, userId: string) {
@@ -141,6 +315,27 @@ export class AppointmentsService {
     );
   }
 
+  async occupancy(
+    businessId: string,
+    from: string,
+    to: string,
+    employeeId: string | undefined,
+    userId: string,
+  ) {
+    await this.assertCanAccess(userId, businessId);
+    if (new Date(from) >= new Date(to)) {
+      throw new BadRequestException(
+        "La fecha from debe ser anterior a la fecha to",
+      );
+    }
+    return this.appointmentsRepository.listOccupancy(
+      businessId,
+      from,
+      to,
+      employeeId,
+    );
+  }
+
   private async changeStatus(
     businessId: string,
     appointmentId: string,
@@ -158,6 +353,12 @@ export class AppointmentsService {
     );
     if (!updated)
       throw new ConflictException("La cita ya no puede actualizarse");
+    await this.recordAppointmentAudit(
+      `APPOINTMENT_${status}`,
+      userId,
+      appointment,
+      updated,
+    );
     return updated;
   }
 
@@ -184,10 +385,18 @@ export class AppointmentsService {
     };
   }
 
-  private async assertAvailable(
+  private buildStoredTimes(appointment: AppointmentRecord): AppointmentTimes {
+    return {
+      startAt: appointment.start_at,
+      endAt: appointment.end_at,
+      occupiedStartAt: appointment.occupied_start_at,
+      occupiedEndAt: appointment.occupied_end_at,
+    };
+  }
+
+  private async assertWithinWorkingHours(
     context: BookingContext,
     times: AppointmentTimes,
-    excludingAppointmentId?: string,
   ): Promise<void> {
     if (
       !(await this.appointmentsRepository.isWithinWorkingHours(
@@ -200,29 +409,27 @@ export class AppointmentsService {
         "La cita queda fuera del horario laboral del empleado",
       );
     }
-    if (
-      await this.appointmentsRepository.hasCalendarBlock(
+  }
+
+  private async getConflicts(
+    context: BookingContext,
+    times: AppointmentTimes,
+    excludingAppointmentId?: string,
+  ): Promise<{ hasAppointmentOverlap: boolean; hasCalendarBlock: boolean }> {
+    const [hasCalendarBlock, hasAppointmentOverlap] = await Promise.all([
+      this.appointmentsRepository.hasCalendarBlock(
         context,
         times.occupiedStartAt,
         times.occupiedEndAt,
-      )
-    ) {
-      throw new ConflictException(
-        "El empleado tiene un bloqueo de calendario en ese horario",
-      );
-    }
-    if (
-      await this.appointmentsRepository.hasAppointmentOverlap(
+      ),
+      this.appointmentsRepository.hasAppointmentOverlap(
         context,
         times.occupiedStartAt,
         times.occupiedEndAt,
         excludingAppointmentId,
-      )
-    ) {
-      throw new ConflictException(
-        "El empleado ya tiene una cita en ese horario",
-      );
-    }
+      ),
+    ]);
+    return { hasAppointmentOverlap, hasCalendarBlock };
   }
 
   private async getBookingContext(
@@ -297,8 +504,64 @@ export class AppointmentsService {
     }
   }
 
+  private async assertCanConfirm(
+    userId: string,
+    businessId: string,
+    appointment: AppointmentRecord,
+  ): Promise<void> {
+    if (
+      (await this.appointmentsRepository.canManageBusiness(
+        userId,
+        businessId,
+      )) ||
+      (await this.appointmentsRepository.isAssignedEmployee(
+        userId,
+        appointment,
+      ))
+    ) {
+      return;
+    }
+    throw new ForbiddenException("No tienes permiso para confirmar esta cita");
+  }
+
   private createReferenceCode(): string {
     return `APT-${randomBytes(5).toString("hex").toUpperCase()}`;
+  }
+
+  private async recordAppointmentAudit(
+    action: string,
+    actorUserId: string,
+    previous: AppointmentRecord,
+    current: AppointmentRecord,
+  ): Promise<void> {
+    await this.auditService.record({
+      organizationId: current.organization_id,
+      businessId: current.business_id,
+      actorUserId,
+      action,
+      entityType: "APPOINTMENT",
+      entityId: current.id,
+      oldValues: this.appointmentAuditValues(previous),
+      newValues: this.appointmentAuditValues(current),
+    });
+  }
+
+  private appointmentAuditValues(
+    appointment: AppointmentRecord,
+  ): Record<string, unknown> {
+    return {
+      employeeId: appointment.employee_id,
+      serviceId: appointment.service_id,
+      customerId: appointment.customer_id,
+      status: appointment.status,
+      startAt: appointment.start_at,
+      endAt: appointment.end_at,
+      requiresApproval: appointment.requires_approval,
+      conflictOverride: appointment.conflict_override,
+    };
+  }
+  private hashToken(token: string): string {
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private normalize<T extends CreateAppointmentDto | UpdateAppointmentDto>(

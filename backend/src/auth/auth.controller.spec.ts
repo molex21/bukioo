@@ -17,6 +17,12 @@ describe("AuthController", () => {
     me: jest.fn(),
     requestEmailVerification: jest.fn(),
     verifyEmail: jest.fn(),
+    requestPasswordReset: jest.fn(),
+    resetPassword: jest.fn(),
+    createTwoFactorSetup: jest.fn(),
+    enableTwoFactor: jest.fn(),
+    verifyTwoFactor: jest.fn(),
+    useRecoveryCode: jest.fn(),
     verifyInitialEmail: jest.fn(),
     setInitialPassword: jest.fn(),
   };
@@ -155,6 +161,36 @@ describe("AuthController", () => {
     );
   });
 
+  it("pauses a 2FA login and stores its attempt in a scoped cookie", async () => {
+    const cookie = jest.fn();
+    const status = jest.fn();
+    const httpResponse = { cookie, status } as unknown as Response;
+    authServiceMock.login.mockResolvedValue({
+      twoFactorRequired: true,
+      twoFactorAttemptToken: "two-factor-attempt-token",
+    });
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.login(
+        { email: "user@example.com", password: "a-secure-password" },
+        "test-agent",
+        "127.0.0.1",
+        httpResponse,
+      ),
+    ).resolves.toEqual({ twoFactorRequired: true });
+
+    expect(status).toHaveBeenCalledWith(202);
+    expect(cookie).toHaveBeenCalledWith(
+      "two_factor_attempt",
+      "two-factor-attempt-token",
+      expect.objectContaining({
+        httpOnly: true,
+        path: "/api/v1/auth/2fa",
+      }),
+    );
+  });
+
   it("rotates the refresh token from the request cookie", async () => {
     const response = {
       accessToken: "next-access-token",
@@ -261,6 +297,33 @@ describe("AuthController", () => {
       emailVerified: true,
     });
     expect(authServiceMock.verifyEmail).toHaveBeenCalledWith(verifyEmailDto);
+  });
+
+  it("accepts a password-reset request without revealing user state", async () => {
+    const forgotPasswordDto = { email: "user@example.com" };
+    authServiceMock.requestPasswordReset.mockResolvedValue(undefined);
+
+    await expect(
+      controller.requestPasswordReset(forgotPasswordDto),
+    ).resolves.toEqual({ status: "accepted" });
+    expect(authServiceMock.requestPasswordReset).toHaveBeenCalledWith(
+      forgotPasswordDto,
+    );
+  });
+
+  it("delegates a password reset to the auth service", async () => {
+    const resetPasswordDto = {
+      token: "123456",
+      password: "new-secure-password",
+    };
+    authServiceMock.resetPassword.mockResolvedValue(undefined);
+
+    await expect(controller.resetPassword(resetPasswordDto)).resolves.toEqual({
+      passwordReset: true,
+    });
+    expect(authServiceMock.resetPassword).toHaveBeenCalledWith(
+      resetPasswordDto,
+    );
   });
 
   it("verifies the email code and exchanges its cookie for password activation", async () => {

@@ -11,6 +11,7 @@ import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
 import { UsersRepository } from "./users.repository";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
+import { TwoFactorRepository } from "./two-factor.repository";
 
 @Module({
   imports: [
@@ -34,11 +35,12 @@ import { EmployeeRegistrationRepository } from "./employee-registration.reposito
     UserSessionsRepository,
     OnboardingRepository,
     UserTokensRepository,
+    TwoFactorRepository,
     {
       provide: EmailProvider,
       useClass: ResendEmailProvider,
     },
   ],
-  exports: [AuthService, JwtAuthGuard, JwtModule],
+  exports: [AuthService, JwtAuthGuard, JwtModule, EmailProvider],
 })
 export class AuthModule {}

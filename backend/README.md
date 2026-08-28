@@ -34,6 +34,7 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 - `pg` como cliente PostgreSQL
 - `dbmate` para migraciones SQL
 - `@nestjs/jwt` para access tokens JWT de corta duracion
+- `otplib` para codigos TOTP de segundo factor
 - Supertest para pruebas de API
 - ESLint
 - TypeScript ESLint
@@ -503,6 +504,7 @@ Para enviar correos de verificacion, configura tambien estas variables:
 
 ```env
 JWT_EMAIL_VERIFICATION_SECRET=replace_with_another_random_value_at_least_32_characters
+TOTP_ENCRYPTION_KEY=replace_with_a_random_value_at_least_32_characters
 ONBOARDING_SECRET=replace_with_a_random_onboarding_value_at_least_32_characters
 RESEND_API_KEY=re_replace_with_your_resend_api_key
 RESEND_FROM_EMAIL=no-reply@your-verified-domain.example
@@ -563,11 +565,16 @@ Al crear un empleado, `inviteUser: true` requiere su email y crea también su
 cuenta, membresías y perfil en una transacción. Recibe por email una contraseña
 temporal de un solo uso y completa el flujo de verificación y nueva contraseña
 en su primer acceso. Si se omite o es `false`, se crea únicamente el perfil.
+`OWNER` y `ADMIN` pueden resetear una configuración TOTP perdida; el reset
+elimina los recovery codes y revoca todas las sesiones del empleado, sin revelar
+el secreto TOTP al administrador. Cada usuario decide si activa 2FA en su propia
+cuenta; la plataforma no lo impone por rol ni por empleado.
 
 ```text
 GET    /api/v1/businesses/<businessId>/employees
 POST   /api/v1/businesses/<businessId>/employees
 POST   /api/v1/businesses/<businessId>/employees/<employeeId>/invite
+POST   /api/v1/businesses/<businessId>/employees/<employeeId>/2fa/reset
 GET    /api/v1/businesses/<businessId>/employees/<employeeId>
 PATCH  /api/v1/businesses/<businessId>/employees/<employeeId>
 DELETE /api/v1/businesses/<businessId>/employees/<employeeId>
@@ -662,6 +669,36 @@ DELETE /api/v1/businesses/<businessId>/appointments/<appointmentId>
 `{ "reason": "..." }`. Los estados son `PENDING`, `CONFIRMED`, `COMPLETED`,
 `CANCELLED` y `NO_SHOW`.
 
+Cada servicio puede definir `autoConfirmAppointments`: `true` crea sus citas
+como `CONFIRMED`, `false` como `PENDING` y, al omitirlo, hereda
+`organization_settings.auto_confirm_appointments`. En `PATCH`, enviar `null`
+vuelve a usar la configuracion heredada. Una cita pendiente puede
+confirmarla el `OWNER`, `ADMIN` o el empleado asignado.
+
+El calendario operativo consulta ocupacion en vez de solo franjas libres. El
+endpoint devuelve citas pendientes o confirmadas y bloqueos que se solapan con
+el rango solicitado:
+
+```text
+GET /api/v1/businesses/<businessId>/appointments/occupancy?from=<iso>&to=<iso>&employeeId=<uuid>
+```
+
+Una cita solicitada sobre otra cita o un bloqueo se guarda como `PENDING` con
+`requiresApproval: true`, incluso cuando el servicio se auto-confirma. Al
+confirmarla manualmente, el empleado asignado, `OWNER` o `ADMIN` acepta la
+excepcion y la cita queda con `conflictOverride: true`.
+
+El personal puede proponer una reubicacion sin modificar la cita original. La
+propuesta admite cambiar fecha, hora y empleado; se envia al cliente por email
+con un token de un solo uso que caduca a las 48 horas. La aceptacion vuelve a
+validar disponibilidad antes de aplicar el cambio.
+
+```text
+POST /api/v1/businesses/<businessId>/appointments/<appointmentId>/reschedule-proposals
+POST /api/v1/appointments/reschedule-proposals/accept
+POST /api/v1/appointments/reschedule-proposals/reject
+```
+
 Al iniciar sesion, BUKIOO guarda el hash del refresh token en `user_sessions`
 y envia el token raw en una cookie HttpOnly. `POST /api/v1/auth/refresh`
 verifica y rota el token, actualiza su hash y devuelve un access token nuevo.
@@ -687,6 +724,28 @@ segundo Login.
 
 `POST /auth/refresh` y `GET /auth/me` rechazan cuentas sin email verificado o
 pendientes de cambiar su contrasena temporal.
+
+`POST /api/v1/auth/password/forgot` siempre responde `202` para no revelar si
+un email tiene cuenta. Para las cuentas activas, envia un codigo numerico de
+seis digitos, de un solo uso y con 10 minutos de validez. `POST
+/api/v1/auth/password/reset` consume ese codigo, establece la nueva contrasena
+con Argon2id y revoca todas las sesiones activas del usuario.
+
+Las cuentas con 2FA activo, los superadmins y los `OWNER`/`ADMIN` cuando su
+organizacion activa `require_2fa_for_admins` pausan el Login y responden `202`.
+La API guarda un intento temporal en una cookie HttpOnly de 10 minutos y no
+crea una sesion hasta completar uno de estos endpoints:
+
+```text
+POST /api/v1/auth/2fa/verify
+POST /api/v1/auth/2fa/recovery
+```
+
+Un usuario autenticado inicia la configuracion con `POST /api/v1/auth/2fa/setup`
+y la confirma con `POST /api/v1/auth/2fa/setup/verify`. El secreto TOTP se guarda
+cifrado con AES-256-GCM usando `TOTP_ENCRYPTION_KEY`; la respuesta de confirmacion
+incluye ocho recovery codes, que deben guardarse una sola vez por el usuario. En
+base de datos solo se almacenan hashes Argon2id y cada recovery code se consume al usarlo.
 
 Esto permitirá mantener aislados los datos de cada negocio.
 

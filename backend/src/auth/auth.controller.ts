@@ -19,7 +19,9 @@ import {
   REFRESH_TOKEN_COOKIE_NAME,
   EMAIL_VERIFICATION_ATTEMPT_COOKIE_NAME,
   PASSWORD_ACTIVATION_ATTEMPT_COOKIE_NAME,
+  TWO_FACTOR_ATTEMPT_COOKIE_NAME,
   EMAIL_VERIFICATION_ATTEMPT_EXPIRES_IN_SECONDS,
+  TWO_FACTOR_ATTEMPT_EXPIRES_IN_SECONDS,
   REFRESH_TOKEN_EXPIRES_IN_SECONDS,
 } from "./auth.constants";
 import { LoginDto } from "./dto/login.dto";
@@ -28,6 +30,10 @@ import { RequestEmailVerificationDto } from "./dto/request-email-verification.dt
 import { RegisterDto } from "./dto/register.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { SetInitialPasswordDto } from "./dto/set-initial-password.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
+import { UseRecoveryCodeDto } from "./dto/use-recovery-code.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import type { AuthenticatedRequest } from "./jwt-auth.guard";
 
@@ -68,13 +74,34 @@ export class AuthController {
       ipAddress,
     });
 
-    if ("verificationAttemptToken" in loginResult) {
+    if (
+      "verificationAttemptToken" in loginResult &&
+      loginResult.verificationAttemptToken
+    ) {
       this.setEmailVerificationAttemptCookie(
         response,
         loginResult.verificationAttemptToken,
       );
       response.status(HttpStatus.ACCEPTED);
       return { emailVerificationRequired: true };
+    }
+
+    if (
+      "twoFactorAttemptToken" in loginResult &&
+      loginResult.twoFactorAttemptToken
+    ) {
+      this.setTwoFactorAttemptCookie(
+        response,
+        loginResult.twoFactorAttemptToken,
+      );
+      response.status(HttpStatus.ACCEPTED);
+      return {
+        twoFactorRequired: true,
+      };
+    }
+
+    if (!("refreshToken" in loginResult)) {
+      throw new Error("Respuesta de login invalida");
     }
 
     const { refreshToken, ...loginResponse } = loginResult;
@@ -129,6 +156,86 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
     return this.authService.verifyEmail(verifyEmailDto);
+  }
+
+  @Post("password/forgot")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async requestPasswordReset(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    await this.authService.requestPasswordReset(forgotPasswordDto);
+    return { status: "accepted" };
+  }
+
+  @Post("password/reset")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    await this.authService.resetPassword(resetPasswordDto);
+    return { passwordReset: true };
+  }
+
+  @Post("2fa/setup")
+  @UseGuards(JwtAuthGuard)
+  setupTwoFactor(@Req() request: AuthenticatedRequest) {
+    return this.authService.createTwoFactorSetup(request.userId!);
+  }
+
+  @Post("2fa/setup/verify")
+  @UseGuards(JwtAuthGuard)
+  verifyTwoFactorSetup(
+    @Body() verifyTwoFactorDto: VerifyTwoFactorDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.authService.enableTwoFactor(
+      request.userId!,
+      verifyTwoFactorDto,
+    );
+  }
+
+  @Post("2fa/verify")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async verifyTwoFactor(
+    @Body() verifyTwoFactorDto: VerifyTwoFactorDto,
+    @Headers("cookie") cookieHeader: string | undefined,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { refreshToken, ...loginResponse } =
+      await this.authService.verifyTwoFactor(
+        verifyTwoFactorDto,
+        this.getCookie(cookieHeader, TWO_FACTOR_ATTEMPT_COOKIE_NAME),
+        { userAgent, ipAddress },
+      );
+
+    this.setRefreshTokenCookie(response, refreshToken);
+    this.clearTwoFactorAttemptCookie(response);
+
+    return loginResponse;
+  }
+
+  @Post("2fa/recovery")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async useRecoveryCode(
+    @Body() useRecoveryCodeDto: UseRecoveryCodeDto,
+    @Headers("cookie") cookieHeader: string | undefined,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { refreshToken, ...loginResponse } =
+      await this.authService.useRecoveryCode(
+        useRecoveryCodeDto,
+        this.getCookie(cookieHeader, TWO_FACTOR_ATTEMPT_COOKIE_NAME),
+        { userAgent, ipAddress },
+      );
+
+    this.setRefreshTokenCookie(response, refreshToken);
+    this.clearTwoFactorAttemptCookie(response);
+
+    return loginResponse;
   }
 
   @Post("activate/verify")
@@ -257,6 +364,25 @@ export class AuthController {
       secure: this.configService.get<string>("NODE_ENV") === "production",
       sameSite: "lax",
       path: "/api/v1/auth/activate/password",
+    });
+  }
+
+  private setTwoFactorAttemptCookie(response: Response, token: string): void {
+    response.cookie(TWO_FACTOR_ATTEMPT_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: this.configService.get<string>("NODE_ENV") === "production",
+      sameSite: "lax",
+      maxAge: TWO_FACTOR_ATTEMPT_EXPIRES_IN_SECONDS * 1000,
+      path: "/api/v1/auth/2fa",
+    });
+  }
+
+  private clearTwoFactorAttemptCookie(response: Response): void {
+    response.clearCookie(TWO_FACTOR_ATTEMPT_COOKIE_NAME, {
+      httpOnly: true,
+      secure: this.configService.get<string>("NODE_ENV") === "production",
+      sameSite: "lax",
+      path: "/api/v1/auth/2fa",
     });
   }
 }

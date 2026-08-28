@@ -69,5 +69,9 @@ export class UpdateServiceDto {
 
   @IsOptional()
   @IsBoolean()
+  autoConfirmAppointments?: boolean | null;
+
+  @IsOptional()
+  @IsBoolean()
   isActive?: boolean;
 }

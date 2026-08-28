@@ -64,4 +64,8 @@ export class CreateServiceDto {
   @IsOptional()
   @IsBoolean()
   sameDayBooking?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  autoConfirmAppointments?: boolean;
 }

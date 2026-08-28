@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AuthService } from "../auth/auth.service";
+import { TwoFactorRepository } from "../auth/two-factor.repository";
 import {
   EmployeesRepository,
   type EmployeeRecord,
@@ -17,6 +18,7 @@ export class EmployeesService {
   constructor(
     private readonly employeesRepository: EmployeesRepository,
     private readonly authService: AuthService,
+    private readonly twoFactorRepository: TwoFactorRepository,
   ) {}
 
   async create(
@@ -110,6 +112,25 @@ export class EmployeesService {
       employee,
       this.normalize(updateEmployeeDto),
     );
+  }
+
+  async resetTwoFactor(
+    businessId: string,
+    employeeId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.assertCanManageBusiness(userId, businessId);
+    const employee = await this.getActiveEmployee(businessId, employeeId);
+
+    if (!employee.user_id) {
+      throw new BadRequestException("El empleado no tiene una cuenta asociada");
+    }
+
+    const reset = await this.twoFactorRepository.reset(employee.user_id);
+
+    if (!reset) {
+      throw new NotFoundException("El empleado no tiene 2FA activo");
+    }
   }
 
   async remove(

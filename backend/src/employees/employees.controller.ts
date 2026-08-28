@@ -83,6 +83,20 @@ export class EmployeesController {
     );
   }
 
+  @Post(":employeeId/2fa/reset")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async resetTwoFactor(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Param("employeeId", ParseUUIDPipe) employeeId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<void> {
+    await this.employeesService.resetTwoFactor(
+      businessId,
+      employeeId,
+      request.userId!,
+    );
+  }
+
   @Delete(":employeeId")
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(

@@ -10,15 +10,19 @@ import { JwtService } from "@nestjs/jwt";
 import * as argon2 from "argon2";
 import {
   createHash,
+  createCipheriv,
+  createDecipheriv,
   randomBytes,
   randomInt,
   randomUUID,
   timingSafeEqual,
 } from "crypto";
+import { generateSecret, generateURI, verify } from "otplib";
 import {
   ACCESS_TOKEN_EXPIRES_IN_SECONDS,
   EMAIL_VERIFICATION_ATTEMPT_EXPIRES_IN_SECONDS,
   REFRESH_TOKEN_EXPIRES_IN_SECONDS,
+  TWO_FACTOR_ATTEMPT_EXPIRES_IN_SECONDS,
 } from "./auth.constants";
 import { LoginDto } from "./dto/login.dto";
 import { OnboardDto } from "./dto/onboard.dto";
@@ -26,11 +30,16 @@ import { RegisterDto } from "./dto/register.dto";
 import { RequestEmailVerificationDto } from "./dto/request-email-verification.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { SetInitialPasswordDto } from "./dto/set-initial-password.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
+import { UseRecoveryCodeDto } from "./dto/use-recovery-code.dto";
 import { EmailProvider } from "./email.provider";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
+import { TwoFactorRepository } from "./two-factor.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 export interface LoginSessionMetadata {
@@ -56,6 +65,12 @@ interface PasswordActivationAttemptPayload {
   jti: string;
 }
 
+interface TwoFactorAttemptPayload {
+  sub: string;
+  purpose: "TWO_FACTOR_ATTEMPT";
+  jti: string;
+}
+
 export interface InviteEmployeeInput {
   email: string;
   organizationId: string;
@@ -75,6 +90,7 @@ export interface InviteExistingEmployeeInput {
 }
 
 const EMAIL_VERIFICATION_TOKEN_EXPIRES_IN_SECONDS = 10 * 60;
+const PASSWORD_RESET_TOKEN_EXPIRES_IN_SECONDS = 10 * 60;
 
 @Injectable()
 export class AuthService {
@@ -84,6 +100,7 @@ export class AuthService {
     private readonly userSessionsRepository: UserSessionsRepository,
     private readonly onboardingRepository: OnboardingRepository,
     private readonly userTokensRepository: UserTokensRepository,
+    private readonly twoFactorRepository: TwoFactorRepository,
     private readonly emailProvider: EmailProvider,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -334,7 +351,133 @@ export class AuthService {
       throw new ForbiddenException("Debes verificar tu email antes de acceder");
     }
 
+    const twoFactorState = await this.twoFactorRepository.findState(user.id);
+
+    if (twoFactorState?.enabled) {
+      return {
+        twoFactorRequired: true,
+        twoFactorAttemptToken: await this.createTwoFactorAttemptToken(user.id),
+      };
+    }
+
     return this.createSession(user, sessionMetadata);
+  }
+
+  async createTwoFactorSetup(userId: string) {
+    const state = await this.twoFactorRepository.findState(userId);
+
+    if (!state || state.enabled) {
+      throw new BadRequestException(
+        "No se puede iniciar la configuracion de 2FA",
+      );
+    }
+
+    const secret = generateSecret();
+    await this.twoFactorRepository.replacePendingSecret(
+      userId,
+      this.encryptTwoFactorSecret(secret),
+    );
+
+    return {
+      secret,
+      otpauthUri: generateURI({
+        issuer: "BUKIOO",
+        label: userId,
+        secret,
+      }),
+    };
+  }
+
+  async enableTwoFactor(
+    userId: string,
+    verifyTwoFactorDto: VerifyTwoFactorDto,
+  ) {
+    const recoveryCodes = await this.enableTwoFactorForUser(
+      userId,
+      verifyTwoFactorDto.code,
+    );
+
+    return { recoveryCodes };
+  }
+
+  async verifyTwoFactor(
+    verifyTwoFactorDto: VerifyTwoFactorDto,
+    twoFactorAttemptToken: string | undefined,
+    sessionMetadata: LoginSessionMetadata = {},
+  ) {
+    const userId = await this.verifyTwoFactorAttemptToken(
+      twoFactorAttemptToken,
+    );
+    const state = await this.twoFactorRepository.findState(userId);
+
+    if (!state?.enabled || !state.secret_encrypted) {
+      throw new UnauthorizedException("Segundo factor invalido");
+    }
+
+    const verification = await verify({
+      secret: this.decryptTwoFactorSecret(state.secret_encrypted),
+      token: verifyTwoFactorDto.code,
+    });
+
+    if (!verification.valid) {
+      throw new UnauthorizedException("Segundo factor invalido");
+    }
+
+    const user = await this.usersRepository.findById(userId);
+
+    if (!user || user.status !== "ACTIVE" || user.email_verified_at === null) {
+      throw new UnauthorizedException("No se pudo completar la autenticacion");
+    }
+
+    return this.createSession(user, sessionMetadata);
+  }
+
+  async useRecoveryCode(
+    useRecoveryCodeDto: UseRecoveryCodeDto,
+    twoFactorAttemptToken: string | undefined,
+    sessionMetadata: LoginSessionMetadata = {},
+  ) {
+    const userId = await this.verifyTwoFactorAttemptToken(
+      twoFactorAttemptToken,
+    );
+    const state = await this.twoFactorRepository.findState(userId);
+
+    if (!state?.enabled) {
+      throw new UnauthorizedException("Codigo de recuperacion invalido");
+    }
+
+    const recoveryCodes =
+      await this.twoFactorRepository.findUnusedRecoveryCodes(userId);
+    const normalizedCode = useRecoveryCodeDto.code.toUpperCase();
+
+    for (const recoveryCode of recoveryCodes) {
+      if (await argon2.verify(recoveryCode.code_hash, normalizedCode)) {
+        const consumed = await this.twoFactorRepository.consumeRecoveryCode(
+          recoveryCode.id,
+          userId,
+        );
+
+        if (!consumed) {
+          break;
+        }
+
+        const user = await this.usersRepository.findById(userId);
+
+        if (
+          !user ||
+          user.status !== "ACTIVE" ||
+          user.email_verified_at === null
+        ) {
+          throw new UnauthorizedException(
+            "No se pudo completar la autenticacion",
+          );
+        }
+
+        return this.createSession(user, sessionMetadata);
+      }
+    }
+
+    throw new UnauthorizedException("Codigo de recuperacion invalido");
   }
 
   async verifyInitialEmail(
@@ -573,6 +716,43 @@ export class AuthService {
     return { emailVerified: true };
   }
 
+  async requestPasswordReset(
+    forgotPasswordDto: ForgotPasswordDto,
+  ): Promise<void> {
+    const email = forgotPasswordDto.email.trim().toLowerCase();
+    const user = await this.usersRepository.findByEmail(email);
+
+    if (!user || user.status !== "ACTIVE") {
+      return;
+    }
+
+    const token = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    await this.userTokensRepository.replacePasswordResetToken({
+      userId: user.id,
+      tokenHash: this.hashToken(token),
+      expiresAt: new Date(
+        Date.now() + PASSWORD_RESET_TOKEN_EXPIRES_IN_SECONDS * 1000,
+      ),
+    });
+    await this.emailProvider.sendPasswordReset({ email: user.email, token });
+  }
+
+  async resetPassword(resetPasswordDto: ResetPasswordDto): Promise<void> {
+    const passwordHash = await argon2.hash(resetPasswordDto.password, {
+      type: argon2.argon2id,
+    });
+    const reset = await this.userTokensRepository.consumePasswordResetToken({
+      tokenHash: this.hashToken(resetPasswordDto.token),
+      passwordHash,
+    });
+
+    if (!reset) {
+      throw new BadRequestException(
+        "Codigo de recuperacion invalido o caducado",
+      );
+    }
+  }
+
   private async verifyRefreshToken(
     refreshToken: string | undefined,
   ): Promise<RefreshTokenPayload> {
@@ -599,6 +779,150 @@ export class AuthService {
 
       throw new UnauthorizedException("Refresh token invalido");
     }
+  }
+
+  private async enableTwoFactorForUser(
+    userId: string,
+    code: string,
+  ): Promise<string[]> {
+    const state = await this.twoFactorRepository.findState(userId);
+
+    if (!state?.secret_encrypted || state.enabled) {
+      throw new BadRequestException(
+        "No hay una configuracion de 2FA pendiente",
+      );
+    }
+
+    const verification = await verify({
+      secret: this.decryptTwoFactorSecret(state.secret_encrypted),
+      token: code,
+    });
+
+    if (!verification.valid) {
+      throw new BadRequestException("Codigo TOTP invalido");
+    }
+
+    const recoveryCodes = Array.from({ length: 8 }, () =>
+      this.createRecoveryCode(),
+    );
+    const recoveryCodeHashes = await Promise.all(
+      recoveryCodes.map((recoveryCode) =>
+        argon2.hash(recoveryCode, { type: argon2.argon2id }),
+      ),
+    );
+    await this.twoFactorRepository.enable(userId, recoveryCodeHashes);
+
+    return recoveryCodes;
+  }
+
+  private async createTwoFactorAttemptToken(userId: string): Promise<string> {
+    return this.jwtService.signAsync(
+      { sub: userId, purpose: "TWO_FACTOR_ATTEMPT", jti: randomUUID() },
+      {
+        secret: this.configService.getOrThrow<string>(
+          "JWT_EMAIL_VERIFICATION_SECRET",
+        ),
+        expiresIn: TWO_FACTOR_ATTEMPT_EXPIRES_IN_SECONDS,
+      },
+    );
+  }
+
+  private async verifyTwoFactorAttemptToken(
+    twoFactorAttemptToken: string | undefined,
+  ): Promise<string> {
+    if (!twoFactorAttemptToken) {
+      throw new UnauthorizedException("Intento de segundo factor invalido");
+    }
+
+    try {
+      const payload = await this.jwtService.verifyAsync<
+        Record<string, unknown>
+      >(twoFactorAttemptToken, {
+        secret: this.configService.getOrThrow<string>(
+          "JWT_EMAIL_VERIFICATION_SECRET",
+        ),
+      });
+
+      if (!this.isTwoFactorAttemptPayload(payload)) {
+        throw new UnauthorizedException("Intento de segundo factor invalido");
+      }
+
+      return payload.sub;
+    } catch (error: unknown) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      throw new UnauthorizedException("Intento de segundo factor invalido");
+    }
+  }
+
+  private isTwoFactorAttemptPayload(
+    value: Record<string, unknown>,
+  ): value is TwoFactorAttemptPayload & Record<string, unknown> {
+    return (
+      value.sub !== undefined &&
+      typeof value.sub === "string" &&
+      value.purpose === "TWO_FACTOR_ATTEMPT" &&
+      typeof value.jti === "string"
+    );
+  }
+
+  private encryptTwoFactorSecret(secret: string): string {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv(
+      "aes-256-gcm",
+      this.getTwoFactorEncryptionKey(),
+      iv,
+    );
+    const ciphertext = Buffer.concat([
+      cipher.update(secret, "utf8"),
+      cipher.final(),
+    ]);
+    const tag = cipher.getAuthTag();
+
+    return [iv, tag, ciphertext]
+      .map((value) => value.toString("base64url"))
+      .join(".");
+  }
+
+  private decryptTwoFactorSecret(encryptedSecret: string): string {
+    const [iv, tag, ciphertext] = encryptedSecret
+      .split(".")
+      .map((value) => Buffer.from(value, "base64url"));
+
+    if (!iv || !tag || !ciphertext) {
+      throw new UnauthorizedException("Segundo factor invalido");
+    }
+
+    try {
+      const decipher = createDecipheriv(
+        "aes-256-gcm",
+        this.getTwoFactorEncryptionKey(),
+        iv,
+      );
+      decipher.setAuthTag(tag);
+      return Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]).toString("utf8");
+    } catch {
+      throw new UnauthorizedException("Segundo factor invalido");
+    }
+  }
+
+  private getTwoFactorEncryptionKey(): Buffer {
+    return createHash("sha256")
+      .update(this.configService.getOrThrow<string>("TOTP_ENCRYPTION_KEY"))
+      .digest();
+  }
+
+  private createRecoveryCode(): string {
+    return randomBytes(6)
+      .toString("hex")
+      .toUpperCase()
+      .match(/.{1,4}/g)!
+      .join("-");
   }
 
   private hashToken(token: string): string {

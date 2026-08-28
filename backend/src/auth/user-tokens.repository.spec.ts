@@ -75,6 +75,70 @@ describe("UserTokensRepository", () => {
     );
   });
 
+  it("replaces a pending password-reset token", async () => {
+    clientMock.query.mockResolvedValue({});
+    const expiresAt = new Date("2026-08-25T10:00:00.000Z");
+
+    await repository.replacePasswordResetToken({
+      userId: "user-id",
+      tokenHash: "token-hash",
+      expiresAt,
+    });
+
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("SET used_at = NOW()"),
+      ["user-id", "PASSWORD_RESET"],
+    );
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("INSERT INTO user_tokens"),
+      ["user-id", "PASSWORD_RESET", "token-hash", expiresAt],
+    );
+  });
+
+  it("consumes a password-reset token, changes the password, and revokes sessions", async () => {
+    clientMock.query
+      .mockResolvedValueOnce({ rows: [{ id: "token-id", user_id: "user-id" }] })
+      .mockResolvedValue({});
+
+    await expect(
+      repository.consumePasswordResetToken({
+        tokenHash: "token-hash",
+        passwordHash: "new-password-hash",
+      }),
+    ).resolves.toBe(true);
+
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("users.status = 'ACTIVE'"),
+      ["PASSWORD_RESET", "token-hash"],
+    );
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining("password_change_required = FALSE"),
+      ["new-password-hash", "user-id"],
+    );
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("UPDATE user_sessions"),
+      ["user-id"],
+    );
+  });
+
+  it("does not reset a password with an unknown, expired, or used token", async () => {
+    clientMock.query.mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      repository.consumePasswordResetToken({
+        tokenHash: "token-hash",
+        passwordHash: "new-password-hash",
+      }),
+    ).resolves.toBe(false);
+
+    expect(clientMock.query).toHaveBeenCalledTimes(1);
+  });
+
   it("does not consume an unknown, expired, or used token", async () => {
     clientMock.query.mockResolvedValueOnce({ rows: [] });
 

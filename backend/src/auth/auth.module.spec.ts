@@ -7,6 +7,7 @@ import { EmployeeRegistrationRepository } from "./employee-registration.reposito
 import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
+import { TwoFactorRepository } from "./two-factor.repository";
 import { UsersRepository } from "./users.repository";
 
 describe("AuthModule", () => {
@@ -35,6 +36,8 @@ describe("AuthModule", () => {
       .overrideProvider(OnboardingRepository)
       .useValue({})
       .overrideProvider(UserTokensRepository)
+      .useValue({})
+      .overrideProvider(TwoFactorRepository)
       .useValue({})
       .overrideProvider(EmailProvider)
       .useValue({})

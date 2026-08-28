@@ -8,8 +8,14 @@ jest.mock("argon2", () => ({
   hash: jest.fn(),
   verify: jest.fn(),
 }));
+jest.mock("otplib", () => ({
+  generateSecret: jest.fn(),
+  generateURI: jest.fn(),
+  verify: jest.fn(),
+}));
 
 import * as argon2 from "argon2";
+import { generateSecret, generateURI } from "otplib";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { OnboardingRepository } from "./onboarding.repository";
@@ -17,6 +23,7 @@ import { EmailProvider } from "./email.provider";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
+import { TwoFactorRepository } from "./two-factor.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 describe("AuthService", () => {
@@ -58,11 +65,22 @@ describe("AuthService", () => {
     consumeEmailVerificationToken: jest.fn(),
     verifyInitialEmail: jest.fn(),
     completeInitialPassword: jest.fn(),
+    replacePasswordResetToken: jest.fn(),
+    consumePasswordResetToken: jest.fn(),
   };
 
   const emailProviderMock = {
     sendEmailVerification: jest.fn(),
     sendAccountCredentials: jest.fn(),
+    sendPasswordReset: jest.fn(),
+  };
+
+  const twoFactorRepositoryMock = {
+    findState: jest.fn(),
+    replacePendingSecret: jest.fn(),
+    enable: jest.fn(),
+    findUnusedRecoveryCodes: jest.fn(),
+    consumeRecoveryCode: jest.fn(),
   };
 
   const configServiceMock = {
@@ -107,6 +125,10 @@ describe("AuthService", () => {
           useValue: userTokensRepositoryMock,
         },
         {
+          provide: TwoFactorRepository,
+          useValue: twoFactorRepositoryMock,
+        },
+        {
           provide: EmailProvider,
           useValue: emailProviderMock,
         },
@@ -147,8 +169,16 @@ describe("AuthService", () => {
     userTokensRepositoryMock.consumeEmailVerificationToken.mockReset();
     userTokensRepositoryMock.verifyInitialEmail.mockReset();
     userTokensRepositoryMock.completeInitialPassword.mockReset();
+    userTokensRepositoryMock.replacePasswordResetToken.mockReset();
+    userTokensRepositoryMock.consumePasswordResetToken.mockReset();
     emailProviderMock.sendEmailVerification.mockReset();
     emailProviderMock.sendAccountCredentials.mockReset();
+    emailProviderMock.sendPasswordReset.mockReset();
+    twoFactorRepositoryMock.findState.mockReset();
+    twoFactorRepositoryMock.replacePendingSecret.mockReset();
+    twoFactorRepositoryMock.enable.mockReset();
+    twoFactorRepositoryMock.findUnusedRecoveryCodes.mockReset();
+    twoFactorRepositoryMock.consumeRecoveryCode.mockReset();
     configServiceMock.getOrThrow.mockReset();
   });
 
@@ -502,6 +532,53 @@ describe("AuthService", () => {
     expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
   });
 
+  it("pauses login until an enabled second factor is verified", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    });
+    jest.mocked(argon2.verify).mockResolvedValue(true);
+    twoFactorRepositoryMock.findState.mockResolvedValue({
+      secret_encrypted: "encrypted-secret",
+      enabled: true,
+    });
+    jwtServiceMock.signAsync.mockResolvedValue("two-factor-attempt-token");
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.login({ email: user.email, password: "a-secure-password" }),
+    ).resolves.toEqual({
+      twoFactorRequired: true,
+      twoFactorAttemptToken: "two-factor-attempt-token",
+    });
+
+    expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("creates an encrypted pending TOTP secret for an authenticated user", async () => {
+    twoFactorRepositoryMock.findState.mockResolvedValue({
+      secret_encrypted: null,
+      enabled: false,
+    });
+    jest
+      .mocked(generateSecret)
+      .mockReturnValue("JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP");
+    jest.mocked(generateURI).mockReturnValue("otpauth://totp/BUKIOO:user");
+    configServiceMock.getOrThrow.mockReturnValue(
+      "totp-encryption-key-with-at-least-32-characters",
+    );
+
+    await expect(service.createTwoFactorSetup(user.id)).resolves.toEqual({
+      secret: "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+      otpauthUri: "otpauth://totp/BUKIOO:user",
+    });
+
+    expect(twoFactorRepositoryMock.replacePendingSecret).toHaveBeenCalledWith(
+      user.id,
+      expect.any(String),
+    );
+  });
+
   it("sends email verification and pauses login for a temporary password", async () => {
     usersRepositoryMock.findByEmail.mockResolvedValue({
       ...user,
@@ -825,6 +902,64 @@ describe("AuthService", () => {
 
     await expect(
       service.verifyEmail({ token: "000000" }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("sends a hashed six-digit password-reset code for an active user", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    userTokensRepositoryMock.replacePasswordResetToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendPasswordReset.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestPasswordReset({ email: " USER@EXAMPLE.COM " }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replacePasswordResetToken,
+    ).toHaveBeenCalledTimes(1);
+    expect(emailProviderMock.sendPasswordReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not disclose whether a password-reset email exists", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.requestPasswordReset({ email: "missing@example.com" }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replacePasswordResetToken,
+    ).not.toHaveBeenCalled();
+    expect(emailProviderMock.sendPasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("resets the password when a valid code is consumed", async () => {
+    jest.mocked(argon2.hash).mockResolvedValue("new-password-hash");
+    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(true);
+
+    await expect(
+      service.resetPassword({
+        token: "123456",
+        password: "new-secure-password",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.consumePasswordResetToken,
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a reused, expired, or unknown password-reset code", async () => {
+    jest.mocked(argon2.hash).mockResolvedValue("new-password-hash");
+    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(false);
+
+    await expect(
+      service.resetPassword({
+        token: "000000",
+        password: "new-secure-password",
+      }),
     ).rejects.toMatchObject({ status: 400 });
   });
 });

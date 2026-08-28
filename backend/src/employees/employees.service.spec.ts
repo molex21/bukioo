@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { AuthService } from "../auth/auth.service";
+import { TwoFactorRepository } from "../auth/two-factor.repository";
 import { EmployeesRepository } from "./employees.repository";
 import { EmployeesService } from "./employees.service";
 
@@ -19,6 +20,9 @@ describe("EmployeesService", () => {
   const authServiceMock = {
     inviteEmployee: jest.fn(),
     inviteExistingEmployee: jest.fn(),
+  };
+  const twoFactorRepositoryMock = {
+    reset: jest.fn(),
   };
 
   const employee = {
@@ -44,6 +48,7 @@ describe("EmployeesService", () => {
         EmployeesService,
         { provide: EmployeesRepository, useValue: repositoryMock },
         { provide: AuthService, useValue: authServiceMock },
+        { provide: TwoFactorRepository, useValue: twoFactorRepositoryMock },
       ],
     }).compile();
 
@@ -54,6 +59,7 @@ describe("EmployeesService", () => {
     Object.values(repositoryMock).forEach((mock) => mock.mockReset());
     authServiceMock.inviteEmployee.mockReset();
     authServiceMock.inviteExistingEmployee.mockReset();
+    twoFactorRepositoryMock.reset.mockReset();
   });
 
   it("creates an employee only for a business the actor manages", async () => {
@@ -140,6 +146,21 @@ describe("EmployeesService", () => {
         "actor-id",
       ),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("resets an employee 2FA configuration and revokes its sessions", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findActiveById.mockResolvedValue({
+      ...employee,
+      user_id: "user-id",
+    });
+    twoFactorRepositoryMock.reset.mockResolvedValue(true);
+
+    await expect(
+      service.resetTwoFactor(employee.business_id, employee.id, "actor-id"),
+    ).resolves.toBeUndefined();
+
+    expect(twoFactorRepositoryMock.reset).toHaveBeenCalledWith("user-id");
   });
 
   it("invites an existing employee without a user account", async () => {

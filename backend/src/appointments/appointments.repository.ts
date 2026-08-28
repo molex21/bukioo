@@ -36,6 +36,8 @@ export interface AppointmentRecord {
   cancellation_reason: string | null;
   cancelled_at: Date | null;
   completed_at: Date | null;
+  requires_approval: boolean;
+  conflict_override: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -52,6 +54,36 @@ export interface BookingContext {
   buffer_before_minutes: number;
   buffer_after_minutes: number;
   price: string | null;
+  auto_confirm_appointments: boolean;
+}
+
+export interface AppointmentOccupancy {
+  appointments: AppointmentRecord[];
+  blocks: CalendarBlockOccupancy[];
+}
+
+export interface CalendarBlockOccupancy {
+  id: string;
+  employee_id: string | null;
+  type: string;
+  start_at: Date;
+  end_at: Date;
+  reason: string | null;
+}
+export interface RescheduleProposalRecord {
+  id: string;
+  appointment_id: string;
+  organization_id: string;
+  business_id: string;
+  employee_id: string;
+  start_at: Date;
+  end_at: Date;
+  occupied_start_at: Date;
+  occupied_end_at: Date;
+  customer_id: string;
+  service_id: string;
+  appointment_status: AppointmentStatus;
+  reference_code: string;
 }
 
 @Injectable()
@@ -102,9 +134,12 @@ export class AppointmentsRepository {
       `SELECT businesses.organization_id, businesses.id AS business_id, businesses.timezone,
         organizations.currency_code, customers.id AS customer_id, employees.id AS employee_id,
         services.id AS service_id, services.duration_minutes, services.buffer_before_minutes,
-        services.buffer_after_minutes, services.price
+        services.buffer_after_minutes, services.price,
+        COALESCE(services.auto_confirm_appointments, organization_settings.auto_confirm_appointments)
+          AS auto_confirm_appointments
       FROM businesses
       INNER JOIN organizations ON organizations.id = businesses.organization_id
+      INNER JOIN organization_settings ON organization_settings.organization_id = businesses.organization_id
       INNER JOIN customers ON customers.id = $2 AND customers.business_id = businesses.id
         AND customers.organization_id = businesses.organization_id AND customers.anonymized_at IS NULL
       INNER JOIN employees ON employees.id = $3 AND employees.business_id = businesses.id
@@ -191,6 +226,31 @@ export class AppointmentsRepository {
     return result.rows[0]?.exists ?? false;
   }
 
+  async findAppointmentContext(
+    appointment: AppointmentRecord,
+  ): Promise<BookingContext | null> {
+    const result = await this.databaseService.query<BookingContext>(
+      `SELECT businesses.organization_id, businesses.id AS business_id, businesses.timezone,
+        organizations.currency_code, $2::uuid AS customer_id, $3::uuid AS employee_id,
+        $4::uuid AS service_id, $5::integer AS duration_minutes,
+        $6::integer AS buffer_before_minutes, $7::integer AS buffer_after_minutes,
+        $8::numeric AS price, FALSE AS auto_confirm_appointments
+      FROM businesses INNER JOIN organizations ON organizations.id = businesses.organization_id
+      WHERE businesses.id = $1 LIMIT 1`,
+      [
+        appointment.business_id,
+        appointment.customer_id,
+        appointment.employee_id,
+        appointment.service_id,
+        appointment.duration_minutes,
+        appointment.buffer_before_minutes,
+        appointment.buffer_after_minutes,
+        appointment.price_amount,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async create(
     context: BookingContext,
     dto: CreateAppointmentDto,
@@ -200,13 +260,15 @@ export class AppointmentsRepository {
     occupiedEndAt: Date,
     referenceCode: string,
     userId: string,
+    status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED">,
+    requiresApproval: boolean,
   ): Promise<AppointmentRecord> {
     const result = await this.databaseService.query<AppointmentRecord>(
       `INSERT INTO appointments (organization_id, business_id, reference_code, customer_id, employee_id,
         service_id, start_at, end_at, occupied_start_at, occupied_end_at, duration_minutes,
         buffer_before_minutes, buffer_after_minutes, price_amount, currency_code, customer_notes,
-        internal_notes, created_by_user_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        internal_notes, created_by_user_id, status, requires_approval)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
       [
         context.organization_id,
@@ -227,6 +289,8 @@ export class AppointmentsRepository {
         dto.customerNotes ?? null,
         dto.internalNotes ?? null,
         userId,
+        status,
+        requiresApproval,
       ],
     );
     return result.rows[0];
@@ -256,6 +320,32 @@ export class AppointmentsRepository {
     return result.rows;
   }
 
+  async listOccupancy(
+    businessId: string,
+    from: string,
+    to: string,
+    employeeId?: string,
+  ): Promise<AppointmentOccupancy> {
+    const [appointments, blocks] = await Promise.all([
+      this.databaseService.query<AppointmentRecord>(
+        `SELECT * FROM appointments WHERE business_id = $1
+          AND status IN ('PENDING', 'CONFIRMED')
+          AND occupied_start_at < $3 AND occupied_end_at > $2
+          AND ($4::uuid IS NULL OR employee_id = $4::uuid)
+        ORDER BY occupied_start_at ASC`,
+        [businessId, from, to, employeeId ?? null],
+      ),
+      this.databaseService.query<CalendarBlockOccupancy>(
+        `SELECT id, employee_id, type, start_at, end_at, reason FROM calendar_blocks
+          WHERE business_id = $1 AND start_at < $3 AND end_at > $2
+          AND ($4::uuid IS NULL OR employee_id = $4::uuid OR employee_id IS NULL)
+        ORDER BY start_at ASC`,
+        [businessId, from, to, employeeId ?? null],
+      ),
+    ]);
+    return { appointments: appointments.rows, blocks: blocks.rows };
+  }
+
   async findById(
     businessId: string,
     appointmentId: string,
@@ -276,6 +366,8 @@ export class AppointmentsRepository {
     occupiedStartAt: Date,
     occupiedEndAt: Date,
     replaceSnapshot: boolean,
+    status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED">,
+    requiresApproval: boolean,
   ): Promise<AppointmentRecord> {
     const result = await this.databaseService.query<AppointmentRecord>(
       `UPDATE appointments SET customer_id = $1, employee_id = $2, service_id = $3, start_at = $4,
@@ -285,8 +377,9 @@ export class AppointmentsRepository {
         buffer_after_minutes = CASE WHEN $8 THEN $11 ELSE buffer_after_minutes END,
         price_amount = CASE WHEN $8 THEN $12 ELSE price_amount END,
         currency_code = CASE WHEN $8 THEN $13 ELSE currency_code END,
-        customer_notes = COALESCE($14, customer_notes), internal_notes = COALESCE($15, internal_notes), updated_at = NOW()
-      WHERE id = $16 AND business_id = $17 AND organization_id = $18 AND status IN ('PENDING', 'CONFIRMED')
+        customer_notes = COALESCE($14, customer_notes), internal_notes = COALESCE($15, internal_notes),
+        status = $16, requires_approval = $17, conflict_override = FALSE, updated_at = NOW()
+      WHERE id = $18 AND business_id = $19 AND organization_id = $20 AND status IN ('PENDING', 'CONFIRMED')
       RETURNING *`,
       [
         context.customer_id,
@@ -304,6 +397,8 @@ export class AppointmentsRepository {
         context.currency_code,
         dto.customerNotes,
         dto.internalNotes,
+        status,
+        requiresApproval,
         appointment.id,
         appointment.business_id,
         appointment.organization_id,
@@ -316,23 +411,145 @@ export class AppointmentsRepository {
     appointment: AppointmentRecord,
     status: AppointmentStatus,
     reason?: string,
+    conflictOverride = false,
   ): Promise<AppointmentRecord | null> {
     const result = await this.databaseService.query<AppointmentRecord>(
       `UPDATE appointments SET status = $1, cancellation_actor = CASE WHEN $1 = 'CANCELLED' THEN 'ADMIN' ELSE NULL END,
         cancellation_reason = CASE WHEN $1 = 'CANCELLED' THEN $2 ELSE NULL END,
         cancelled_at = CASE WHEN $1 = 'CANCELLED' THEN NOW() ELSE NULL END,
         completed_at = CASE WHEN $1 = 'COMPLETED' THEN NOW() ELSE NULL END,
+        requires_approval = CASE WHEN $1 = 'CONFIRMED' THEN FALSE ELSE requires_approval END,
+        conflict_override = CASE WHEN $1 = 'CONFIRMED' THEN $3 ELSE conflict_override END,
         updated_at = NOW()
-      WHERE id = $3 AND business_id = $4 AND organization_id = $5 AND status IN ('PENDING', 'CONFIRMED')
+      WHERE id = $4 AND business_id = $5 AND organization_id = $6 AND status IN ('PENDING', 'CONFIRMED')
       RETURNING *`,
       [
         status,
         reason ?? null,
+        conflictOverride,
         appointment.id,
         appointment.business_id,
         appointment.organization_id,
       ],
     );
     return result.rows[0] ?? null;
+  }
+
+  async isAssignedEmployee(
+    userId: string,
+    appointment: AppointmentRecord,
+  ): Promise<boolean> {
+    const result = await this.databaseService.query<{ exists: boolean }>(
+      `SELECT EXISTS (SELECT 1 FROM employees
+        INNER JOIN users ON users.id = employees.user_id
+        WHERE employees.id = $1 AND employees.business_id = $2
+          AND employees.organization_id = $3 AND employees.user_id = $4
+          AND employees.is_active = TRUE AND users.status = 'ACTIVE') AS exists`,
+      [
+        appointment.employee_id,
+        appointment.business_id,
+        appointment.organization_id,
+        userId,
+      ],
+    );
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async createRescheduleProposal(input: {
+    appointment: AppointmentRecord;
+    employeeId: string;
+    startAt: Date;
+    endAt: Date;
+    occupiedStartAt: Date;
+    occupiedEndAt: Date;
+    tokenHash: string;
+    expiresAt: Date;
+    userId: string;
+    message?: string;
+  }): Promise<void> {
+    await this.databaseService.transaction(async (client) => {
+      await client.query(
+        "UPDATE appointment_reschedule_proposals SET status = 'EXPIRED' WHERE appointment_id = $1 AND status = 'PENDING_CUSTOMER'",
+        [input.appointment.id],
+      );
+      await client.query(
+        `INSERT INTO appointment_reschedule_proposals (organization_id,business_id,appointment_id,employee_id,start_at,end_at,occupied_start_at,occupied_end_at,token_hash,expires_at,created_by_user_id,message) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [
+          input.appointment.organization_id,
+          input.appointment.business_id,
+          input.appointment.id,
+          input.employeeId,
+          input.startAt,
+          input.endAt,
+          input.occupiedStartAt,
+          input.occupiedEndAt,
+          input.tokenHash,
+          input.expiresAt,
+          input.userId,
+          input.message ?? null,
+        ],
+      );
+    });
+  }
+
+  async findRescheduleProposal(
+    tokenHash: string,
+  ): Promise<RescheduleProposalRecord | null> {
+    const result = await this.databaseService.query<RescheduleProposalRecord>(
+      `SELECT p.id,p.appointment_id,p.organization_id,p.business_id,p.employee_id,p.start_at,p.end_at,p.occupied_start_at,p.occupied_end_at,a.customer_id,a.service_id,a.status AS appointment_status,a.reference_code FROM appointment_reschedule_proposals p INNER JOIN appointments a ON a.id=p.appointment_id AND a.organization_id=p.organization_id WHERE p.token_hash=$1 AND p.status='PENDING_CUSTOMER' AND p.expires_at > NOW() LIMIT 1`,
+      [tokenHash],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async customerEmail(appointment: AppointmentRecord): Promise<string | null> {
+    const r = await this.databaseService.query<{ email: string }>(
+      "SELECT email FROM customers WHERE id=$1 AND business_id=$2 AND organization_id=$3 AND anonymized_at IS NULL",
+      [
+        appointment.customer_id,
+        appointment.business_id,
+        appointment.organization_id,
+      ],
+    );
+    return r.rows[0]?.email ?? null;
+  }
+
+  async acceptRescheduleProposal(
+    proposal: RescheduleProposalRecord,
+  ): Promise<AppointmentRecord | null> {
+    return this.databaseService.transaction(async (client) => {
+      const locked = await client.query<{ id: string }>(
+        "SELECT id FROM appointment_reschedule_proposals WHERE id=$1 AND status='PENDING_CUSTOMER' AND expires_at > NOW() FOR UPDATE",
+        [proposal.id],
+      );
+      if (!locked.rows[0]) return null;
+      const updated = await client.query<AppointmentRecord>(
+        `UPDATE appointments SET employee_id=$1,start_at=$2,end_at=$3,occupied_start_at=$4,occupied_end_at=$5,updated_at=NOW() WHERE id=$6 AND organization_id=$7 AND business_id=$8 AND status IN ('PENDING','CONFIRMED') RETURNING *`,
+        [
+          proposal.employee_id,
+          proposal.start_at,
+          proposal.end_at,
+          proposal.occupied_start_at,
+          proposal.occupied_end_at,
+          proposal.appointment_id,
+          proposal.organization_id,
+          proposal.business_id,
+        ],
+      );
+      if (!updated.rows[0]) return null;
+      await client.query(
+        "UPDATE appointment_reschedule_proposals SET status='ACCEPTED', responded_at=NOW() WHERE id=$1",
+        [proposal.id],
+      );
+      return updated.rows[0];
+    });
+  }
+
+  async rejectRescheduleProposal(tokenHash: string): Promise<boolean> {
+    const r = await this.databaseService.query(
+      "UPDATE appointment_reschedule_proposals SET status='REJECTED', responded_at=NOW() WHERE token_hash=$1 AND status='PENDING_CUSTOMER' AND expires_at > NOW()",
+      [tokenHash],
+    );
+    return (r.rowCount ?? 0) === 1;
   }
 }

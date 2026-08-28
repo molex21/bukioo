@@ -3,10 +3,12 @@ import { AuthModule } from "../auth/auth.module";
 import { AppointmentsController } from "./appointments.controller";
 import { AppointmentsRepository } from "./appointments.repository";
 import { AppointmentsService } from "./appointments.service";
+import { RescheduleProposalsController } from "./reschedule-proposals.controller";
+import { AuditService } from "../audit/audit.service";
 
 @Module({
   imports: [AuthModule],
-  controllers: [AppointmentsController],
-  providers: [AppointmentsService, AppointmentsRepository],
+  controllers: [AppointmentsController, RescheduleProposalsController],
+  providers: [AppointmentsService, AppointmentsRepository, AuditService],
 })
 export class AppointmentsModule {}

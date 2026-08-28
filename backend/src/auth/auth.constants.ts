@@ -5,4 +5,6 @@ export const EMAIL_VERIFICATION_ATTEMPT_COOKIE_NAME =
   "email_verification_attempt";
 export const PASSWORD_ACTIVATION_ATTEMPT_COOKIE_NAME =
   "password_activation_attempt";
+export const TWO_FACTOR_ATTEMPT_COOKIE_NAME = "two_factor_attempt";
 export const EMAIL_VERIFICATION_ATTEMPT_EXPIRES_IN_SECONDS = 10 * 60;
+export const TWO_FACTOR_ATTEMPT_EXPIRES_IN_SECONDS = 10 * 60;

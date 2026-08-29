@@ -1489,6 +1489,18 @@ No confundir con `user_tokens`.
 
 V1:
 
+La configuracion de Loyalty es por `business_id`. Cada empresa define una
+regla por defecto y cada servicio puede usar `INHERIT`, `NONE`, `FIXED`,
+`AMOUNT_MULTIPLIER` o `BOTH`. La regla efectiva debe guardarse como snapshot
+en la cita para que los cambios posteriores del servicio no alteren el
+historico.
+
+Una cita solo concede puntos cuando esta `COMPLETED` y
+`counts_toward_membership` es `true`. El ledger es inmutable: cambiar esa
+elegibilidad debe crear una concesion o una reversion, nunca editar o borrar
+movimientos anteriores. Cada cambio de saldo recalcula el nivel activo del
+cliente segun el nivel activo con mayor `minimum_points` alcanzado.
+
 - gana puntos;
 - categorías/niveles;
 - no se pagan servicios con puntos todavía.
@@ -1519,6 +1531,11 @@ Mantener consistencia con:
 ```text
 customers.points_balance
 ```
+
+Pendiente posterior a Loyalty V1:
+
+- canje de puntos, consumiendo primero los que caducan antes (FIFO);
+- recompensas, cupones o pago parcial con puntos.
 
 ---
 
@@ -2023,6 +2040,8 @@ NO añadir Redis en MVP.
 
 Jobs:
 
+- caducidad individual de puntos cada hora;
+- avisos de puntos proximos a caducar a 30 y 7 dias;
 - emails;
 - reminders;
 - background work.
@@ -2339,17 +2358,21 @@ No documentar como completado algo que todavía no existe.
 
 ## Fase 13 — Notifications
 
-- [ ] Resend
-- [ ] pg-boss
-- [ ] worker
+- [x] Resend
+- [x] pg-boss
+- [x] worker de caducidad de Loyalty
+- [x] avisos de puntos proximos a caducar
 - [ ] reminders
 
 ## Fase 14 — Loyalty
 
-- [ ] levels
-- [ ] earning
-- [ ] ledger
-- [ ] adjustments
+- [x] levels
+- [x] earning
+- [x] ledger
+- [x] adjustments
+- [x] expiration worker
+- [ ] expiration notices and reminders
+- [ ] point redemption FIFO
 
 ## Fase 15 — Reports
 

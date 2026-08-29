@@ -93,6 +93,24 @@ describe("ServicesService", () => {
     expect(repositoryMock.create).not.toHaveBeenCalled();
   });
 
+  it("requires fixed points for a FIXED loyalty service", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+
+    await expect(
+      service.create(
+        serviceRecord.business_id,
+        {
+          name: "Oil change",
+          durationMinutes: 30,
+          loyaltyEarningType: "FIXED",
+        },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(repositoryMock.create).not.toHaveBeenCalled();
+  });
+
   it("deletes a service when it has no associated data", async () => {
     repositoryMock.canManageBusiness.mockResolvedValue(true);
     repositoryMock.findById.mockResolvedValue(serviceRecord);

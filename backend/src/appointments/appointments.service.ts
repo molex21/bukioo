@@ -11,6 +11,8 @@ import { ConfigService } from "@nestjs/config";
 import { EmailProvider } from "../auth/email.provider";
 import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dto";
 import { AuditService } from "../audit/audit.service";
+import { LoyaltyService } from "../loyalty/loyalty.service";
+import type { LoyaltyRuleSnapshot } from "../loyalty/loyalty.types";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { ListAppointmentsDto } from "./dto/list-appointments.dto";
 import { ListCustomerAppointmentsDto } from "./dto/list-customer-appointments.dto";
@@ -19,6 +21,7 @@ import {
   AppointmentsRepository,
   type AppointmentRecord,
   type AppointmentStatus,
+  type AppointmentWithCustomerLoyaltyRecord,
   type BookingContext,
 } from "./appointments.repository";
 
@@ -36,6 +39,7 @@ export class AppointmentsService {
     @Inject(EmailProvider) private readonly emailProvider: EmailProvider,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   async createRescheduleProposal(
@@ -171,6 +175,7 @@ export class AppointmentsService {
     const conflicts = await this.getConflicts(context, times);
     const requiresApproval =
       conflicts.hasAppointmentOverlap || conflicts.hasCalendarBlock;
+    const loyaltyRuleSnapshot = await this.resolveLoyaltyRule(context);
     try {
       const appointment = await this.appointmentsRepository.create(
         context,
@@ -185,6 +190,7 @@ export class AppointmentsService {
           ? "CONFIRMED"
           : "PENDING",
         requiresApproval,
+        loyaltyRuleSnapshot,
       );
       await this.auditService.record({
         organizationId: appointment.organization_id,
@@ -208,7 +214,13 @@ export class AppointmentsService {
   async list(businessId: string, filters: ListAppointmentsDto, userId: string) {
     await this.assertCanAccess(userId, businessId);
     this.assertValidRange(filters);
-    return this.appointmentsRepository.listByBusiness(businessId, filters);
+    const appointments = await this.appointmentsRepository.listByBusiness(
+      businessId,
+      filters,
+    );
+    return appointments.map((appointment) =>
+      this.withCustomerLoyalty(appointment),
+    );
   }
 
   async listForCustomerAccount(
@@ -294,7 +306,9 @@ export class AppointmentsService {
 
   async get(businessId: string, appointmentId: string, userId: string) {
     await this.assertCanAccess(userId, businessId);
-    return this.getAppointment(businessId, appointmentId);
+    return this.withCustomerLoyalty(
+      await this.getAppointment(businessId, appointmentId),
+    );
   }
 
   async update(
@@ -325,6 +339,9 @@ export class AppointmentsService {
       );
     }
     const replacesSnapshot = serviceId !== appointment.service_id;
+    const loyaltyRuleSnapshot = replacesSnapshot
+      ? await this.resolveLoyaltyRule(context)
+      : null;
     const times = this.buildTimes(
       dto.startAt ?? appointment.start_at.toISOString(),
       context,
@@ -355,6 +372,7 @@ export class AppointmentsService {
         replacesSnapshot,
         status,
         requiresApproval,
+        loyaltyRuleSnapshot,
       );
       if (!updated)
         throw new ConflictException("La cita ya no puede modificarse");
@@ -393,6 +411,7 @@ export class AppointmentsService {
       appointment,
       updated,
     );
+    await this.loyaltyService.reconcileAppointment(updated, userId);
     return updated;
   }
 
@@ -426,6 +445,7 @@ export class AppointmentsService {
       appointment,
       updated,
     );
+    await this.loyaltyService.reconcileAppointment(updated, userId);
     return updated;
   }
 
@@ -481,6 +501,7 @@ export class AppointmentsService {
       appointment,
       updated,
     );
+    await this.loyaltyService.reconcileAppointment(updated, userId);
     return updated;
   }
 
@@ -528,6 +549,7 @@ export class AppointmentsService {
       appointment,
       updated,
     );
+    await this.loyaltyService.reconcileAppointment(updated, userId);
     return updated;
   }
 
@@ -552,6 +574,17 @@ export class AppointmentsService {
       occupiedStartAt: new Date(startAt.getTime() - bufferBefore * 60_000),
       occupiedEndAt: new Date(endAt.getTime() + bufferAfter * 60_000),
     };
+  }
+
+  private async resolveLoyaltyRule(
+    context: BookingContext,
+  ): Promise<LoyaltyRuleSnapshot> {
+    return this.loyaltyService.resolveRuleForBooking(context.business_id, {
+      loyalty_earning_type: context.loyalty_earning_type,
+      loyalty_fixed_points: context.loyalty_fixed_points,
+      loyalty_points_per_currency_unit:
+        context.loyalty_points_per_currency_unit,
+    });
   }
 
   private buildStoredTimes(appointment: AppointmentRecord): AppointmentTimes {
@@ -624,13 +657,39 @@ export class AppointmentsService {
   private async getAppointment(
     businessId: string,
     appointmentId: string,
-  ): Promise<AppointmentRecord> {
+  ): Promise<AppointmentWithCustomerLoyaltyRecord> {
     const appointment = await this.appointmentsRepository.findById(
       businessId,
       appointmentId,
     );
     if (!appointment) throw new NotFoundException("Cita no encontrada");
     return appointment;
+  }
+
+  private withCustomerLoyalty(
+    appointment: AppointmentWithCustomerLoyaltyRecord,
+  ) {
+    const {
+      customer_points_balance,
+      customer_loyalty_level_id,
+      customer_loyalty_level_name,
+      customer_loyalty_level_minimum_points,
+      ...appointmentData
+    } = appointment;
+
+    return {
+      ...appointmentData,
+      customerLoyalty: {
+        pointsBalance: customer_points_balance,
+        currentLevel: customer_loyalty_level_id
+          ? {
+              id: customer_loyalty_level_id,
+              name: customer_loyalty_level_name!,
+              minimumPoints: customer_loyalty_level_minimum_points!,
+            }
+          : null,
+      },
+    };
   }
 
   private assertCalendarEditable(

@@ -5,6 +5,7 @@ import {
   emailVerificationTemplate,
   appointmentRescheduleTemplate,
   passwordResetTemplate,
+  pointsExpirationTemplate,
 } from "../email/templates";
 
 export interface EmailVerificationMessage {
@@ -28,6 +29,14 @@ export interface AppointmentRescheduleMessage {
   url: string;
   message?: string;
 }
+export interface PointsExpirationMessage {
+  email: string;
+  businessName: string;
+  points: number;
+  expiresAt: Date;
+  timezone: string;
+  daysBeforeExpiration: 30 | 7;
+}
 
 export abstract class EmailProvider {
   abstract sendEmailVerification(
@@ -39,6 +48,9 @@ export abstract class EmailProvider {
   abstract sendPasswordReset(message: PasswordResetMessage): Promise<void>;
   abstract sendAppointmentReschedule(
     message: AppointmentRescheduleMessage,
+  ): Promise<void>;
+  abstract sendPointsExpiration(
+    message: PointsExpirationMessage,
   ): Promise<void>;
 }
 
@@ -67,6 +79,10 @@ export class ResendEmailProvider implements EmailProvider {
     message: AppointmentRescheduleMessage,
   ): Promise<void> {
     await this.send(message.email, appointmentRescheduleTemplate(message));
+  }
+
+  async sendPointsExpiration(message: PointsExpirationMessage): Promise<void> {
+    await this.send(message.email, pointsExpirationTemplate(message));
   }
 
   private async send(

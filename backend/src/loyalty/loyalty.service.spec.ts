@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { EmailProvider } from "../auth/email.provider";
 import { LoyaltyRepository } from "./loyalty.repository";
 import { LoyaltyService } from "./loyalty.service";
 
@@ -14,7 +15,17 @@ describe("LoyaltyService", () => {
     update: jest.fn(),
     countCustomers: jest.fn(),
     remove: jest.fn(),
+    findSettingsByBusiness: jest.fn(),
+    updateSettings: jest.fn(),
+    reconcileAppointment: jest.fn(),
+    getCustomerLoyalty: jest.fn(),
+    adjustCustomerPoints: jest.fn(),
+    expireDuePoints: jest.fn(),
+    prepareExpirationNotices: jest.fn(),
+    markExpirationNoticeSent: jest.fn(),
+    markExpirationNoticeFailed: jest.fn(),
   };
+  const emailProviderMock = { sendPointsExpiration: jest.fn() };
 
   const level = {
     id: "11111111-1111-4111-8111-111111111111",
@@ -33,6 +44,7 @@ describe("LoyaltyService", () => {
       providers: [
         LoyaltyService,
         { provide: LoyaltyRepository, useValue: repositoryMock },
+        { provide: EmailProvider, useValue: emailProviderMock },
       ],
     }).compile();
 
@@ -41,6 +53,7 @@ describe("LoyaltyService", () => {
 
   afterEach(() => {
     Object.values(repositoryMock).forEach((mock) => mock.mockReset());
+    emailProviderMock.sendPointsExpiration.mockReset();
   });
 
   it("creates a level only for an actor who manages the business", async () => {
@@ -59,6 +72,65 @@ describe("LoyaltyService", () => {
       name: "Gold",
       minimumPoints: 100,
     });
+  });
+
+  it("sends and records an expiration notice", async () => {
+    const notice = {
+      id: "notification-id",
+      email: "customer@example.com",
+      business_name: "Peluqueria BUKIOO",
+      points: 20,
+      expires_at: new Date("2026-09-30T23:59:59.999Z"),
+      timezone: "Atlantic/Canary",
+      days_before_expiration: 30 as const,
+    };
+    repositoryMock.prepareExpirationNotices.mockResolvedValue([notice]);
+    emailProviderMock.sendPointsExpiration.mockResolvedValue(undefined);
+    repositoryMock.markExpirationNoticeSent.mockResolvedValue(undefined);
+
+    await expect(service.sendExpirationNotices(30)).resolves.toEqual({
+      sent: 1,
+      failed: 0,
+    });
+
+    expect(emailProviderMock.sendPointsExpiration).toHaveBeenCalledWith({
+      email: notice.email,
+      businessName: notice.business_name,
+      points: notice.points,
+      expiresAt: notice.expires_at,
+      timezone: notice.timezone,
+      daysBeforeExpiration: 30,
+    });
+    expect(repositoryMock.markExpirationNoticeSent).toHaveBeenCalledWith(
+      notice.id,
+    );
+  });
+
+  it("records a failed expiration notice for the next retry", async () => {
+    repositoryMock.prepareExpirationNotices.mockResolvedValue([
+      {
+        id: "notification-id",
+        email: "customer@example.com",
+        business_name: "Peluqueria BUKIOO",
+        points: 20,
+        expires_at: new Date("2026-09-30T23:59:59.999Z"),
+        timezone: "Atlantic/Canary",
+        days_before_expiration: 7,
+      },
+    ]);
+    emailProviderMock.sendPointsExpiration.mockRejectedValue(
+      new Error("Resend no disponible"),
+    );
+    repositoryMock.markExpirationNoticeFailed.mockResolvedValue(undefined);
+
+    await expect(service.sendExpirationNotices(7)).resolves.toEqual({
+      sent: 0,
+      failed: 1,
+    });
+    expect(repositoryMock.markExpirationNoticeFailed).toHaveBeenCalledWith(
+      "notification-id",
+      "Resend no disponible",
+    );
   });
 
   it("rejects listing levels outside the user's business access", async () => {
@@ -96,5 +168,58 @@ describe("LoyaltyService", () => {
     ).rejects.toMatchObject({ status: 409 });
 
     expect(repositoryMock.remove).not.toHaveBeenCalled();
+  });
+
+  it("requires fixed points when enabling a FIXED default", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findSettingsByBusiness.mockResolvedValue({
+      business_id: level.business_id,
+      organization_id: level.organization_id,
+      loyalty_enabled: false,
+      default_earning_type: "NONE",
+      default_fixed_points: null,
+      default_points_per_currency_unit: null,
+      points_expiration_months: 12,
+    });
+
+    await expect(
+      service.updateSettings(
+        level.business_id,
+        { loyaltyEnabled: true, defaultLoyaltyEarningType: "FIXED" },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("updates a complete enabled appointment earning configuration", async () => {
+    const settings = {
+      business_id: level.business_id,
+      organization_id: level.organization_id,
+      loyalty_enabled: false,
+      default_earning_type: "NONE",
+      default_fixed_points: null,
+      default_points_per_currency_unit: null,
+      points_expiration_months: 12,
+    };
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findSettingsByBusiness.mockResolvedValue(settings);
+    repositoryMock.updateSettings.mockResolvedValue({
+      ...settings,
+      loyalty_enabled: true,
+      default_earning_type: "FIXED",
+      default_fixed_points: 10,
+    });
+
+    await expect(
+      service.updateSettings(
+        level.business_id,
+        {
+          loyaltyEnabled: true,
+          defaultLoyaltyEarningType: "FIXED",
+          defaultLoyaltyFixedPoints: 10,
+        },
+        "actor-id",
+      ),
+    ).resolves.toMatchObject({ loyalty_enabled: true });
   });
 });

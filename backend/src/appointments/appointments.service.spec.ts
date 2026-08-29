@@ -23,6 +23,9 @@ const context: BookingContext = {
   buffer_after_minutes: 5,
   price: "35.00",
   auto_confirm_appointments: false,
+  loyalty_earning_type: "INHERIT",
+  loyalty_fixed_points: null,
+  loyalty_points_per_currency_unit: null,
 };
 
 describe("AppointmentsService", () => {
@@ -57,6 +60,14 @@ describe("AppointmentsService", () => {
     getOrThrow: jest.fn().mockReturnValue("http://localhost:5173"),
   };
   const auditService = { record: jest.fn().mockResolvedValue(undefined) };
+  const loyaltyService = {
+    resolveRuleForBooking: jest.fn().mockResolvedValue({
+      type: "NONE",
+      fixedPoints: null,
+      pointsPerCurrencyUnit: null,
+    }),
+    reconcileAppointment: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(() => {
     jest.resetAllMocks();
@@ -65,6 +76,7 @@ describe("AppointmentsService", () => {
       emailProvider,
       configService,
       auditService,
+      loyaltyService,
     );
     repository.canManageBusiness.mockResolvedValue(true);
     repository.canAccessBusiness.mockResolvedValue(true);
@@ -76,6 +88,12 @@ describe("AppointmentsService", () => {
     repository.create.mockResolvedValue({ id: "appointment-id" });
     repository.isAssignedEmployee.mockResolvedValue(false);
     repository.customerEmail.mockResolvedValue("customer@example.com");
+    loyaltyService.resolveRuleForBooking.mockResolvedValue({
+      type: "NONE",
+      fixedPoints: null,
+      pointsPerCurrencyUnit: null,
+    });
+    loyaltyService.reconcileAppointment.mockResolvedValue(undefined);
     auditService.record.mockClear();
   });
 
@@ -103,7 +121,36 @@ describe("AppointmentsService", () => {
       "user-id",
       "PENDING",
       false,
+      { type: "NONE", fixedPoints: null, pointsPerCurrencyUnit: null },
     );
+  });
+
+  it("includes the customer's loyalty summary when listing appointments", async () => {
+    repository.listByBusiness.mockResolvedValue([
+      {
+        id: "appointment-id",
+        customer_points_balance: 85,
+        customer_loyalty_level_id: "level-id",
+        customer_loyalty_level_name: "Gold",
+        customer_loyalty_level_minimum_points: 50,
+      },
+    ]);
+
+    const result = await service.list("business-id", {}, "employee-id");
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: "appointment-id",
+        customerLoyalty: {
+          pointsBalance: 85,
+          currentLevel: {
+            id: "level-id",
+            name: "Gold",
+            minimumPoints: 50,
+          },
+        },
+      }),
+    ]);
   });
 
   it("rejects appointments outside working hours", async () => {
@@ -145,6 +192,7 @@ describe("AppointmentsService", () => {
       "user-id",
       "PENDING",
       true,
+      expect.anything(),
     );
     repository.hasCalendarBlock.mockResolvedValue(false);
     repository.hasAppointmentOverlap.mockResolvedValue(true);
@@ -169,6 +217,7 @@ describe("AppointmentsService", () => {
       "user-id",
       "PENDING",
       true,
+      expect.anything(),
     );
   });
 
@@ -402,6 +451,7 @@ describe("AppointmentsService", () => {
       "user-id",
       "CONFIRMED",
       false,
+      expect.anything(),
     );
   });
 
@@ -480,6 +530,38 @@ describe("AppointmentsService", () => {
     await expect(
       service.complete("business-id", "appointment-id", "employee-user-id"),
     ).resolves.toEqual(expect.objectContaining({ status: "COMPLETED" }));
+    expect(loyaltyService.reconcileAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "COMPLETED" }),
+      "employee-user-id",
+    );
+  });
+
+  it("reconciles loyalty after changing completed appointment eligibility", async () => {
+    const appointment = {
+      id: "appointment-id",
+      organization_id: "org-id",
+      business_id: "business-id",
+      employee_id: "employee-id",
+      status: "COMPLETED",
+      counts_toward_membership: false,
+    };
+    repository.findById.mockResolvedValue(appointment);
+    repository.updateMembershipEligibility.mockResolvedValue({
+      ...appointment,
+      counts_toward_membership: true,
+    });
+
+    await service.updateMembershipEligibility(
+      "business-id",
+      "appointment-id",
+      true,
+      "admin-id",
+    );
+
+    expect(loyaltyService.reconcileAppointment).toHaveBeenCalledWith(
+      expect.objectContaining({ counts_toward_membership: true }),
+      "admin-id",
+    );
   });
 
   it("requires a proposal to reassign an appointment to another local day", async () => {

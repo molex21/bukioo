@@ -69,6 +69,11 @@ export class BusinessesRepository {
         VALUES ($1, $2, $3)`,
         [business.id, creatorUserId, business.organization_id],
       );
+      await client.query(
+        `INSERT INTO business_loyalty_settings (business_id, organization_id)
+        VALUES ($1, $2)`,
+        [business.id, business.organization_id],
+      );
 
       return business;
     });

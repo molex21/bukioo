@@ -114,16 +114,22 @@ DATABASE_URL=postgres://bukioo:change_me@localhost:5432/bukioo?sslmode=disable
 
 Variables:
 
-| Variable       | Uso                             | Ejemplo                                                             |
-| -------------- | ------------------------------- | ------------------------------------------------------------------- |
-| `PORT`         | Puerto HTTP de NestJS           | `3000`                                                              |
-| `DATABASE_URL` | Cadena de conexión a PostgreSQL | `postgres://bukioo:change_me@localhost:5432/bukioo?sslmode=disable` |
+| Variable         | Uso                                        | Ejemplo                                                             |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------- |
+| `PORT`           | Puerto HTTP de NestJS                      | `3000`                                                              |
+| `DATABASE_URL`   | Cadena de conexión a PostgreSQL            | `postgres://bukioo:change_me@localhost:5432/bukioo?sslmode=disable` |
+| `PGBOSS_ENABLED` | Activa el worker de tareas sobre PostgreSQL | `true`                                                              |
 
 La contraseña debe coincidir con la configurada para PostgreSQL en el `.env` de la raíz utilizado por Docker Compose.
 
 No subas ningún archivo `.env` real al repositorio.
 
 Los archivos `.env.example` deben contener únicamente valores de ejemplo.
+
+Con `PGBOSS_ENABLED=true`, la API inicia el worker de `pg-boss` y ejecuta cada
+hora la caducidad de puntos de Loyalty. Puede desactivarse temporalmente con
+`false`; `pg-boss` utiliza la misma `DATABASE_URL` y crea sus tablas de trabajo
+en PostgreSQL.
 
 > Actualmente NestJS lee `PORT` desde el entorno del proceso. La carga automática del archivo `.env` dentro de la aplicación deberá configurarse cuando se implemente la configuración del backend.
 
@@ -605,8 +611,8 @@ Los niveles de fidelizacion se gestionan por negocio. `PATCH` permite cambiar
 el nombre, minimo de puntos, orden y estado activo. `DELETE` solo se permite
 cuando no hay clientes asociados al nivel; de otro modo devuelve `409 Conflict`.
 Crear, editar y borrar requiere `OWNER` o `ADMIN`; listarlos admite usuarios
-con acceso al negocio. Este bloque solo configura niveles: el calculo de puntos
-y el ledger se incorporaran en los siguientes pasos de Loyalty V1.
+con acceso al negocio. El nivel activo de cada cliente se recalcula de forma
+automatica con cada movimiento de puntos.
 
 ```text
 GET    /api/v1/businesses/<businessId>/loyalty/levels
@@ -614,6 +620,44 @@ POST   /api/v1/businesses/<businessId>/loyalty/levels
 PATCH  /api/v1/businesses/<businessId>/loyalty/levels/<levelId>
 DELETE /api/v1/businesses/<businessId>/loyalty/levels/<levelId>
 ```
+
+La configuracion de Loyalty se almacena por negocio. Al activarla se debe
+elegir una regla por defecto: `NONE`, `FIXED`, `AMOUNT_MULTIPLIER` o `BOTH`.
+Se pueden configurar puntos fijos, puntos por unidad monetaria y una caducidad
+de `1` a `120` meses, o `null` para que no caduquen. La fecha de expiracion se
+guarda en cada concesion y el worker de `pg-boss` ejecuta su caducidad cada
+hora.
+
+Cuando Resend esta configurado, el worker tambien revisa diariamente a las
+08:15 UTC los puntos activos que caducan en 30 y 7 dias. Envia un correo de
+texto plano por cada umbral, registra el resultado en `notifications` y evita
+duplicados por movimiento de puntos. Los envios fallidos se reintentan en el
+siguiente ciclo.
+
+```text
+GET   /api/v1/businesses/<businessId>/loyalty/settings
+PATCH /api/v1/businesses/<businessId>/loyalty/settings
+```
+
+Cada servicio puede usar la regla de la empresa (`INHERIT`), no conceder
+puntos (`NONE`), usar puntos fijos (`FIXED`), puntos por importe
+(`AMOUNT_MULTIPLIER`) o ambos (`BOTH`). La regla efectiva se guarda como
+snapshot en la cita. Al marcar una cita `COMPLETED`, solo genera puntos si
+`countsTowardMembership` es `true`; cambiar despues esa elegibilidad crea una
+concesion o reversion en el ledger, sin borrar historico.
+
+La ficha de fidelizacion de un cliente y los ajustes manuales se gestionan con:
+
+```text
+GET  /api/v1/businesses/<businessId>/customers/<customerId>/loyalty
+POST /api/v1/businesses/<businessId>/customers/<customerId>/loyalty/adjust
+```
+
+Los ajustes exigen `points` distinto de cero y `reason`; solo `OWNER` y
+`ADMIN` pueden realizarlos. No se permite dejar un saldo negativo.
+Cada movimiento incluye `appointment: null` o, si procede de una cita, su
+referencia, estado, horario, empleado, servicio e importe. Esto permite mostrar
+el historial de puntos completo desde la ficha del cliente.
 
 Los servicios se gestionan por negocio y pueden pertenecer opcionalmente a una
 categoria del mismo negocio. `PATCH` permite activar o desactivar un servicio.
@@ -703,6 +747,9 @@ POST   /api/v1/businesses/<businessId>/appointments/<appointmentId>/complete
 POST   /api/v1/businesses/<businessId>/appointments/<appointmentId>/no-show
 DELETE /api/v1/businesses/<businessId>/appointments/<appointmentId>
 ```
+
+Las consultas internas de citas (`GET` de listado y por id) incluyen
+`customerLoyalty`, con el saldo de puntos y el nivel actual del cliente.
 
 `DELETE` cancela la cita y conserva su historico. Puede incluir opcionalmente
 `{ "reason": "..." }`. Los estados son `PENDING`, `CONFIRMED`, `COMPLETED`,

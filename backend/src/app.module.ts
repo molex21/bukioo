@@ -20,6 +20,7 @@ import { AvailabilityModule } from "./availability/availability.module";
 import { CustomerAuthModule } from "./customer-auth/customer-auth.module";
 import { PublicBookingModule } from "./public-booking/public-booking.module";
 import { LoyaltyModule } from "./loyalty/loyalty.module";
+import { LoyaltyJobsModule } from "./loyalty-jobs/loyalty-jobs.module";
 import Joi from "joi";
 
 @Module({
@@ -46,6 +47,8 @@ import Joi from "joi";
         TOTP_ENCRYPTION_KEY: Joi.string().min(32).required(),
 
         ONBOARDING_SECRET: Joi.string().min(32).required(),
+
+        PGBOSS_ENABLED: Joi.boolean().default(true),
 
         RESEND_API_KEY: Joi.string().when("NODE_ENV", {
           is: "production",
@@ -90,6 +93,7 @@ import Joi from "joi";
     CustomerAuthModule,
     PublicBookingModule,
     LoyaltyModule,
+    LoyaltyJobsModule,
   ],
   controllers: [AppController],
   providers: [

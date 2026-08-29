@@ -80,6 +80,11 @@ export class OnboardingRepository {
         [organization.id],
       );
       await client.query(
+        `INSERT INTO business_loyalty_settings (business_id, organization_id)
+        VALUES ($1, $2)`,
+        [business.id, organization.id],
+      );
+      await client.query(
         "INSERT INTO organization_locales (organization_id, locale, is_default) VALUES ($1, $2, TRUE)",
         [organization.id, "es"],
       );

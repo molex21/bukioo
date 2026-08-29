@@ -21,6 +21,7 @@ export class ServicesService {
   ): Promise<ServiceRecord> {
     await this.assertCanManage(userId, businessId);
     await this.assertCategoryBelongsToBusiness(dto.categoryId, businessId);
+    this.assertLoyaltyConfiguration(dto);
     return this.servicesRepository.create(businessId, {
       ...dto,
       name: dto.name.trim(),
@@ -42,6 +43,7 @@ export class ServicesService {
     await this.assertCanManage(userId, businessId);
     const service = await this.getService(businessId, serviceId);
     await this.assertCategoryBelongsToBusiness(dto.categoryId, businessId);
+    this.assertLoyaltyConfiguration(dto, service);
     return this.servicesRepository.update(service, {
       ...dto,
       name: dto.name?.trim(),
@@ -150,5 +152,42 @@ export class ServicesService {
       throw new NotFoundException("Servicio no encontrado");
     }
     return service;
+  }
+
+  private assertLoyaltyConfiguration(
+    dto: Pick<
+      CreateServiceDto | UpdateServiceDto,
+      | "loyaltyEarningType"
+      | "loyaltyFixedPoints"
+      | "loyaltyPointsPerCurrencyUnit"
+    >,
+    current?: ServiceRecord,
+  ): void {
+    const type = dto.loyaltyEarningType ?? current?.loyalty_earning_type;
+    const fixedPoints = dto.loyaltyFixedPoints ?? current?.loyalty_fixed_points;
+    const pointsPerCurrencyUnit =
+      dto.loyaltyPointsPerCurrencyUnit ??
+      (current?.loyalty_points_per_currency_unit === undefined ||
+      current.loyalty_points_per_currency_unit === null
+        ? null
+        : Number(current.loyalty_points_per_currency_unit));
+
+    if (
+      (type === "FIXED" || type === "BOTH") &&
+      (fixedPoints === null || fixedPoints === undefined)
+    ) {
+      throw new BadRequestException(
+        "Debes indicar puntos fijos para esta regla de fidelizacion",
+      );
+    }
+
+    if (
+      (type === "AMOUNT_MULTIPLIER" || type === "BOTH") &&
+      (pointsPerCurrencyUnit === null || pointsPerCurrencyUnit === undefined)
+    ) {
+      throw new BadRequestException(
+        "Debes indicar puntos por unidad monetaria para esta regla de fidelizacion",
+      );
+    }
   }
 }

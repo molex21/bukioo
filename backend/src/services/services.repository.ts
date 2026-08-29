@@ -18,6 +18,14 @@ export interface ServiceRecord {
   maximum_booking_advance_days: number | null;
   same_day_booking: boolean | null;
   auto_confirm_appointments: boolean | null;
+  loyalty_earning_type:
+    | "INHERIT"
+    | "NONE"
+    | "FIXED"
+    | "AMOUNT_MULTIPLIER"
+    | "BOTH";
+  loyalty_fixed_points: number | null;
+  loyalty_points_per_currency_unit: string | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -103,13 +111,15 @@ export class ServicesRepository {
       `INSERT INTO services
         (organization_id, business_id, category_id, name, description, price,
          duration_minutes, buffer_before_minutes, buffer_after_minutes,
-         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments)
-       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
+         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit)
+       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
        FROM businesses WHERE id = $1
        RETURNING id, organization_id, business_id, category_id, name, description,
          price, duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
-         auto_confirm_appointments,
+         auto_confirm_appointments, loyalty_earning_type, loyalty_fixed_points,
+         loyalty_points_per_currency_unit,
          is_active, created_at, updated_at, archived_at`,
       [
         businessId,
@@ -124,6 +134,9 @@ export class ServicesRepository {
         dto.maximumBookingAdvanceDays ?? null,
         dto.sameDayBooking ?? null,
         dto.autoConfirmAppointments ?? null,
+        dto.loyaltyEarningType ?? "INHERIT",
+        dto.loyaltyFixedPoints ?? null,
+        dto.loyaltyPointsPerCurrencyUnit ?? null,
       ],
     );
     return result.rows[0];
@@ -134,6 +147,7 @@ export class ServicesRepository {
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE business_id = $1 AND archived_at IS NULL
       ORDER BY name ASC`,
@@ -150,6 +164,7 @@ export class ServicesRepository {
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE id = $1 AND business_id = $2 AND archived_at IS NULL LIMIT 1`,
       [serviceId, businessId],
@@ -171,12 +186,16 @@ export class ServicesRepository {
         maximum_booking_advance_days = COALESCE($9, maximum_booking_advance_days),
         same_day_booking = COALESCE($10, same_day_booking),
         auto_confirm_appointments = CASE WHEN $12 THEN $11 ELSE auto_confirm_appointments END,
-        is_active = COALESCE($13, is_active),
+        loyalty_earning_type = COALESCE($13, loyalty_earning_type),
+        loyalty_fixed_points = COALESCE($14, loyalty_fixed_points),
+        loyalty_points_per_currency_unit = COALESCE($15, loyalty_points_per_currency_unit),
+        is_active = COALESCE($16, is_active),
         updated_at = NOW()
-      WHERE id = $14 AND business_id = $15 AND organization_id = $16 AND archived_at IS NULL
+      WHERE id = $17 AND business_id = $18 AND organization_id = $19 AND archived_at IS NULL
       RETURNING id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
         is_active, created_at, updated_at, archived_at`,
       [
         dto.categoryId,
@@ -191,6 +210,9 @@ export class ServicesRepository {
         dto.sameDayBooking,
         dto.autoConfirmAppointments ?? null,
         Object.prototype.hasOwnProperty.call(dto, "autoConfirmAppointments"),
+        dto.loyaltyEarningType,
+        dto.loyaltyFixedPoints,
+        dto.loyaltyPointsPerCurrencyUnit,
         dto.isActive,
         service.id,
         service.business_id,

@@ -87,7 +87,7 @@ describe("OnboardingRepository", () => {
     });
 
     expect(databaseServiceMock.transaction).toHaveBeenCalledTimes(1);
-    expect(clientMock.query).toHaveBeenCalledTimes(7);
+    expect(clientMock.query).toHaveBeenCalledTimes(8);
     expect(clientMock.query).toHaveBeenLastCalledWith(
       expect.stringContaining("business_memberships"),
       ["business-id", "user-id", "organization-id"],

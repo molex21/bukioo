@@ -3,6 +3,7 @@ import { DatabaseService } from "../database/database.service";
 import type { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import type { ListAppointmentsDto } from "./dto/list-appointments.dto";
 import type { UpdateAppointmentDto } from "./dto/update-appointment.dto";
+import type { LoyaltyRuleSnapshot } from "../loyalty/loyalty.types";
 
 export type AppointmentStatus =
   | "PENDING"
@@ -37,10 +38,19 @@ export interface AppointmentRecord {
   cancelled_at: Date | null;
   completed_at: Date | null;
   counts_toward_membership: boolean;
+  loyalty_rule_snapshot: LoyaltyRuleSnapshot | null;
   requires_approval: boolean;
   conflict_override: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface AppointmentWithCustomerLoyaltyRecord
+  extends AppointmentRecord {
+  customer_points_balance: number;
+  customer_loyalty_level_id: string | null;
+  customer_loyalty_level_name: string | null;
+  customer_loyalty_level_minimum_points: number | null;
 }
 
 export interface BookingContext {
@@ -56,6 +66,14 @@ export interface BookingContext {
   buffer_after_minutes: number;
   price: string | null;
   auto_confirm_appointments: boolean;
+  loyalty_earning_type:
+    | "INHERIT"
+    | "NONE"
+    | "FIXED"
+    | "AMOUNT_MULTIPLIER"
+    | "BOTH";
+  loyalty_fixed_points: number | null;
+  loyalty_points_per_currency_unit: string | null;
 }
 
 export interface AppointmentOccupancy {
@@ -162,6 +180,8 @@ export class AppointmentsRepository {
         organizations.currency_code, customers.id AS customer_id, employees.id AS employee_id,
         services.id AS service_id, services.duration_minutes, services.buffer_before_minutes,
         services.buffer_after_minutes, services.price,
+        services.loyalty_earning_type, services.loyalty_fixed_points,
+        services.loyalty_points_per_currency_unit,
         COALESCE(services.auto_confirm_appointments, organization_settings.auto_confirm_appointments)
           AS auto_confirm_appointments
       FROM businesses
@@ -289,13 +309,14 @@ export class AppointmentsRepository {
     userId: string | null,
     status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED">,
     requiresApproval: boolean,
+    loyaltyRuleSnapshot: LoyaltyRuleSnapshot,
   ): Promise<AppointmentRecord> {
     const result = await this.databaseService.query<AppointmentRecord>(
       `INSERT INTO appointments (organization_id, business_id, reference_code, customer_id, employee_id,
         service_id, start_at, end_at, occupied_start_at, occupied_end_at, duration_minutes,
         buffer_before_minutes, buffer_after_minutes, price_amount, currency_code, customer_notes,
-        internal_notes, created_by_user_id, status, requires_approval)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        internal_notes, created_by_user_id, status, requires_approval, loyalty_rule_snapshot)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING *`,
       [
         context.organization_id,
@@ -318,6 +339,7 @@ export class AppointmentsRepository {
         userId,
         status,
         requiresApproval,
+        JSON.stringify(loyaltyRuleSnapshot),
       ],
     );
     return result.rows[0];
@@ -326,24 +348,34 @@ export class AppointmentsRepository {
   async listByBusiness(
     businessId: string,
     filters: ListAppointmentsDto,
-  ): Promise<AppointmentRecord[]> {
-    const result = await this.databaseService.query<AppointmentRecord>(
-      `SELECT * FROM appointments WHERE business_id = $1
+  ): Promise<AppointmentWithCustomerLoyaltyRecord[]> {
+    const result =
+      await this.databaseService.query<AppointmentWithCustomerLoyaltyRecord>(
+        `SELECT appointments.*, customers.points_balance AS customer_points_balance,
+        loyalty_levels.id AS customer_loyalty_level_id,
+        loyalty_levels.name AS customer_loyalty_level_name,
+        loyalty_levels.minimum_points AS customer_loyalty_level_minimum_points
+      FROM appointments
+      INNER JOIN customers ON customers.id = appointments.customer_id
+        AND customers.business_id = appointments.business_id
+      LEFT JOIN loyalty_levels ON loyalty_levels.id = customers.loyalty_level_id
+        AND loyalty_levels.business_id = customers.business_id
+      WHERE appointments.business_id = $1
         AND ($2::timestamptz IS NULL OR end_at > $2::timestamptz)
         AND ($3::timestamptz IS NULL OR start_at < $3::timestamptz)
-        AND ($4::uuid IS NULL OR employee_id = $4::uuid)
-        AND ($5::uuid IS NULL OR customer_id = $5::uuid)
-        AND ($6::varchar IS NULL OR status = $6::varchar)
-      ORDER BY start_at ASC`,
-      [
-        businessId,
-        filters.from ?? null,
-        filters.to ?? null,
-        filters.employeeId ?? null,
-        filters.customerId ?? null,
-        filters.status ?? null,
-      ],
-    );
+        AND ($4::uuid IS NULL OR appointments.employee_id = $4::uuid)
+        AND ($5::uuid IS NULL OR appointments.customer_id = $5::uuid)
+        AND ($6::varchar IS NULL OR appointments.status = $6::varchar)
+      ORDER BY appointments.start_at ASC`,
+        [
+          businessId,
+          filters.from ?? null,
+          filters.to ?? null,
+          filters.employeeId ?? null,
+          filters.customerId ?? null,
+          filters.status ?? null,
+        ],
+      );
     return result.rows;
   }
 
@@ -446,11 +478,22 @@ export class AppointmentsRepository {
   async findById(
     businessId: string,
     appointmentId: string,
-  ): Promise<AppointmentRecord | null> {
-    const result = await this.databaseService.query<AppointmentRecord>(
-      `SELECT * FROM appointments WHERE id = $1 AND business_id = $2 LIMIT 1`,
-      [appointmentId, businessId],
-    );
+  ): Promise<AppointmentWithCustomerLoyaltyRecord | null> {
+    const result =
+      await this.databaseService.query<AppointmentWithCustomerLoyaltyRecord>(
+        `SELECT appointments.*, customers.points_balance AS customer_points_balance,
+        loyalty_levels.id AS customer_loyalty_level_id,
+        loyalty_levels.name AS customer_loyalty_level_name,
+        loyalty_levels.minimum_points AS customer_loyalty_level_minimum_points
+      FROM appointments
+      INNER JOIN customers ON customers.id = appointments.customer_id
+        AND customers.business_id = appointments.business_id
+      LEFT JOIN loyalty_levels ON loyalty_levels.id = customers.loyalty_level_id
+        AND loyalty_levels.business_id = customers.business_id
+      WHERE appointments.id = $1 AND appointments.business_id = $2
+      LIMIT 1`,
+        [appointmentId, businessId],
+      );
     return result.rows[0] ?? null;
   }
 
@@ -529,6 +572,7 @@ export class AppointmentsRepository {
     replaceSnapshot: boolean,
     status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED">,
     requiresApproval: boolean,
+    loyaltyRuleSnapshot: LoyaltyRuleSnapshot | null,
   ): Promise<AppointmentRecord> {
     const result = await this.databaseService.query<AppointmentRecord>(
       `UPDATE appointments SET customer_id = $1, employee_id = $2, service_id = $3, start_at = $4,
@@ -538,9 +582,10 @@ export class AppointmentsRepository {
         buffer_after_minutes = CASE WHEN $8 THEN $11 ELSE buffer_after_minutes END,
         price_amount = CASE WHEN $8 THEN $12 ELSE price_amount END,
         currency_code = CASE WHEN $8 THEN $13 ELSE currency_code END,
-        customer_notes = COALESCE($14, customer_notes), internal_notes = COALESCE($15, internal_notes),
-        status = $16, requires_approval = $17, conflict_override = FALSE, updated_at = NOW()
-      WHERE id = $18 AND business_id = $19 AND organization_id = $20 AND status IN ('PENDING', 'CONFIRMED')
+        loyalty_rule_snapshot = CASE WHEN $8 THEN $14::jsonb ELSE loyalty_rule_snapshot END,
+        customer_notes = COALESCE($15, customer_notes), internal_notes = COALESCE($16, internal_notes),
+        status = $17, requires_approval = $18, conflict_override = FALSE, updated_at = NOW()
+      WHERE id = $19 AND business_id = $20 AND organization_id = $21 AND status IN ('PENDING', 'CONFIRMED')
       RETURNING *`,
       [
         context.customer_id,
@@ -556,6 +601,9 @@ export class AppointmentsRepository {
         context.buffer_after_minutes,
         context.price,
         context.currency_code,
+        loyaltyRuleSnapshot === null
+          ? null
+          : JSON.stringify(loyaltyRuleSnapshot),
         dto.customerNotes,
         dto.internalNotes,
         status,

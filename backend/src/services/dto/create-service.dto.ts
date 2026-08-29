@@ -10,6 +10,11 @@ import {
   Min,
   MinLength,
 } from "class-validator";
+import { IsIn } from "class-validator";
+import {
+  loyaltyEarningTypes,
+  type LoyaltyEarningType,
+} from "../../loyalty/loyalty.types";
 
 export class CreateServiceDto {
   @IsOptional()
@@ -68,4 +73,20 @@ export class CreateServiceDto {
   @IsOptional()
   @IsBoolean()
   autoConfirmAppointments?: boolean;
+
+  @IsOptional()
+  @IsIn(loyaltyEarningTypes)
+  loyaltyEarningType?: LoyaltyEarningType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000_000)
+  loyaltyFixedPoints?: number;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 4 })
+  @Min(0)
+  @Max(1_000_000)
+  loyaltyPointsPerCurrencyUnit?: number;
 }

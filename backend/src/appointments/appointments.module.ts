@@ -10,5 +10,6 @@ import { AuditService } from "../audit/audit.service";
   imports: [AuthModule],
   controllers: [AppointmentsController, RescheduleProposalsController],
   providers: [AppointmentsService, AppointmentsRepository, AuditService],
+  exports: [AppointmentsService],
 })
 export class AppointmentsModule {}

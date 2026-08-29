@@ -601,6 +601,20 @@ PATCH  /api/v1/businesses/<businessId>/service-categories/<categoryId>
 DELETE /api/v1/businesses/<businessId>/service-categories/<categoryId>
 ```
 
+Los niveles de fidelizacion se gestionan por negocio. `PATCH` permite cambiar
+el nombre, minimo de puntos, orden y estado activo. `DELETE` solo se permite
+cuando no hay clientes asociados al nivel; de otro modo devuelve `409 Conflict`.
+Crear, editar y borrar requiere `OWNER` o `ADMIN`; listarlos admite usuarios
+con acceso al negocio. Este bloque solo configura niveles: el calculo de puntos
+y el ledger se incorporaran en los siguientes pasos de Loyalty V1.
+
+```text
+GET    /api/v1/businesses/<businessId>/loyalty/levels
+POST   /api/v1/businesses/<businessId>/loyalty/levels
+PATCH  /api/v1/businesses/<businessId>/loyalty/levels/<levelId>
+DELETE /api/v1/businesses/<businessId>/loyalty/levels/<levelId>
+```
+
 Los servicios se gestionan por negocio y pueden pertenecer opcionalmente a una
 categoria del mismo negocio. `PATCH` permite activar o desactivar un servicio.
 `DELETE` lo elimina fisicamente solo cuando no tiene empleados ni citas
@@ -624,6 +638,10 @@ PUT /api/v1/businesses/<businessId>/services/<serviceId>/employees
 
 Los clientes se gestionan por negocio. `DELETE` anonimiza sus datos personales
 para conservar el historial sin retener nombre, email, teléfono ni notas.
+Las cuentas de cliente se modelan por organización en `customer_accounts`,
+separadas de los usuarios internos globales.
+Sus sesiones de refresh se almacenan de forma independiente en
+`customer_sessions`.
 
 ```text
 GET    /api/v1/businesses/<businessId>/customers
@@ -689,6 +707,13 @@ DELETE /api/v1/businesses/<businessId>/appointments/<appointmentId>
 `DELETE` cancela la cita y conserva su historico. Puede incluir opcionalmente
 `{ "reason": "..." }`. Los estados son `PENDING`, `CONFIRMED`, `COMPLETED`,
 `CANCELLED` y `NO_SHOW`.
+El cliente no puede cancelar una cita cuando ya ha comenzado. Hasta las
+`23:59:59.999` del dia local del negocio, el `OWNER`, `ADMIN` o empleado
+asignado pueden confirmar y reubicar directamente dentro de ese mismo dia.
+Moverla a otro dia exige una propuesta aceptada por el cliente. Desde el dia
+siguiente, el calendario queda bloqueado; aun se puede marcar `COMPLETED` o
+`NO_SHOW` desde `startAt`, sin depender de `endAt`.
+La excepción es `PATCH /api/v1/businesses/<businessId>/appointments/<appointmentId>/membership-eligibility`, que actualiza solo la marca administrativa `countsTowardMembership`. La pueden modificar el `OWNER`, `ADMIN` o el empleado asignado, incluso después de la cita. Las futuras membresías solo deben contar citas `COMPLETED` con esa marca activa.
 
 Crear, editar, completar, marcar ausencia y cancelar una cita requiere
 `OWNER` o `ADMIN`. Las consultas mantienen el acceso de usuarios asignados al
@@ -727,6 +752,17 @@ consultar disponibilidad en los siguientes pasos.
 GET /api/v1/public/<organizationSlug>/services?businessId=<uuid>
 GET /api/v1/public/<organizationSlug>/employees?businessId=<uuid>&serviceId=<uuid>
 GET /api/v1/public/<organizationSlug>/availability?businessId=<uuid>&employeeId=<uuid>&serviceId=<uuid>&from=<iso>&to=<iso>
+POST /api/v1/public/<organizationSlug>/appointments
+POST /api/v1/public/<organizationSlug>/auth/register
+POST /api/v1/public/<organizationSlug>/auth/login
+POST /api/v1/public/<organizationSlug>/auth/refresh
+POST /api/v1/public/<organizationSlug>/auth/logout
+GET /api/v1/public/<organizationSlug>/auth/me
+GET /api/v1/public/<organizationSlug>/auth/appointments?businessId=<uuid>&from=<iso>&to=<iso>&status=<status>
+GET /api/v1/public/<organizationSlug>/auth/appointments/<appointmentId>
+POST /api/v1/public/<organizationSlug>/auth/appointments/<appointmentId>/cancel
+GET /api/v1/public/appointments/<accessToken>
+POST /api/v1/public/appointments/<accessToken>/cancel
 ```
 
 Una cita solicitada sobre otra cita o un bloqueo se guarda como `PENDING` con

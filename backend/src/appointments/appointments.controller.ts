@@ -23,6 +23,7 @@ import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { ListAppointmentsDto } from "./dto/list-appointments.dto";
 import { ListAppointmentOccupancyDto } from "./dto/list-appointment-occupancy.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
+import { UpdateAppointmentMembershipEligibilityDto } from "./dto/update-appointment-membership-eligibility.dto";
 import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dto";
 
 @Controller("businesses/:businessId/appointments")
@@ -75,8 +76,6 @@ export class AppointmentsController {
   }
 
   @Patch(":appointmentId")
-  @Roles("OWNER", "ADMIN")
-  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   update(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
@@ -87,6 +86,21 @@ export class AppointmentsController {
       businessId,
       appointmentId,
       dto,
+      userId,
+    );
+  }
+
+  @Patch(":appointmentId/membership-eligibility")
+  updateMembershipEligibility(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
+    @Body() dto: UpdateAppointmentMembershipEligibilityDto,
+    @CurrentUser() userId: string,
+  ) {
+    return this.appointmentsService.updateMembershipEligibility(
+      businessId,
+      appointmentId,
+      dto.countsTowardMembership,
       userId,
     );
   }
@@ -116,8 +130,6 @@ export class AppointmentsController {
   }
 
   @Post(":appointmentId/complete")
-  @Roles("OWNER", "ADMIN")
-  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   complete(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
@@ -127,8 +139,6 @@ export class AppointmentsController {
   }
 
   @Post(":appointmentId/no-show")
-  @Roles("OWNER", "ADMIN")
-  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   noShow(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,
@@ -139,8 +149,6 @@ export class AppointmentsController {
 
   @Delete(":appointmentId")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles("OWNER", "ADMIN")
-  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
   async cancel(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Param("appointmentId", ParseUUIDPipe) appointmentId: string,

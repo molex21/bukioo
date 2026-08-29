@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
+import { CreatePublicAppointmentDto } from "./dto/create-public-appointment.dto";
 import { ListPublicEmployeesDto } from "./dto/list-public-employees.dto";
 import { ListPublicAvailabilityDto } from "./dto/list-public-availability.dto";
 import { ListPublicServicesDto } from "./dto/list-public-services.dto";
@@ -30,5 +31,13 @@ export class PublicBookingController {
     @Query() dto: ListPublicAvailabilityDto,
   ) {
     return this.publicBookingService.listAvailability(organizationSlug, dto);
+  }
+
+  @Post("appointments")
+  createAppointment(
+    @Param("organizationSlug") organizationSlug: string,
+    @Body() dto: CreatePublicAppointmentDto,
+  ) {
+    return this.publicBookingService.createAppointment(organizationSlug, dto);
   }
 }

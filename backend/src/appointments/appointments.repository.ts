@@ -36,6 +36,7 @@ export interface AppointmentRecord {
   cancellation_reason: string | null;
   cancelled_at: Date | null;
   completed_at: Date | null;
+  counts_toward_membership: boolean;
   requires_approval: boolean;
   conflict_override: boolean;
   created_at: Date;
@@ -62,6 +63,31 @@ export interface AppointmentOccupancy {
   blocks: CalendarBlockOccupancy[];
 }
 
+export interface CustomerAppointmentRecord {
+  id: string;
+  reference_code: string;
+  status: AppointmentStatus;
+  start_at: Date;
+  end_at: Date;
+  business_id: string;
+  business_name: string;
+  employee_id: string;
+  employee_first_name: string;
+  employee_last_name: string;
+  service_id: string;
+  service_name: string;
+}
+
+export interface CustomerAppointmentDetailRecord
+  extends CustomerAppointmentRecord {
+  service_description: string | null;
+  price_amount: string | null;
+  currency_code: string;
+  customer_notes: string | null;
+  cancellation_reason: string | null;
+  cancelled_at: Date | null;
+}
+
 export interface CalendarBlockOccupancy {
   id: string;
   employee_id: string | null;
@@ -83,6 +109,7 @@ export interface RescheduleProposalRecord {
   customer_id: string;
   service_id: string;
   appointment_status: AppointmentStatus;
+  appointment_start_at: Date;
   reference_code: string;
 }
 
@@ -259,7 +286,7 @@ export class AppointmentsRepository {
     occupiedStartAt: Date,
     occupiedEndAt: Date,
     referenceCode: string,
-    userId: string,
+    userId: string | null,
     status: Extract<AppointmentStatus, "PENDING" | "CONFIRMED">,
     requiresApproval: boolean,
   ): Promise<AppointmentRecord> {
@@ -320,6 +347,76 @@ export class AppointmentsRepository {
     return result.rows;
   }
 
+  async listByCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    filters: {
+      from?: string;
+      to?: string;
+      businessId?: string;
+      status?: AppointmentStatus;
+    },
+  ): Promise<CustomerAppointmentRecord[]> {
+    const result = await this.databaseService.query<CustomerAppointmentRecord>(
+      `SELECT
+        appointments.id,
+        appointments.reference_code,
+        appointments.status,
+        appointments.start_at,
+        appointments.end_at,
+        businesses.id AS business_id,
+        businesses.name AS business_name,
+        employees.id AS employee_id,
+        employees.first_name AS employee_first_name,
+        employees.last_name AS employee_last_name,
+        services.id AS service_id,
+        services.name AS service_name
+      FROM appointments
+      INNER JOIN customers
+        ON customers.id = appointments.customer_id
+        AND customers.organization_id = appointments.organization_id
+      INNER JOIN businesses ON businesses.id = appointments.business_id
+      INNER JOIN employees ON employees.id = appointments.employee_id
+      INNER JOIN services ON services.id = appointments.service_id
+      WHERE appointments.organization_id = $1
+        AND customers.customer_account_id = $2
+        AND ($3::timestamptz IS NULL OR appointments.end_at > $3::timestamptz)
+        AND ($4::timestamptz IS NULL OR appointments.start_at < $4::timestamptz)
+        AND ($5::uuid IS NULL OR appointments.business_id = $5::uuid)
+        AND ($6::varchar IS NULL OR appointments.status = $6::varchar)
+      ORDER BY appointments.start_at ASC`,
+      [
+        organizationId,
+        accountId,
+        filters.from ?? null,
+        filters.to ?? null,
+        filters.businessId ?? null,
+        filters.status ?? null,
+      ],
+    );
+    return result.rows;
+  }
+
+  async findByCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    appointmentId: string,
+  ): Promise<AppointmentRecord | null> {
+    const result = await this.databaseService.query<AppointmentRecord>(
+      `SELECT appointments.*
+      FROM appointments
+      INNER JOIN customers
+        ON customers.id = appointments.customer_id
+        AND customers.organization_id = appointments.organization_id
+      WHERE appointments.id = $1
+        AND appointments.organization_id = $2
+        AND customers.customer_account_id = $3
+      LIMIT 1`,
+      [appointmentId, organizationId, accountId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async listOccupancy(
     businessId: string,
     from: string,
@@ -354,6 +451,70 @@ export class AppointmentsRepository {
       `SELECT * FROM appointments WHERE id = $1 AND business_id = $2 LIMIT 1`,
       [appointmentId, businessId],
     );
+    return result.rows[0] ?? null;
+  }
+
+  async updateMembershipEligibility(
+    appointment: AppointmentRecord,
+    countsTowardMembership: boolean,
+  ): Promise<AppointmentRecord | null> {
+    const result = await this.databaseService.query<AppointmentRecord>(
+      `UPDATE appointments
+      SET counts_toward_membership = $1,
+          updated_at = NOW()
+      WHERE id = $2
+        AND business_id = $3
+        AND organization_id = $4
+      RETURNING *`,
+      [
+        countsTowardMembership,
+        appointment.id,
+        appointment.business_id,
+        appointment.organization_id,
+      ],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async findDetailByCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    appointmentId: string,
+  ): Promise<CustomerAppointmentDetailRecord | null> {
+    const result =
+      await this.databaseService.query<CustomerAppointmentDetailRecord>(
+        `SELECT
+          appointments.id,
+          appointments.reference_code,
+          appointments.status,
+          appointments.start_at,
+          appointments.end_at,
+          appointments.price_amount,
+          appointments.currency_code,
+          appointments.customer_notes,
+          appointments.cancellation_reason,
+          appointments.cancelled_at,
+          businesses.id AS business_id,
+          businesses.name AS business_name,
+          employees.id AS employee_id,
+          employees.first_name AS employee_first_name,
+          employees.last_name AS employee_last_name,
+          services.id AS service_id,
+          services.name AS service_name,
+          services.description AS service_description
+        FROM appointments
+        INNER JOIN customers
+          ON customers.id = appointments.customer_id
+          AND customers.organization_id = appointments.organization_id
+        INNER JOIN businesses ON businesses.id = appointments.business_id
+        INNER JOIN employees ON employees.id = appointments.employee_id
+        INNER JOIN services ON services.id = appointments.service_id
+        WHERE appointments.id = $1
+          AND appointments.organization_id = $2
+          AND customers.customer_account_id = $3
+        LIMIT 1`,
+        [appointmentId, organizationId, accountId],
+      );
     return result.rows[0] ?? null;
   }
 
@@ -412,21 +573,23 @@ export class AppointmentsRepository {
     status: AppointmentStatus,
     reason?: string,
     conflictOverride = false,
+    cancellationActor: "CLIENT" | "EMPLOYEE" | "ADMIN" | "SYSTEM" = "ADMIN",
   ): Promise<AppointmentRecord | null> {
     const result = await this.databaseService.query<AppointmentRecord>(
-      `UPDATE appointments SET status = $1, cancellation_actor = CASE WHEN $1 = 'CANCELLED' THEN 'ADMIN' ELSE NULL END,
+      `UPDATE appointments SET status = $1, cancellation_actor = CASE WHEN $1 = 'CANCELLED' THEN $4 ELSE NULL END,
         cancellation_reason = CASE WHEN $1 = 'CANCELLED' THEN $2 ELSE NULL END,
         cancelled_at = CASE WHEN $1 = 'CANCELLED' THEN NOW() ELSE NULL END,
         completed_at = CASE WHEN $1 = 'COMPLETED' THEN NOW() ELSE NULL END,
         requires_approval = CASE WHEN $1 = 'CONFIRMED' THEN FALSE ELSE requires_approval END,
         conflict_override = CASE WHEN $1 = 'CONFIRMED' THEN $3 ELSE conflict_override END,
         updated_at = NOW()
-      WHERE id = $4 AND business_id = $5 AND organization_id = $6 AND status IN ('PENDING', 'CONFIRMED')
+      WHERE id = $5 AND business_id = $6 AND organization_id = $7 AND status IN ('PENDING', 'CONFIRMED')
       RETURNING *`,
       [
         status,
         reason ?? null,
         conflictOverride,
+        cancellationActor,
         appointment.id,
         appointment.business_id,
         appointment.organization_id,
@@ -496,7 +659,7 @@ export class AppointmentsRepository {
     tokenHash: string,
   ): Promise<RescheduleProposalRecord | null> {
     const result = await this.databaseService.query<RescheduleProposalRecord>(
-      `SELECT p.id,p.appointment_id,p.organization_id,p.business_id,p.employee_id,p.start_at,p.end_at,p.occupied_start_at,p.occupied_end_at,a.customer_id,a.service_id,a.status AS appointment_status,a.reference_code FROM appointment_reschedule_proposals p INNER JOIN appointments a ON a.id=p.appointment_id AND a.organization_id=p.organization_id WHERE p.token_hash=$1 AND p.status='PENDING_CUSTOMER' AND p.expires_at > NOW() LIMIT 1`,
+      `SELECT p.id,p.appointment_id,p.organization_id,p.business_id,p.employee_id,p.start_at,p.end_at,p.occupied_start_at,p.occupied_end_at,a.customer_id,a.service_id,a.status AS appointment_status,a.start_at AS appointment_start_at,a.reference_code FROM appointment_reschedule_proposals p INNER JOIN appointments a ON a.id=p.appointment_id AND a.organization_id=p.organization_id WHERE p.token_hash=$1 AND p.status='PENDING_CUSTOMER' AND p.expires_at > NOW() LIMIT 1`,
       [tokenHash],
     );
     return result.rows[0] ?? null;

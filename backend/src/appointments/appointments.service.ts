@@ -13,6 +13,7 @@ import { CreateRescheduleProposalDto } from "./dto/create-reschedule-proposal.dt
 import { AuditService } from "../audit/audit.service";
 import { CreateAppointmentDto } from "./dto/create-appointment.dto";
 import { ListAppointmentsDto } from "./dto/list-appointments.dto";
+import { ListCustomerAppointmentsDto } from "./dto/list-customer-appointments.dto";
 import { UpdateAppointmentDto } from "./dto/update-appointment.dto";
 import {
   AppointmentsRepository,
@@ -45,13 +46,13 @@ export class AppointmentsService {
   ) {
     const appointment = await this.getAppointment(businessId, appointmentId);
     await this.assertCanConfirm(userId, businessId, appointment);
-    this.assertSchedulable(appointment);
     const context = await this.getBookingContext(
       businessId,
       appointment.customer_id,
       dto.employeeId ?? appointment.employee_id,
       appointment.service_id,
     );
+    this.assertCalendarEditable(appointment, context.timezone);
     const times = this.buildTimes(dto.startAt, context, appointment);
     await this.assertWithinWorkingHours(context, times);
     const conflicts = await this.getConflicts(context, times, appointment.id);
@@ -101,6 +102,7 @@ export class AppointmentsService {
       proposal.employee_id,
       proposal.service_id,
     );
+    this.assertProposalCalendarEditable(proposal, context.timezone);
     const times = {
       startAt: proposal.start_at,
       endAt: proposal.end_at,
@@ -146,6 +148,18 @@ export class AppointmentsService {
 
   async create(businessId: string, dto: CreateAppointmentDto, userId: string) {
     await this.assertCanManage(userId, businessId);
+    return this.createAppointment(businessId, dto, userId);
+  }
+
+  async createPublic(businessId: string, dto: CreateAppointmentDto) {
+    return this.createAppointment(businessId, dto, null);
+  }
+
+  private async createAppointment(
+    businessId: string,
+    dto: CreateAppointmentDto,
+    userId: string | null,
+  ) {
     const context = await this.getBookingContext(
       businessId,
       dto.customerId,
@@ -197,6 +211,87 @@ export class AppointmentsService {
     return this.appointmentsRepository.listByBusiness(businessId, filters);
   }
 
+  async listForCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    filters: ListCustomerAppointmentsDto,
+  ) {
+    this.assertValidRange(filters);
+    const appointments =
+      await this.appointmentsRepository.listByCustomerAccount(
+        organizationId,
+        accountId,
+        filters,
+      );
+    return appointments.map((appointment) => ({
+      id: appointment.id,
+      referenceCode: appointment.reference_code,
+      status: appointment.status,
+      startAt: appointment.start_at,
+      endAt: appointment.end_at,
+      business: {
+        id: appointment.business_id,
+        name: appointment.business_name,
+      },
+      employee: {
+        id: appointment.employee_id,
+        firstName: appointment.employee_first_name,
+        lastName: appointment.employee_last_name,
+      },
+      service: {
+        id: appointment.service_id,
+        name: appointment.service_name,
+      },
+    }));
+  }
+
+  async getForCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    appointmentId: string,
+  ) {
+    const appointment =
+      await this.appointmentsRepository.findDetailByCustomerAccount(
+        organizationId,
+        accountId,
+        appointmentId,
+      );
+    if (!appointment) throw new NotFoundException("Cita no encontrada");
+
+    return {
+      id: appointment.id,
+      referenceCode: appointment.reference_code,
+      status: appointment.status,
+      startAt: appointment.start_at,
+      endAt: appointment.end_at,
+      customerNotes: appointment.customer_notes,
+      cancellation: appointment.cancelled_at
+        ? {
+            reason: appointment.cancellation_reason,
+            cancelledAt: appointment.cancelled_at,
+          }
+        : null,
+      price: {
+        amount: appointment.price_amount,
+        currencyCode: appointment.currency_code,
+      },
+      business: {
+        id: appointment.business_id,
+        name: appointment.business_name,
+      },
+      employee: {
+        id: appointment.employee_id,
+        firstName: appointment.employee_first_name,
+        lastName: appointment.employee_last_name,
+      },
+      service: {
+        id: appointment.service_id,
+        name: appointment.service_name,
+        description: appointment.service_description,
+      },
+    };
+  }
+
   async get(businessId: string, appointmentId: string, userId: string) {
     await this.assertCanAccess(userId, businessId);
     return this.getAppointment(businessId, appointmentId);
@@ -208,9 +303,7 @@ export class AppointmentsService {
     dto: UpdateAppointmentDto,
     userId: string,
   ) {
-    await this.assertCanManage(userId, businessId);
     const appointment = await this.getAppointment(businessId, appointmentId);
-    this.assertSchedulable(appointment);
     const customerId = dto.customerId ?? appointment.customer_id;
     const employeeId = dto.employeeId ?? appointment.employee_id;
     const serviceId = dto.serviceId ?? appointment.service_id;
@@ -220,6 +313,17 @@ export class AppointmentsService {
       employeeId,
       serviceId,
     );
+    await this.assertCanConfirm(userId, businessId, appointment);
+    this.assertCalendarEditable(appointment, context.timezone);
+    if (
+      dto.startAt &&
+      this.localDate(dto.startAt, context.timezone) !==
+        this.localDate(appointment.start_at, context.timezone)
+    ) {
+      throw new ConflictException(
+        "Para reubicar la cita a otro dia debes crear una propuesta",
+      );
+    }
     const replacesSnapshot = serviceId !== appointment.service_id;
     const times = this.buildTimes(
       dto.startAt ?? appointment.start_at.toISOString(),
@@ -269,10 +373,10 @@ export class AppointmentsService {
   async confirm(businessId: string, appointmentId: string, userId: string) {
     const appointment = await this.getAppointment(businessId, appointmentId);
     await this.assertCanConfirm(userId, businessId, appointment);
-    this.assertSchedulable(appointment);
     const context =
       await this.appointmentsRepository.findAppointmentContext(appointment);
     if (!context) throw new NotFoundException("Negocio no encontrado");
+    this.assertCalendarEditable(appointment, context.timezone);
     const times = this.buildStoredTimes(appointment);
     const conflicts = await this.getConflicts(context, times, appointment.id);
     const updated = await this.appointmentsRepository.setStatus(
@@ -306,13 +410,78 @@ export class AppointmentsService {
     userId: string,
     reason?: string,
   ) {
-    return this.changeStatus(
-      businessId,
-      appointmentId,
+    const appointment = await this.getAppointment(businessId, appointmentId);
+    await this.assertCanConfirm(userId, businessId, appointment);
+    this.assertCancellable(appointment);
+    const updated = await this.appointmentsRepository.setStatus(
+      appointment,
       "CANCELLED",
-      userId,
-      reason,
+      reason?.trim(),
     );
+    if (!updated)
+      throw new ConflictException("La cita ya no puede actualizarse");
+    await this.recordAppointmentAudit(
+      "APPOINTMENT_CANCELLED",
+      userId,
+      appointment,
+      updated,
+    );
+    return updated;
+  }
+
+  async cancelForCustomerAccount(
+    organizationId: string,
+    accountId: string,
+    appointmentId: string,
+    reason?: string,
+  ) {
+    const appointment = await this.appointmentsRepository.findByCustomerAccount(
+      organizationId,
+      accountId,
+      appointmentId,
+    );
+    if (!appointment) throw new NotFoundException("Cita no encontrada");
+    this.assertCancellable(appointment);
+    const updated = await this.appointmentsRepository.setStatus(
+      appointment,
+      "CANCELLED",
+      reason?.trim(),
+      false,
+      "CLIENT",
+    );
+    if (!updated)
+      throw new ConflictException("La cita ya no puede modificarse");
+    await this.recordAppointmentAudit(
+      "APPOINTMENT_CANCELLED",
+      null,
+      appointment,
+      updated,
+    );
+    return { status: "CANCELLED" };
+  }
+
+  async updateMembershipEligibility(
+    businessId: string,
+    appointmentId: string,
+    countsTowardMembership: boolean,
+    userId: string,
+  ) {
+    const appointment = await this.getAppointment(businessId, appointmentId);
+    await this.assertCanConfirm(userId, businessId, appointment);
+    const updated =
+      await this.appointmentsRepository.updateMembershipEligibility(
+        appointment,
+        countsTowardMembership,
+      );
+    if (!updated)
+      throw new ConflictException("La cita ya no puede modificarse");
+    await this.recordAppointmentAudit(
+      "APPOINTMENT_MEMBERSHIP_ELIGIBILITY_UPDATED",
+      userId,
+      appointment,
+      updated,
+    );
+    return updated;
   }
 
   async occupancy(
@@ -343,9 +512,9 @@ export class AppointmentsService {
     userId: string,
     reason?: string,
   ) {
-    await this.assertCanManage(userId, businessId);
     const appointment = await this.getAppointment(businessId, appointmentId);
-    this.assertSchedulable(appointment);
+    await this.assertCanConfirm(userId, businessId, appointment);
+    this.assertOutcomeRecordable(appointment);
     const updated = await this.appointmentsRepository.setStatus(
       appointment,
       status,
@@ -464,13 +633,74 @@ export class AppointmentsService {
     return appointment;
   }
 
-  private assertSchedulable(appointment: AppointmentRecord): void {
+  private assertCalendarEditable(
+    appointment: AppointmentRecord,
+    timezone: string,
+  ): void {
     if (!["PENDING", "CONFIRMED"].includes(appointment.status)) {
       throw new ConflictException("La cita ya no puede modificarse");
     }
+    if (
+      appointment.start_at &&
+      this.localDate(appointment.start_at, timezone) <
+        this.localDate(new Date(), timezone)
+    ) {
+      throw new ConflictException("El dia de la cita ya ha terminado");
+    }
   }
 
-  private assertValidRange(filters: ListAppointmentsDto): void {
+  private assertProposalCalendarEditable(
+    proposal: {
+      appointment_status: AppointmentStatus;
+      appointment_start_at: Date;
+    },
+    timezone: string,
+  ): void {
+    this.assertCalendarEditable(
+      {
+        status: proposal.appointment_status,
+        start_at: proposal.appointment_start_at,
+      } as AppointmentRecord,
+      timezone,
+    );
+  }
+
+  private assertCancellable(appointment: AppointmentRecord): void {
+    if (!["PENDING", "CONFIRMED"].includes(appointment.status)) {
+      throw new ConflictException("La cita ya no puede modificarse");
+    }
+    if (appointment.start_at && appointment.start_at <= new Date()) {
+      throw new ConflictException("La cita ya ha comenzado");
+    }
+  }
+
+  private assertOutcomeRecordable(appointment: AppointmentRecord): void {
+    if (!["PENDING", "CONFIRMED"].includes(appointment.status)) {
+      throw new ConflictException("La cita ya no puede modificarse");
+    }
+    if (appointment.start_at && appointment.start_at > new Date()) {
+      throw new ConflictException("La cita aun no ha comenzado");
+    }
+  }
+
+  private localDate(value: Date | string, timezone: string): string {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date(value));
+    const fields = Object.fromEntries(
+      parts
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value]),
+    );
+    return `${fields.year}-${fields.month}-${fields.day}`;
+  }
+
+  private assertValidRange(
+    filters: Pick<ListAppointmentsDto, "from" | "to">,
+  ): void {
     if (
       filters.from &&
       filters.to &&
@@ -530,7 +760,7 @@ export class AppointmentsService {
 
   private async recordAppointmentAudit(
     action: string,
-    actorUserId: string,
+    actorUserId: string | null,
     previous: AppointmentRecord,
     current: AppointmentRecord,
   ): Promise<void> {
@@ -556,6 +786,7 @@ export class AppointmentsService {
       status: appointment.status,
       startAt: appointment.start_at,
       endAt: appointment.end_at,
+      countsTowardMembership: appointment.counts_toward_membership,
       requiresApproval: appointment.requires_approval,
       conflictOverride: appointment.conflict_override,
     };

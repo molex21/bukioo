@@ -17,7 +17,9 @@ import { CalendarBlocksModule } from "./calendar-blocks/calendar-blocks.module";
 import { AppointmentsModule } from "./appointments/appointments.module";
 import { AuditModule } from "./audit/audit.module";
 import { AvailabilityModule } from "./availability/availability.module";
+import { CustomerAuthModule } from "./customer-auth/customer-auth.module";
 import { PublicBookingModule } from "./public-booking/public-booking.module";
+import { LoyaltyModule } from "./loyalty/loyalty.module";
 import Joi from "joi";
 
 @Module({
@@ -85,7 +87,9 @@ import Joi from "joi";
     AppointmentsModule,
     AuditModule,
     AvailabilityModule,
+    CustomerAuthModule,
     PublicBookingModule,
+    LoyaltyModule,
   ],
   controllers: [AppController],
   providers: [

@@ -106,6 +106,18 @@ export interface CustomerAppointmentDetailRecord
   cancelled_at: Date | null;
 }
 
+export interface AppointmentReminderRecord {
+  id: string;
+  email: string;
+  business_name: string;
+  reference_code: string;
+  service_name: string;
+  employee_first_name: string;
+  employee_last_name: string;
+  start_at: Date;
+  timezone: string;
+}
+
 export interface CalendarBlockOccupancy {
   id: string;
   employee_id: string | null;
@@ -495,6 +507,86 @@ export class AppointmentsRepository {
         [appointmentId, businessId],
       );
     return result.rows[0] ?? null;
+  }
+
+  async prepareAppointmentReminders(): Promise<AppointmentReminderRecord[]> {
+    const result = await this.databaseService.query<AppointmentReminderRecord>(
+      `WITH candidates AS (
+        SELECT appointments.id AS appointment_id, appointments.organization_id,
+          appointments.customer_id, appointments.reference_code,
+          appointments.start_at, customers.email, businesses.name AS business_name,
+          businesses.timezone, services.name AS service_name,
+          employees.first_name AS employee_first_name,
+          employees.last_name AS employee_last_name
+        FROM appointments
+        INNER JOIN customers ON customers.id = appointments.customer_id
+          AND customers.business_id = appointments.business_id
+          AND customers.anonymized_at IS NULL
+        INNER JOIN businesses ON businesses.id = appointments.business_id
+          AND businesses.organization_id = appointments.organization_id
+          AND businesses.status = 'ACTIVE'
+        INNER JOIN business_notification_settings
+          ON business_notification_settings.business_id = appointments.business_id
+          AND business_notification_settings.organization_id = appointments.organization_id
+          AND business_notification_settings.appointment_reminder_enabled = TRUE
+        INNER JOIN services ON services.id = appointments.service_id
+          AND services.business_id = appointments.business_id
+        INNER JOIN employees ON employees.id = appointments.employee_id
+          AND employees.business_id = appointments.business_id
+        WHERE appointments.status = 'CONFIRMED'
+          AND appointments.start_at > NOW()
+            + make_interval(
+              hours => business_notification_settings.appointment_reminder_hours_before
+            ) - INTERVAL '15 minutes'
+          AND appointments.start_at <= NOW()
+            + make_interval(
+              hours => business_notification_settings.appointment_reminder_hours_before
+            ) + INTERVAL '15 minutes'
+      ), prepared AS (
+        INSERT INTO notifications (
+          organization_id, appointment_id, customer_id, channel, type,
+          destination, status, scheduled_at, appointment_reminder_start_at
+        )
+        SELECT organization_id, appointment_id, customer_id, 'EMAIL',
+          'APPOINTMENT_REMINDER', email, 'PENDING', NOW(), start_at
+        FROM candidates
+        ON CONFLICT (appointment_id, type, appointment_reminder_start_at)
+          WHERE type = 'APPOINTMENT_REMINDER'
+        DO UPDATE SET status = 'PENDING', error_message = NULL,
+          scheduled_at = NOW(), updated_at = NOW()
+          WHERE notifications.status = 'FAILED'
+        RETURNING id, appointment_id, appointment_reminder_start_at
+      )
+      SELECT prepared.id, candidates.email, candidates.business_name,
+        candidates.reference_code, candidates.service_name,
+        candidates.employee_first_name, candidates.employee_last_name,
+        candidates.start_at, candidates.timezone
+      FROM prepared
+      INNER JOIN candidates ON candidates.appointment_id = prepared.appointment_id
+        AND candidates.start_at = prepared.appointment_reminder_start_at`,
+    );
+    return result.rows;
+  }
+
+  async markAppointmentReminderSent(notificationId: string): Promise<void> {
+    await this.databaseService.query(
+      `UPDATE notifications
+      SET status = 'SENT', sent_at = NOW(), error_message = NULL
+      WHERE id = $1`,
+      [notificationId],
+    );
+  }
+
+  async markAppointmentReminderFailed(
+    notificationId: string,
+    errorMessage: string,
+  ): Promise<void> {
+    await this.databaseService.query(
+      `UPDATE notifications
+      SET status = 'FAILED', error_message = $2
+      WHERE id = $1`,
+      [notificationId, errorMessage.slice(0, 1_000)],
+    );
   }
 
   async updateMembershipEligibility(

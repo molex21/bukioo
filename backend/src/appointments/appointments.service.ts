@@ -223,6 +223,43 @@ export class AppointmentsService {
     );
   }
 
+  async sendAppointmentReminders(): Promise<{ sent: number; failed: number }> {
+    const reminders =
+      await this.appointmentsRepository.prepareAppointmentReminders();
+    let sent = 0;
+    let failed = 0;
+
+    for (const reminder of reminders) {
+      try {
+        await this.emailProvider.sendAppointmentReminder({
+          email: reminder.email,
+          businessName: reminder.business_name,
+          referenceCode: reminder.reference_code,
+          serviceName: reminder.service_name,
+          employeeName: `${reminder.employee_first_name} ${reminder.employee_last_name}`,
+          startAt: reminder.start_at,
+          timezone: reminder.timezone,
+        });
+        await this.appointmentsRepository.markAppointmentReminderSent(
+          reminder.id,
+        );
+        sent += 1;
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error
+            ? error.message
+            : "Error desconocido al enviar";
+        await this.appointmentsRepository.markAppointmentReminderFailed(
+          reminder.id,
+          errorMessage,
+        );
+        failed += 1;
+      }
+    }
+
+    return { sent, failed };
+  }
+
   async listForCustomerAccount(
     organizationId: string,
     accountId: string,

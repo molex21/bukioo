@@ -2043,7 +2043,7 @@ Jobs:
 - caducidad individual de puntos cada hora;
 - avisos de puntos proximos a caducar a 30 y 7 dias;
 - emails;
-- reminders;
+- recordatorios de citas confirmadas a 24 horas;
 - background work.
 
 Worker separado si resulta limpio:
@@ -2362,7 +2362,9 @@ No documentar como completado algo que todavía no existe.
 - [x] pg-boss
 - [x] worker de caducidad de Loyalty
 - [x] avisos de puntos proximos a caducar
-- [ ] reminders
+- [x] reminders
+- [x] internal notification history
+- [x] per-business reminder settings
 
 ## Fase 14 — Loyalty
 

@@ -6,6 +6,7 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { LoyaltyService } from "../loyalty/loyalty.service";
+import { AppointmentsService } from "../appointments/appointments.service";
 import { PG_BOSS, type PgBossClient } from "./pg-boss.provider";
 
 export const LOYALTY_EXPIRATION_JOB = "loyalty.expire-points";
@@ -13,6 +14,7 @@ export const LOYALTY_EXPIRATION_NOTICE_30_DAYS_JOB =
   "loyalty.send-expiration-notices-30-days";
 export const LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB =
   "loyalty.send-expiration-notices-7-days";
+export const APPOINTMENT_REMINDER_JOB = "appointments.send-reminders";
 
 @Injectable()
 export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
@@ -21,6 +23,7 @@ export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(PG_BOSS) private readonly pgBoss: PgBossClient | null,
     private readonly loyaltyService: LoyaltyService,
+    private readonly appointmentsService: AppointmentsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -39,6 +42,9 @@ export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
     await this.pgBoss.work(LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB, async () => {
       await this.sendExpirationNotices(7);
     });
+    await this.pgBoss.work(APPOINTMENT_REMINDER_JOB, async () => {
+      await this.sendAppointmentReminders();
+    });
     await this.pgBoss.schedule(LOYALTY_EXPIRATION_JOB, "0 * * * *");
     await this.pgBoss.schedule(
       LOYALTY_EXPIRATION_NOTICE_30_DAYS_JOB,
@@ -48,6 +54,7 @@ export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
       LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB,
       "15 8 * * *",
     );
+    await this.pgBoss.schedule(APPOINTMENT_REMINDER_JOB, "*/15 * * * *");
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -62,6 +69,15 @@ export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
     if (result.sent > 0 || result.failed > 0) {
       this.logger.log(
         `Avisos de caducidad a ${daysBeforeExpiration} dias: ${result.sent} enviados, ${result.failed} fallidos`,
+      );
+    }
+  }
+
+  private async sendAppointmentReminders(): Promise<void> {
+    const result = await this.appointmentsService.sendAppointmentReminders();
+    if (result.sent > 0 || result.failed > 0) {
+      this.logger.log(
+        `Recordatorios de cita: ${result.sent} enviados, ${result.failed} fallidos`,
       );
     }
   }

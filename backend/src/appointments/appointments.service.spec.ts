@@ -54,8 +54,14 @@ describe("AppointmentsService", () => {
     findRescheduleProposal: jest.fn(),
     acceptRescheduleProposal: jest.fn(),
     rejectRescheduleProposal: jest.fn(),
+    prepareAppointmentReminders: jest.fn(),
+    markAppointmentReminderSent: jest.fn(),
+    markAppointmentReminderFailed: jest.fn(),
   };
-  const emailProvider = { sendAppointmentReschedule: jest.fn() };
+  const emailProvider = {
+    sendAppointmentReschedule: jest.fn(),
+    sendAppointmentReminder: jest.fn(),
+  };
   const configService = {
     getOrThrow: jest.fn().mockReturnValue("http://localhost:5173"),
   };
@@ -151,6 +157,70 @@ describe("AppointmentsService", () => {
         },
       }),
     ]);
+  });
+
+  it("sends and records a scheduled appointment reminder", async () => {
+    const reminder = {
+      id: "notification-id",
+      email: "customer@example.com",
+      business_name: "Peluqueria BUKIOO",
+      reference_code: "APT-123",
+      service_name: "Corte",
+      employee_first_name: "Ana",
+      employee_last_name: "Lopez",
+      start_at: new Date("2026-09-01T10:00:00.000Z"),
+      timezone: "Atlantic/Canary",
+    };
+    repository.prepareAppointmentReminders.mockResolvedValue([reminder]);
+    emailProvider.sendAppointmentReminder.mockResolvedValue(undefined);
+    repository.markAppointmentReminderSent.mockResolvedValue(undefined);
+
+    await expect(service.sendAppointmentReminders()).resolves.toEqual({
+      sent: 1,
+      failed: 0,
+    });
+
+    expect(emailProvider.sendAppointmentReminder).toHaveBeenCalledWith({
+      email: reminder.email,
+      businessName: reminder.business_name,
+      referenceCode: reminder.reference_code,
+      serviceName: reminder.service_name,
+      employeeName: "Ana Lopez",
+      startAt: reminder.start_at,
+      timezone: reminder.timezone,
+    });
+    expect(repository.markAppointmentReminderSent).toHaveBeenCalledWith(
+      reminder.id,
+    );
+  });
+
+  it("records failed appointment reminders for retry", async () => {
+    repository.prepareAppointmentReminders.mockResolvedValue([
+      {
+        id: "notification-id",
+        email: "customer@example.com",
+        business_name: "Peluqueria BUKIOO",
+        reference_code: "APT-123",
+        service_name: "Corte",
+        employee_first_name: "Ana",
+        employee_last_name: "Lopez",
+        start_at: new Date("2026-09-01T10:00:00.000Z"),
+        timezone: "Atlantic/Canary",
+      },
+    ]);
+    emailProvider.sendAppointmentReminder.mockRejectedValue(
+      new Error("Resend no disponible"),
+    );
+    repository.markAppointmentReminderFailed.mockResolvedValue(undefined);
+
+    await expect(service.sendAppointmentReminders()).resolves.toEqual({
+      sent: 0,
+      failed: 1,
+    });
+    expect(repository.markAppointmentReminderFailed).toHaveBeenCalledWith(
+      "notification-id",
+      "Resend no disponible",
+    );
   });
 
   it("rejects appointments outside working hours", async () => {

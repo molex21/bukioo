@@ -63,6 +63,11 @@ describe("BusinessesRepository", () => {
       expect.stringContaining("business_memberships"),
       ["business-id", "creator-id", "organization-id"],
     );
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("business_notification_settings"),
+      ["business-id", "organization-id"],
+    );
   });
 
   it("checks management access against an active organization membership", async () => {

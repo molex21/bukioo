@@ -634,6 +634,32 @@ texto plano por cada umbral, registra el resultado en `notifications` y evita
 duplicados por movimiento de puntos. Los envios fallidos se reintentan en el
 siguiente ciclo.
 
+El worker tambien revisa cada 15 minutos las citas `CONFIRMED` que empiezan
+entre 23 horas y 45 minutos y 24 horas y 15 minutos despues. Envia un unico
+recordatorio por email para esa fecha concreta de cita. Si se reprograma, la
+nueva fecha puede recibir su propio recordatorio; no se envian recordatorios a
+citas pendientes, canceladas, completadas ni no presentadas.
+
+Cada negocio puede consultar y ajustar su politica de recordatorios:
+
+```text
+GET   /api/v1/businesses/<businessId>/notification-settings
+PATCH /api/v1/businesses/<businessId>/notification-settings
+```
+
+La lectura admite usuarios con acceso al negocio; solo `OWNER` y `ADMIN` pueden
+modificarla. Por defecto esta activa y se envia 24 horas antes. Se puede elegir
+entre 1 y 168 horas antes o desactivarla por completo.
+
+El historial interno de envios se consulta con permisos `OWNER` o `ADMIN`:
+
+```text
+GET /api/v1/businesses/<businessId>/notifications?status=<status>&type=<type>&channel=<channel>&appointmentId=<uuid>&customerId=<uuid>&from=<iso>&to=<iso>&limit=<1-100>&offset=<number>
+```
+
+El resultado incluye el destino, estado, fechas, cita y cliente asociados, y
+el error del proveedor cuando exista. Los filtros son opcionales.
+
 ```text
 GET   /api/v1/businesses/<businessId>/loyalty/settings
 PATCH /api/v1/businesses/<businessId>/loyalty/settings

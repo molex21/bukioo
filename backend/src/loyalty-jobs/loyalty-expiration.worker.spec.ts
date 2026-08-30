@@ -1,9 +1,11 @@
 import { LoyaltyService } from "../loyalty/loyalty.service";
+import { AppointmentsService } from "../appointments/appointments.service";
 import {
   LoyaltyExpirationWorker,
   LOYALTY_EXPIRATION_JOB,
   LOYALTY_EXPIRATION_NOTICE_30_DAYS_JOB,
   LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB,
+  APPOINTMENT_REMINDER_JOB,
 } from "./loyalty-expiration.worker";
 
 describe("LoyaltyExpirationWorker", () => {
@@ -17,12 +19,14 @@ describe("LoyaltyExpirationWorker", () => {
     expireDuePoints: jest.fn(),
     sendExpirationNotices: jest.fn(),
   };
+  const appointmentsService = { sendAppointmentReminders: jest.fn() };
   const workHandlers = new Map<string, () => Promise<void>>();
 
   beforeEach(() => {
     Object.values(pgBoss).forEach((mock) => mock.mockReset());
     loyaltyService.expireDuePoints.mockReset();
     loyaltyService.sendExpirationNotices.mockReset();
+    appointmentsService.sendAppointmentReminders.mockReset();
     pgBoss.start.mockResolvedValue(undefined);
     workHandlers.clear();
     pgBoss.work.mockImplementation(
@@ -39,6 +43,7 @@ describe("LoyaltyExpirationWorker", () => {
     const worker = new LoyaltyExpirationWorker(
       pgBoss,
       loyaltyService as LoyaltyService,
+      appointmentsService as AppointmentsService,
     );
 
     await worker.onModuleInit();
@@ -60,6 +65,10 @@ describe("LoyaltyExpirationWorker", () => {
       LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB,
       "15 8 * * *",
     );
+    expect(pgBoss.schedule).toHaveBeenCalledWith(
+      APPOINTMENT_REMINDER_JOB,
+      "*/15 * * * *",
+    );
   });
 
   it("expires due points when pg-boss runs the job", async () => {
@@ -67,6 +76,7 @@ describe("LoyaltyExpirationWorker", () => {
     const worker = new LoyaltyExpirationWorker(
       pgBoss,
       loyaltyService as LoyaltyService,
+      appointmentsService as AppointmentsService,
     );
 
     await worker.onModuleInit();
@@ -85,6 +95,7 @@ describe("LoyaltyExpirationWorker", () => {
     const worker = new LoyaltyExpirationWorker(
       pgBoss,
       loyaltyService as LoyaltyService,
+      appointmentsService as AppointmentsService,
     );
 
     await worker.onModuleInit();
@@ -95,10 +106,30 @@ describe("LoyaltyExpirationWorker", () => {
     expect(loyaltyService.sendExpirationNotices).toHaveBeenNthCalledWith(2, 7);
   });
 
+  it("sends appointment reminders when pg-boss runs the job", async () => {
+    appointmentsService.sendAppointmentReminders.mockResolvedValue({
+      sent: 0,
+      failed: 0,
+    });
+    const worker = new LoyaltyExpirationWorker(
+      pgBoss,
+      loyaltyService as LoyaltyService,
+      appointmentsService as AppointmentsService,
+    );
+
+    await worker.onModuleInit();
+    await workHandlers.get(APPOINTMENT_REMINDER_JOB)?.();
+
+    expect(appointmentsService.sendAppointmentReminders).toHaveBeenCalledTimes(
+      1,
+    );
+  });
+
   it("does nothing when jobs are disabled", async () => {
     const worker = new LoyaltyExpirationWorker(
       null,
       loyaltyService as LoyaltyService,
+      appointmentsService as AppointmentsService,
     );
 
     await worker.onModuleInit();

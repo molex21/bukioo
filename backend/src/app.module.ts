@@ -21,6 +21,7 @@ import { CustomerAuthModule } from "./customer-auth/customer-auth.module";
 import { PublicBookingModule } from "./public-booking/public-booking.module";
 import { LoyaltyModule } from "./loyalty/loyalty.module";
 import { LoyaltyJobsModule } from "./loyalty-jobs/loyalty-jobs.module";
+import { NotificationsModule } from "./notifications/notifications.module";
 import Joi from "joi";
 
 @Module({
@@ -94,6 +95,7 @@ import Joi from "joi";
     PublicBookingModule,
     LoyaltyModule,
     LoyaltyJobsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

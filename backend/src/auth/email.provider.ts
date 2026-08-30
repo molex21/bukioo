@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
   accountCredentialsTemplate,
+  appointmentReminderTemplate,
   emailVerificationTemplate,
   appointmentRescheduleTemplate,
   passwordResetTemplate,
@@ -37,6 +38,15 @@ export interface PointsExpirationMessage {
   timezone: string;
   daysBeforeExpiration: 30 | 7;
 }
+export interface AppointmentReminderMessage {
+  email: string;
+  businessName: string;
+  referenceCode: string;
+  serviceName: string;
+  employeeName: string;
+  startAt: Date;
+  timezone: string;
+}
 
 export abstract class EmailProvider {
   abstract sendEmailVerification(
@@ -51,6 +61,9 @@ export abstract class EmailProvider {
   ): Promise<void>;
   abstract sendPointsExpiration(
     message: PointsExpirationMessage,
+  ): Promise<void>;
+  abstract sendAppointmentReminder(
+    message: AppointmentReminderMessage,
   ): Promise<void>;
 }
 
@@ -83,6 +96,12 @@ export class ResendEmailProvider implements EmailProvider {
 
   async sendPointsExpiration(message: PointsExpirationMessage): Promise<void> {
     await this.send(message.email, pointsExpirationTemplate(message));
+  }
+
+  async sendAppointmentReminder(
+    message: AppointmentReminderMessage,
+  ): Promise<void> {
+    await this.send(message.email, appointmentReminderTemplate(message));
   }
 
   private async send(

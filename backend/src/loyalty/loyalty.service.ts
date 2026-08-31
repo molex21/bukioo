@@ -13,6 +13,7 @@ import {
   LoyaltyRepository,
   type LoyaltyAppointmentInput,
   type LoyaltyLevelRecord,
+  type LoyaltyRedemptionRecord,
   type LoyaltySettingsRecord,
 } from "./loyalty.repository";
 import {
@@ -160,6 +161,40 @@ export class LoyaltyService {
         error.message === "LOYALTY_NEGATIVE_BALANCE"
       ) {
         throw new ConflictException("El ajuste no puede dejar saldo negativo");
+      }
+      if (
+        error instanceof Error &&
+        error.message === "LOYALTY_CUSTOMER_NOT_FOUND"
+      ) {
+        throw new NotFoundException("Cliente no encontrado");
+      }
+      throw error;
+    }
+  }
+
+  async redeemCustomerPoints(
+    businessId: string,
+    customerId: string,
+    points: number,
+    reason: string,
+    userId: string,
+  ): Promise<LoyaltyRedemptionRecord> {
+    await this.assertCanManageBusiness(userId, businessId);
+    try {
+      return await this.loyaltyRepository.redeemCustomerPoints({
+        businessId,
+        customerId,
+        points,
+        reason: reason.trim(),
+        actorUserId: userId,
+      });
+    } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        (error.message === "LOYALTY_INSUFFICIENT_POINTS" ||
+          error.message === "LOYALTY_INSUFFICIENT_REDEEMABLE_POINTS")
+      ) {
+        throw new ConflictException("El cliente no tiene puntos suficientes");
       }
       if (
         error instanceof Error &&

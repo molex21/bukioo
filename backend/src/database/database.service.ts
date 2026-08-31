@@ -1,9 +1,15 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DatabaseService.name);
   private readonly pool: Pool;
 
   constructor(private readonly configService: ConfigService) {
@@ -22,7 +28,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit(): Promise<void> {
     await this.pool.query("SELECT 1");
-    console.log("PostgreSQL conectado correctamente");
+    this.logger.log("PostgreSQL conectado correctamente");
   }
 
   async query<T extends QueryResultRow>(

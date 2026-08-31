@@ -79,6 +79,13 @@ export interface LoyaltyExpirationNoticeRecord {
   days_before_expiration: 30 | 7;
 }
 
+export interface LoyaltyRedemptionRecord {
+  id: string;
+  points: number;
+  reason: string;
+  created_at: Date;
+}
+
 @Injectable()
 export class LoyaltyRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -573,6 +580,111 @@ export class LoyaltyRepository {
     });
   }
 
+  async redeemCustomerPoints(input: {
+    businessId: string;
+    customerId: string;
+    points: number;
+    reason: string;
+    actorUserId: string;
+  }): Promise<LoyaltyRedemptionRecord> {
+    return this.databaseService.transaction(async (client) => {
+      const customerResult = await client.query<{
+        id: string;
+        organization_id: string;
+        business_id: string;
+        points_balance: number;
+      }>(
+        `SELECT id, organization_id, business_id, points_balance
+        FROM customers
+        WHERE id = $1 AND business_id = $2 AND anonymized_at IS NULL
+        FOR UPDATE`,
+        [input.customerId, input.businessId],
+      );
+      const customer = customerResult.rows[0];
+      if (!customer) throw new Error("LOYALTY_CUSTOMER_NOT_FOUND");
+      if (customer.points_balance < input.points) {
+        throw new Error("LOYALTY_INSUFFICIENT_POINTS");
+      }
+
+      const lotsResult = await client.query<{
+        id: string;
+        points: number;
+        allocated_points: string;
+      }>(
+        `SELECT source.id, source.points,
+          COALESCE((
+            SELECT SUM(allocations.points)
+            FROM loyalty_redemption_allocations AS allocations
+            WHERE allocations.source_transaction_id = source.id
+          ), 0)::text AS allocated_points
+        FROM loyalty_transactions AS source
+        LEFT JOIN appointment_loyalty_awards AS awards
+          ON awards.last_award_transaction_id = source.id
+        WHERE source.customer_id = $1
+          AND source.business_id = $2
+          AND source.points > 0
+          AND (
+            source.type = 'ADJUSTMENT'
+            OR (
+              source.type = 'APPOINTMENT_EARNED'
+              AND awards.is_active = TRUE
+              AND awards.is_expired = FALSE
+            )
+          )
+        ORDER BY source.expires_at ASC NULLS LAST, source.created_at ASC, source.id ASC
+        FOR UPDATE OF source`,
+        [customer.id, customer.business_id],
+      );
+
+      let remaining = input.points;
+      const allocations = lotsResult.rows.flatMap((lot) => {
+        const available = lot.points - Number(lot.allocated_points);
+        if (available <= 0 || remaining === 0) return [];
+        const points = Math.min(available, remaining);
+        remaining -= points;
+        return [{ sourceTransactionId: lot.id, points }];
+      });
+      if (remaining > 0) {
+        throw new Error("LOYALTY_INSUFFICIENT_REDEEMABLE_POINTS");
+      }
+
+      const redemptionResult = await client.query<LoyaltyRedemptionRecord>(
+        `INSERT INTO loyalty_transactions
+          (organization_id, business_id, customer_id, points, type, reason,
+           created_by_user_id)
+        VALUES ($1, $2, $3, $4, 'REDEMPTION', $5, $6)
+        RETURNING id, points, reason, created_at`,
+        [
+          customer.organization_id,
+          customer.business_id,
+          customer.id,
+          -input.points,
+          input.reason,
+          input.actorUserId,
+        ],
+      );
+      const redemption = redemptionResult.rows[0];
+      for (const allocation of allocations) {
+        await client.query(
+          `INSERT INTO loyalty_redemption_allocations
+            (organization_id, business_id, customer_id, redemption_transaction_id,
+             source_transaction_id, points)
+          VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            customer.organization_id,
+            customer.business_id,
+            customer.id,
+            redemption.id,
+            allocation.sourceTransactionId,
+            allocation.points,
+          ],
+        );
+      }
+      await this.updateCustomerBalance(client, customer, -input.points);
+      return redemption;
+    });
+  }
+
   async expireDuePoints(limit = 100): Promise<number> {
     const candidates = await this.databaseService.query<{ id: string }>(
       `SELECT loyalty_transactions.id
@@ -605,7 +717,11 @@ export class LoyaltyRepository {
         SELECT loyalty_transactions.id AS loyalty_transaction_id,
           loyalty_transactions.organization_id, loyalty_transactions.customer_id,
           customers.email, businesses.name AS business_name,
-          loyalty_transactions.points, loyalty_transactions.expires_at,
+          (loyalty_transactions.points - COALESCE((
+            SELECT SUM(loyalty_redemption_allocations.points)
+            FROM loyalty_redemption_allocations
+            WHERE loyalty_redemption_allocations.source_transaction_id = loyalty_transactions.id
+          ), 0))::integer AS points, loyalty_transactions.expires_at,
           businesses.timezone
         FROM loyalty_transactions
         INNER JOIN appointment_loyalty_awards
@@ -617,6 +733,11 @@ export class LoyaltyRepository {
         WHERE loyalty_transactions.type = 'APPOINTMENT_EARNED'
           AND appointment_loyalty_awards.is_active = TRUE
           AND appointment_loyalty_awards.is_expired = FALSE
+          AND loyalty_transactions.points > COALESCE((
+            SELECT SUM(loyalty_redemption_allocations.points)
+            FROM loyalty_redemption_allocations
+            WHERE loyalty_redemption_allocations.source_transaction_id = loyalty_transactions.id
+          ), 0)
           AND (loyalty_transactions.expires_at AT TIME ZONE businesses.timezone)::date
             = ((NOW() AT TIME ZONE businesses.timezone)::date + $1::integer)
       ), prepared AS (
@@ -702,6 +823,25 @@ export class LoyaltyRepository {
       );
       if (!awardResult.rows[0]) return false;
 
+      const allocatedResult = await client.query<{ points: string }>(
+        `SELECT COALESCE(SUM(points), 0)::text AS points
+        FROM loyalty_redemption_allocations
+        WHERE source_transaction_id = $1`,
+        [earned.id],
+      );
+      const remainingPoints =
+        earned.points - Number(allocatedResult.rows[0]?.points ?? 0);
+
+      if (remainingPoints <= 0) {
+        await client.query(
+          `UPDATE appointment_loyalty_awards
+          SET is_active = FALSE, is_expired = TRUE
+          WHERE appointment_id = $1`,
+          [earned.appointment_id],
+        );
+        return true;
+      }
+
       const expiration = await client.query<{ id: string }>(
         `INSERT INTO loyalty_transactions
           (organization_id, business_id, customer_id, appointment_id, points,
@@ -714,7 +854,7 @@ export class LoyaltyRepository {
           earned.business_id,
           earned.customer_id,
           earned.appointment_id,
-          -earned.points,
+          -remainingPoints,
           "Caducidad de puntos",
           earned.id,
         ],

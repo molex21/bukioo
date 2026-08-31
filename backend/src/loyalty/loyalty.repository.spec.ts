@@ -4,10 +4,12 @@ import { LoyaltyRepository } from "./loyalty.repository";
 describe("LoyaltyRepository", () => {
   const databaseService = {
     query: jest.fn(),
+    transaction: jest.fn(),
   };
 
   beforeEach(() => {
     databaseService.query.mockReset();
+    databaseService.transaction.mockReset();
   });
 
   it("scopes level lookup to its business", async () => {
@@ -143,6 +145,87 @@ describe("LoyaltyRepository", () => {
     expect(databaseService.query).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining("LEFT JOIN appointments"),
+      ["customer-id", "business-id"],
+    );
+  });
+
+  it("redeems the oldest available point lots first", async () => {
+    const client = { query: jest.fn() };
+    databaseService.transaction.mockImplementation(
+      (callback: (transactionClient: typeof client) => unknown) =>
+        Promise.resolve(callback(client)),
+    );
+    client.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "customer-id",
+            organization_id: "organization-id",
+            business_id: "business-id",
+            points_balance: 20,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: "oldest-lot", points: 10, allocated_points: "2" },
+          { id: "newer-lot", points: 20, allocated_points: "0" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "redemption-id",
+            points: -20,
+            reason: "Descuento aplicado",
+            created_at: new Date("2026-08-31T10:00:00.000Z"),
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ points_balance: 0 }] });
+    const repository = new LoyaltyRepository(
+      databaseService as unknown as DatabaseService,
+    );
+
+    await expect(
+      repository.redeemCustomerPoints({
+        businessId: "business-id",
+        customerId: "customer-id",
+        points: 20,
+        reason: "Descuento aplicado",
+        actorUserId: "actor-id",
+      }),
+    ).resolves.toMatchObject({ id: "redemption-id", points: -20 });
+
+    expect(client.query).toHaveBeenNthCalledWith(
+      4,
+      expect.stringContaining("INSERT INTO loyalty_redemption_allocations"),
+      [
+        "organization-id",
+        "business-id",
+        "customer-id",
+        "redemption-id",
+        "oldest-lot",
+        8,
+      ],
+    );
+    expect(client.query).toHaveBeenNthCalledWith(
+      5,
+      expect.stringContaining("INSERT INTO loyalty_redemption_allocations"),
+      [
+        "organization-id",
+        "business-id",
+        "customer-id",
+        "redemption-id",
+        "newer-lot",
+        12,
+      ],
+    );
+    expect(client.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("FOR UPDATE OF source"),
       ["customer-id", "business-id"],
     );
   });

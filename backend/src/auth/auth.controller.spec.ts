@@ -127,6 +127,60 @@ describe("AuthController", () => {
     );
   });
 
+  it("marks every staff authentication cookie as Secure in production", () => {
+    const cookie = jest.fn();
+    const clearCookie = jest.fn();
+    const response = { cookie, clearCookie } as unknown as Response;
+    configServiceMock.get.mockReturnValue("production");
+    const cookieController = controller as unknown as {
+      setRefreshTokenCookie(response: Response, token: string): void;
+      clearRefreshTokenCookie(response: Response): void;
+      setEmailVerificationAttemptCookie(
+        response: Response,
+        token: string,
+      ): void;
+      clearEmailVerificationAttemptCookie(response: Response): void;
+      setPasswordActivationAttemptCookie(
+        response: Response,
+        token: string,
+      ): void;
+      clearPasswordActivationAttemptCookie(response: Response): void;
+      setTwoFactorAttemptCookie(response: Response, token: string): void;
+      clearTwoFactorAttemptCookie(response: Response): void;
+    };
+
+    cookieController.setRefreshTokenCookie(response, "refresh-token");
+    cookieController.clearRefreshTokenCookie(response);
+    cookieController.setEmailVerificationAttemptCookie(response, "email-token");
+    cookieController.clearEmailVerificationAttemptCookie(response);
+    cookieController.setPasswordActivationAttemptCookie(
+      response,
+      "password-token",
+    );
+    cookieController.clearPasswordActivationAttemptCookie(response);
+    cookieController.setTwoFactorAttemptCookie(response, "two-factor-token");
+    cookieController.clearTwoFactorAttemptCookie(response);
+
+    for (const [, , options] of cookie.mock.calls) {
+      expect(options).toEqual(
+        expect.objectContaining({
+          httpOnly: true,
+          sameSite: "lax",
+          secure: true,
+        }),
+      );
+    }
+    for (const [, options] of clearCookie.mock.calls) {
+      expect(options).toEqual(
+        expect.objectContaining({
+          httpOnly: true,
+          sameSite: "lax",
+          secure: true,
+        }),
+      );
+    }
+  });
+
   it("pauses a temporary-password login and stores its attempt in a cookie", async () => {
     const loginDto = {
       email: "user@example.com",

@@ -20,6 +20,7 @@ describe("LoyaltyService", () => {
     reconcileAppointment: jest.fn(),
     getCustomerLoyalty: jest.fn(),
     adjustCustomerPoints: jest.fn(),
+    redeemCustomerPoints: jest.fn(),
     expireDuePoints: jest.fn(),
     prepareExpirationNotices: jest.fn(),
     markExpirationNoticeSent: jest.fn(),
@@ -221,5 +222,49 @@ describe("LoyaltyService", () => {
         "actor-id",
       ),
     ).resolves.toMatchObject({ loyalty_enabled: true });
+  });
+
+  it("redeems points for a manager", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.redeemCustomerPoints.mockResolvedValue({
+      id: "redemption-id",
+      points: -25,
+      reason: "Descuento aplicado",
+      created_at: new Date("2026-08-31T10:00:00.000Z"),
+    });
+
+    await expect(
+      service.redeemCustomerPoints(
+        level.business_id,
+        "customer-id",
+        25,
+        " Descuento aplicado ",
+        "actor-id",
+      ),
+    ).resolves.toMatchObject({ points: -25 });
+    expect(repositoryMock.redeemCustomerPoints).toHaveBeenCalledWith({
+      businessId: level.business_id,
+      customerId: "customer-id",
+      points: 25,
+      reason: "Descuento aplicado",
+      actorUserId: "actor-id",
+    });
+  });
+
+  it("rejects redemption when the balance is insufficient", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.redeemCustomerPoints.mockRejectedValue(
+      new Error("LOYALTY_INSUFFICIENT_POINTS"),
+    );
+
+    await expect(
+      service.redeemCustomerPoints(
+        level.business_id,
+        "customer-id",
+        25,
+        "Descuento aplicado",
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 409 });
   });
 });

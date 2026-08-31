@@ -12,6 +12,7 @@ import {
   ACCESS_TOKEN_EXPIRES_IN_SECONDS,
   REFRESH_TOKEN_EXPIRES_IN_SECONDS,
 } from "../auth/auth.constants";
+import { LoginProtectionRepository } from "../auth/login-protection.repository";
 import {
   CustomerAccount,
   CustomerAuthRepository,
@@ -24,6 +25,7 @@ export class CustomerAuthService {
     private readonly repo: CustomerAuthRepository,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly loginProtectionRepository: LoginProtectionRepository,
   ) {}
   async register(slug: string, dto: RegisterCustomerDto) {
     const org = await this.repo.findOrganization(slug.trim());
@@ -50,13 +52,26 @@ export class CustomerAuthService {
       org.id,
       dto.email.trim().toLowerCase(),
     );
+    if (!account || account.status !== "ACTIVE") {
+      throw new UnauthorizedException("Credenciales invalidas");
+    }
+
     if (
-      !account ||
-      account.status !== "ACTIVE" ||
-      !(await argon2.verify(account.password_hash, dto.password))
+      await this.loginProtectionRepository.isCustomerAccountLocked(account.id)
     ) {
       throw new UnauthorizedException("Credenciales invalidas");
     }
+
+    if (!(await argon2.verify(account.password_hash, dto.password))) {
+      await this.loginProtectionRepository.recordCustomerAccountFailure(
+        account.id,
+      );
+      throw new UnauthorizedException("Credenciales invalidas");
+    }
+
+    await this.loginProtectionRepository.clearCustomerAccountFailures(
+      account.id,
+    );
 
     return this.createAuthenticatedSession(account);
   }

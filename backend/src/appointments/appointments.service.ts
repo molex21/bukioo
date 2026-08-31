@@ -906,7 +906,7 @@ export class AppointmentsService {
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
-      error.code === "23P01"
+      (error.code === "23P01" || error.code === "40P01")
     ) {
       throw new ConflictException(
         "El empleado ya tiene una cita en ese horario",

@@ -4,24 +4,27 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
-  Req,
   UseGuards,
 } from "@nestjs/common";
-import {
-  JwtAuthGuard,
-  type AuthenticatedRequest,
-} from "../auth/jwt-auth.guard";
+import { AuthorizeScope } from "../auth/authorization-scope.decorator";
+import { CurrentUser } from "../auth/current-user.decorator";
+import { JwtAuthGuard } from "../auth/jwt-auth.guard";
+import { Roles } from "../auth/roles.decorator";
+import { RolesGuard } from "../auth/roles.guard";
 import { AuditService } from "./audit.service";
 import { ListAuditLogsDto } from "./dto/list-audit-logs.dto";
 @Controller("businesses/:businessId/audit-logs")
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
-  @Get() list(
+  @Get()
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
+  list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
     @Query() filters: ListAuditLogsDto,
-    @Req() request: AuthenticatedRequest,
+    @CurrentUser() userId: string,
   ) {
-    return this.auditService.list(businessId, filters, request.userId!);
+    return this.auditService.list(businessId, filters, userId);
   }
 }

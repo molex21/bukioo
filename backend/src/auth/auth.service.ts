@@ -40,6 +40,7 @@ import { OnboardingRepository } from "./onboarding.repository";
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
 import { TwoFactorRepository } from "./two-factor.repository";
+import { LoginProtectionRepository } from "./login-protection.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 export interface LoginSessionMetadata {
@@ -101,6 +102,7 @@ export class AuthService {
     private readonly onboardingRepository: OnboardingRepository,
     private readonly userTokensRepository: UserTokensRepository,
     private readonly twoFactorRepository: TwoFactorRepository,
+    private readonly loginProtectionRepository: LoginProtectionRepository,
     private readonly emailProvider: EmailProvider,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -258,14 +260,23 @@ export class AuthService {
       throw new UnauthorizedException("Email o contraseña incorrectos");
     }
 
+    if (await this.loginProtectionRepository.isUserLocked(user.id)) {
+      throw new UnauthorizedException("Email o contraseña incorrectos");
+    }
+
     const passwordMatches = await argon2.verify(
       user.password_hash,
       loginDto.password,
     );
 
     if (!passwordMatches || user.status !== "ACTIVE") {
+      if (user.status === "ACTIVE") {
+        await this.loginProtectionRepository.recordUserFailure(user.id);
+      }
       throw new UnauthorizedException("Email o contraseña incorrectos");
     }
+
+    await this.loginProtectionRepository.clearUserFailures(user.id);
 
     return user;
   }

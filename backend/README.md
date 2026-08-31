@@ -35,7 +35,9 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 - `dbmate` para migraciones SQL
 - `@nestjs/jwt` para access tokens JWT de corta duracion
 - `otplib` para codigos TOTP de segundo factor
+- `pino`, `pino-http` y `nestjs-pino` para logs tecnicos estructurados
 - Supertest para pruebas de API
+- `exceljs` para exportar informes XLSX
 - ESLint
 - TypeScript ESLint
 - Prettier
@@ -119,6 +121,9 @@ Variables:
 | `PORT`           | Puerto HTTP de NestJS                      | `3000`                                                              |
 | `DATABASE_URL`   | Cadena de conexión a PostgreSQL            | `postgres://bukioo:change_me@localhost:5432/bukioo?sslmode=disable` |
 | `PGBOSS_ENABLED` | Activa el worker de tareas sobre PostgreSQL | `true`                                                              |
+| `EMAIL_DELIVERY_ENABLED` | Permite el envio real de correos | `true` |
+| `TRUST_PROXY_HOPS` | Proxies de confianza delante de la API | `0` |
+| `LOG_LEVEL` | Nivel minimo de los logs tecnicos | `info` |
 
 La contraseña debe coincidir con la configurada para PostgreSQL en el `.env` de la raíz utilizado por Docker Compose.
 
@@ -130,6 +135,29 @@ Con `PGBOSS_ENABLED=true`, la API inicia el worker de `pg-boss` y ejecuta cada
 hora la caducidad de puntos de Loyalty. Puede desactivarse temporalmente con
 `false`; `pg-boss` utiliza la misma `DATABASE_URL` y crea sus tablas de trabajo
 en PostgreSQL.
+
+Para desarrollo o pruebas sin envios reales, configura
+`EMAIL_DELIVERY_ENABLED=false`. El proveedor no llamara a Resend y los flujos
+continuaran sin error, pero los destinatarios no recibiran codigos,
+contrasenas temporales ni recordatorios. En produccion, las variables de
+Resend solo son obligatorias si el envio esta activado.
+
+`TRUST_PROXY_HOPS` debe quedarse en `0` durante desarrollo y cuando la API se
+expone directamente. Configura `1` para un proxy inverso directo, como Nginx
+Proxy Manager, y aumenta el valor solo cuando exista otro salto de proxy real.
+Esto permite que el rate limiting use la IP del cliente sin confiar por defecto
+en cabeceras `X-Forwarded-For` falsificadas.
+
+Los logs tecnicos se emiten en JSON mediante Pino e incluyen un `X-Request-Id`
+por respuesta. Se redactan `Authorization`, cookies, API keys, contrasenas y
+tokens; los logs no sustituyen los registros de auditoria de negocio.
+
+Las cookies de autenticacion son `HttpOnly`, host-only y se limitan a la ruta
+del flujo que las consume. En produccion llevan `Secure`; usan `SameSite=Lax`
+para que los POST iniciados desde otro sitio no las incluyan. El frontend debe
+usar el access token mediante `Authorization: Bearer`; CORS solo admite
+`FRONTEND_URL` con credenciales.
+
 
 > Actualmente NestJS lee `PORT` desde el entorno del proceso. La carga automática del archivo `.env` dentro de la aplicación deberá configurarse cuando se implemente la configuración del backend.
 
@@ -523,6 +551,12 @@ Los access tokens tienen una duracion de 15 minutos. El endpoint
 `POST /api/v1/auth/login` valida las credenciales y responde con un access
 token Bearer.
 
+Los inicios de sesión de personal y clientes conservan el límite por IP de
+cinco intentos por minuto. Además, cinco contraseñas erróneas consecutivas de
+una cuenta activa la bloquean durante 15 minutos. Un inicio correcto elimina
+los fallos acumulados. La respuesta es siempre genérica para no revelar si el
+correo existe o si la cuenta está bloqueada.
+
 `POST /api/v1/auth/onboard` crea en una transaccion un usuario, una
 organización, su primer negocio con el mismo nombre y slug, sus settings
 iniciales, el locale `es`, una membresía `OWNER` y el acceso del OWNER a ese
@@ -660,6 +694,61 @@ GET /api/v1/businesses/<businessId>/notifications?status=<status>&type=<type>&ch
 El resultado incluye el destino, estado, fechas, cita y cliente asociados, y
 el error del proveedor cuando exista. Los filtros son opcionales.
 
+## Reportes
+
+El primer resumen operativo se consulta por negocio y exige permisos `OWNER` o
+`ADMIN`:
+
+```text
+GET /api/v1/businesses/<businessId>/reports/overview?from=<iso>&to=<iso>&employeeId=<uuid>&serviceId=<uuid>
+```
+
+`from` y `to` son obligatorios, `from` debe ser anterior a `to`, y el rango se
+interpreta como `start_at >= from` y `start_at < to`. Los filtros de empleado y
+servicio son opcionales. La respuesta incluye totales por estado, clientes
+unicos, citas que cuentan para membresia e importe de las citas `COMPLETED`.
+El importe usa el precio guardado en la cita, no el precio actual del servicio.
+
+El detalle de citas para analisis usa el mismo rango y permisos:
+
+```text
+GET /api/v1/businesses/<businessId>/reports/appointments?from=<iso>&to=<iso>&employeeId=<uuid>&serviceId=<uuid>&status=<PENDING|CONFIRMED|COMPLETED|CANCELLED|NO_SHOW>&limit=<1-100>&offset=<number>
+```
+
+Incluye cita, cliente, empleado, servicio, importe historico y elegibilidad de
+membresia. Devuelve `items` y paginacion con `total`, `limit` y `offset`.
+
+El mismo detalle se exporta completo como CSV, sin paginacion y con los mismos
+filtros de rango, empleado, servicio y estado:
+
+```text
+GET /api/v1/businesses/<businessId>/reports/appointments.csv?from=<iso>&to=<iso>&employeeId=<uuid>&serviceId=<uuid>&status=<status>
+```
+
+La respuesta descarga `bukioo-appointments-report.csv` en UTF-8.
+
+## Auditoria
+
+El historial de acciones internas se consulta por negocio con permisos `OWNER`
+o `ADMIN`:
+
+```text
+GET /api/v1/businesses/<businessId>/audit-logs?action=<action>&entityType=<type>&entityId=<uuid>&actorUserId=<uuid>&from=<iso>&to=<iso>&limit=<1-100>&offset=<number>
+```
+
+Todos los filtros son opcionales. La respuesta devuelve `items` con valores
+anteriores y nuevos, junto a `pagination` con `total`, `limit` y `offset`.
+
+El rendimiento por empleado se obtiene por las citas que tuvo asignadas en el
+rango, incluso si ahora esta archivado:
+
+```text
+GET /api/v1/businesses/<businessId>/reports/employees?from=<iso>&to=<iso>&serviceId=<uuid>
+```
+
+Cada fila incluye citas por estado, clientes unicos, citas elegibles para
+membresia e importe completado. El filtro de servicio es opcional.
+
 ```text
 GET   /api/v1/businesses/<businessId>/loyalty/settings
 PATCH /api/v1/businesses/<businessId>/loyalty/settings
@@ -684,6 +773,23 @@ Los ajustes exigen `points` distinto de cero y `reason`; solo `OWNER` y
 Cada movimiento incluye `appointment: null` o, si procede de una cita, su
 referencia, estado, horario, empleado, servicio e importe. Esto permite mostrar
 el historial de puntos completo desde la ficha del cliente.
+
+El canje de puntos tambien requiere `OWNER` o `ADMIN` y consume primero los
+lotes de puntos disponibles mas antiguos:
+
+```text
+POST /api/v1/businesses/<businessId>/customers/<customerId>/loyalty/redeem
+```
+
+```json
+{
+  "points": 50,
+  "reason": "Descuento aplicado en compra"
+}
+```
+
+El canje conserva la operacion y las asignaciones FIFO internas para que los
+puntos ya gastados no vuelvan a caducar.
 
 Los servicios se gestionan por negocio y pueden pertenecer opcionalmente a una
 categoria del mismo negocio. `PATCH` permite activar o desactivar un servicio.
@@ -919,3 +1025,61 @@ Organization B
 ├── services
 └── appointments
 ```
+
+## Informes XLSX
+
+Los reportes de citas se pueden descargar con los mismos filtros del CSV:
+
+```text
+GET /api/v1/businesses/<businessId>/reports/appointments.xlsx?from=<iso>&to=<iso>&employeeId=<uuid>&serviceId=<uuid>&status=<status>
+```
+
+La respuesta es `bukioo-appointments-report.xlsx`, no usa paginacion y protege
+los valores que Excel podria interpretar como formulas.
+
+## Superadmin
+
+Estas rutas requieren un access token de un usuario activo con
+`is_superadmin=true`, sin depender de los roles de una organizacion:
+
+```text
+GET    /api/v1/superadmin/dashboard
+GET    /api/v1/superadmin/organizations?search=<text>&status=<ACTIVE|SUSPENDED>&planCode=<code>&limit=<1-100>&offset=<number>
+GET    /api/v1/superadmin/organizations/<organizationId>
+PATCH  /api/v1/superadmin/organizations/<organizationId>/status
+PATCH  /api/v1/superadmin/organizations/<organizationId>/security
+PUT    /api/v1/superadmin/organizations/<organizationId>/subscription
+GET    /api/v1/superadmin/plans
+POST   /api/v1/superadmin/plans
+PATCH  /api/v1/superadmin/plans/<planCode>
+DELETE /api/v1/superadmin/plans/<planCode>
+```
+
+`security` recibe `{ "require2faForAdmins": true }`. La suscripcion es manual,
+sin cobro integrado; recibe `planCode`, `status` (`TRIAL`, `ACTIVE` o
+`SUSPENDED`) y opcionalmente `trialEndsAt` y `expiresAt`. Los cambios quedan en
+`platform_audit_logs`.
+
+## Pruebas E2E
+
+Supertest usa `DATABASE_URL_TEST`, una base independiente cuyo nombre debe
+terminar en `_test`. El arnes no se ejecuta contra otra base. En PowerShell:
+
+```powershell
+$env:DATABASE_URL = $env:DATABASE_URL_TEST
+npx.cmd dbmate up
+npm.cmd run test:e2e
+```
+
+Los tests E2E desactivan pg-boss y los correos, y limpian exclusivamente la
+base de pruebas entre casos.
+
+## Revision de dependencias
+
+La revision de produccion se realiza con `npm audit --omit=dev` en raiz,
+frontend y backend. Raiz y frontend no tienen vulnerabilidades conocidas. El
+backend conserva una vulnerabilidad moderada transitiva de `uuid` incluida por
+`exceljs`; npm no ofrece una actualizacion segura compatible. La exportacion no
+usa la API vulnerable de UUID con buffers controlados por usuarios. Revisar esta
+dependencia antes de cada despliegue y sustituirla cuando el proveedor publique
+una correccion compatible.

@@ -4,13 +4,13 @@ import { AppointmentsController } from "./appointments.controller";
 import { AppointmentsRepository } from "./appointments.repository";
 import { AppointmentsService } from "./appointments.service";
 import { RescheduleProposalsController } from "./reschedule-proposals.controller";
-import { AuditService } from "../audit/audit.service";
+import { AuditModule } from "../audit/audit.module";
 import { LoyaltyModule } from "../loyalty/loyalty.module";
 
 @Module({
-  imports: [AuthModule, LoyaltyModule],
+  imports: [AuthModule, LoyaltyModule, AuditModule],
   controllers: [AppointmentsController, RescheduleProposalsController],
-  providers: [AppointmentsService, AppointmentsRepository, AuditService],
+  providers: [AppointmentsService, AppointmentsRepository],
   exports: [AppointmentsService],
 })
 export class AppointmentsModule {}

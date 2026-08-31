@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { DatabaseModule } from "./database/database.module";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { HealthModule } from "./health/health.module";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
@@ -22,6 +22,10 @@ import { PublicBookingModule } from "./public-booking/public-booking.module";
 import { LoyaltyModule } from "./loyalty/loyalty.module";
 import { LoyaltyJobsModule } from "./loyalty-jobs/loyalty-jobs.module";
 import { NotificationsModule } from "./notifications/notifications.module";
+import { ReportsModule } from "./reports/reports.module";
+import { SuperadminModule } from "./superadmin/superadmin.module";
+import { LoggerModule } from "nestjs-pino";
+import { createPinoHttpOptions } from "./logging-configuration";
 import Joi from "joi";
 
 @Module({
@@ -39,6 +43,12 @@ import Joi from "joi";
 
         FRONTEND_URL: Joi.string().uri().required(),
 
+        TRUST_PROXY_HOPS: Joi.number().integer().min(0).max(10).default(0),
+
+        LOG_LEVEL: Joi.string()
+          .valid("fatal", "error", "warn", "info", "debug", "trace", "silent")
+          .default("info"),
+
         JWT_ACCESS_SECRET: Joi.string().min(32).required(),
 
         JWT_REFRESH_SECRET: Joi.string().min(32).required(),
@@ -51,17 +61,38 @@ import Joi from "joi";
 
         PGBOSS_ENABLED: Joi.boolean().default(true),
 
+        EMAIL_DELIVERY_ENABLED: Joi.boolean().default(true),
+
         RESEND_API_KEY: Joi.string().when("NODE_ENV", {
           is: "production",
-          then: Joi.required(),
+          then: Joi.when("EMAIL_DELIVERY_ENABLED", {
+            is: true,
+            then: Joi.required(),
+            otherwise: Joi.optional(),
+          }),
           otherwise: Joi.optional(),
         }),
 
-        RESEND_FROM_EMAIL: Joi.string().email().when("NODE_ENV", {
-          is: "production",
-          then: Joi.required(),
-          otherwise: Joi.optional(),
-        }),
+        RESEND_FROM_EMAIL: Joi.string()
+          .email()
+          .when("NODE_ENV", {
+            is: "production",
+            then: Joi.when("EMAIL_DELIVERY_ENABLED", {
+              is: true,
+              then: Joi.required(),
+              otherwise: Joi.optional(),
+            }),
+            otherwise: Joi.optional(),
+          }),
+      }),
+    }),
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        pinoHttp: createPinoHttpOptions(
+          configService.getOrThrow<string>("LOG_LEVEL"),
+        ),
       }),
     }),
     DatabaseModule,
@@ -96,6 +127,8 @@ import Joi from "joi";
     LoyaltyModule,
     LoyaltyJobsModule,
     NotificationsModule,
+    ReportsModule,
+    SuperadminModule,
   ],
   controllers: [AppController],
   providers: [

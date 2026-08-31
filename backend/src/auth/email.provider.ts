@@ -108,6 +108,10 @@ export class ResendEmailProvider implements EmailProvider {
     email: string,
     template: { subject: string; text: string },
   ) {
+    if (this.configService.get<boolean>("EMAIL_DELIVERY_ENABLED") === false) {
+      return;
+    }
+
     const apiKey = this.configService.get<string>("RESEND_API_KEY");
     const from = this.configService.get<string>("RESEND_FROM_EMAIL");
 

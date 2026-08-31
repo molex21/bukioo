@@ -1,33 +1,21 @@
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { AppModule } from "./app.module";
-import { ValidationPipe } from "@nestjs/common";
-import helmet from "helmet";
+import { ConfigService } from "@nestjs/config";
+import { configureHttpApplication } from "./http-configuration";
+import { Logger } from "nestjs-pino";
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
+  const configService = app.get(ConfigService);
+  app.useLogger(app.get(Logger));
 
-  app.useBodyParser("json", {
-    limit: "1mb",
+  configureHttpApplication(app, {
+    frontendUrl: configService.getOrThrow<string>("FRONTEND_URL"),
+    trustProxyHops: configService.getOrThrow<number>("TRUST_PROXY_HOPS"),
   });
-  app.useBodyParser("urlencoded", {
-    limit: "1mb",
-    extended: true,
-  });
-  app.enableCors({
-    origin: process.env.FRONTEND_URL,
-    credentials: true,
-  });
-  app.use(helmet());
-
-  app.setGlobalPrefix("api/v1");
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(configService.getOrThrow<number>("PORT"));
 }
 void bootstrap();

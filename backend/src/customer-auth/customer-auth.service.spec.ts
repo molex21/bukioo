@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { CustomerAuthRepository } from "./customer-auth.repository";
 import { CustomerAuthService } from "./customer-auth.service";
+import { LoginProtectionRepository } from "../auth/login-protection.repository";
 
 describe("CustomerAuthService", () => {
   const repository = {
@@ -20,6 +21,11 @@ describe("CustomerAuthService", () => {
     revokeSession: jest.fn(),
     findActiveAccountById: jest.fn(),
   };
+  const loginProtectionRepository = {
+    isCustomerAccountLocked: jest.fn(),
+    recordCustomerAccountFailure: jest.fn(),
+    clearCustomerAccountFailures: jest.fn(),
+  };
   const jwt = { signAsync: jest.fn(), verifyAsync: jest.fn() };
   const config = { getOrThrow: jest.fn() };
   let service: CustomerAuthService;
@@ -30,6 +36,7 @@ describe("CustomerAuthService", () => {
       repository as unknown as CustomerAuthRepository,
       jwt as never,
       config as never,
+      loginProtectionRepository as unknown as LoginProtectionRepository,
     );
     repository.findOrganization.mockResolvedValue({ id: "organization-id" });
     repository.findAccount.mockResolvedValue(null);
@@ -120,6 +127,34 @@ describe("CustomerAuthService", () => {
         password: "password-at-least-12",
       }),
     ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it("records a failed customer password and clears failures after a valid login", async () => {
+    repository.findAccountForLogin.mockResolvedValue({
+      id: "account-id",
+      organization_id: "organization-id",
+      email: "customer@example.com",
+      status: "ACTIVE",
+      password_hash: await argon2.hash("correct-password"),
+    });
+
+    await expect(
+      service.login("mi-negocio", {
+        email: "customer@example.com",
+        password: "wrong-password",
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(
+      loginProtectionRepository.recordCustomerAccountFailure,
+    ).toHaveBeenCalledWith("account-id");
+
+    await service.login("mi-negocio", {
+      email: "customer@example.com",
+      password: "correct-password",
+    });
+    expect(
+      loginProtectionRepository.clearCustomerAccountFailures,
+    ).toHaveBeenCalledWith("account-id");
   });
 
   it("rotates a valid customer refresh session for its organization", async () => {

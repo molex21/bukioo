@@ -2269,7 +2269,7 @@ No documentar como completado algo que todavía no existe.
 - [x] CORS
 - [x] rate limiting
 - [x] body limit
-- [ ] verificar/terminar validación env si falta
+- [x] verificar/terminar validación env si falta
 - [ ] revisar configuración final de seguridad base
 
 ## Fase 2 — Auth
@@ -2351,7 +2351,7 @@ No documentar como completado algo que todavía no existe.
 ## Fase 12 — Public Booking
 
 - [ ] services
-- [ ] employees
+- [x] employees
 - [ ] availability
 - [ ] create
 - [ ] manage token
@@ -2373,44 +2373,44 @@ No documentar como completado algo que todavía no existe.
 - [x] ledger
 - [x] adjustments
 - [x] expiration worker
-- [ ] expiration notices and reminders
-- [ ] point redemption FIFO
+- [x] expiration notices and reminders
+- [x] point redemption FIFO
 
 ## Fase 15 — Reports
 
-- [ ] overview
-- [ ] appointments
-- [ ] employees
-- [ ] CSV
-- [ ] XLSX
+- [x] overview
+- [x] appointments
+- [x] employees
+- [x] CSV
+- [x] XLSX
 
 ## Fase 16 — Audit
 
-- [ ] write service
-- [ ] read endpoint
+- [x] write service
+- [x] read endpoint
 
 ## Fase 17 — SUPERADMIN
 
-- [ ] dashboard
-- [ ] metrics
-- [ ] organizations
-- [ ] plans/subscriptions
-- [ ] required 2FA
+- [x] dashboard
+- [x] metrics
+- [x] organizations
+- [x] plans/subscriptions
+- [x] required 2FA
 
 ## Fase 18 — Hardening final
 
-- [ ] Pino
+- [x] Pino
 - [ ] Sentry
 - [ ] brute force tuning
-- [ ] cookie review
-- [ ] HTTPS/proxy awareness
-- [ ] dependency review
-- [ ] secret review
+- [x] cookie review
+- [x] HTTPS/proxy awareness
+- [x] dependency review
+- [x] secret review
 
 ## Fase 19 — Testing completo
 
 - [ ] Vitest
-- [ ] Supertest
+- [x] Supertest
 - [ ] Playwright
 - [ ] concurrency
 - [ ] tenant isolation

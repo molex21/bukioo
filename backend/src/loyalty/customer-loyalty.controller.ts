@@ -13,6 +13,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { AdjustLoyaltyDto } from "../customers/dto/adjust-loyalty.dto";
+import { RedeemLoyaltyPointsDto } from "./dto/redeem-loyalty-points.dto";
 import { LoyaltyService } from "./loyalty.service";
 
 @Controller("businesses/:businessId/customers/:customerId/loyalty")
@@ -43,6 +44,24 @@ export class CustomerLoyaltyController {
     @CurrentUser() userId: string,
   ): Promise<void> {
     await this.loyaltyService.adjustCustomerPoints(
+      businessId,
+      customerId,
+      dto.points,
+      dto.reason,
+      userId,
+    );
+  }
+
+  @Post("redeem")
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
+  redeem(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Param("customerId", ParseUUIDPipe) customerId: string,
+    @Body() dto: RedeemLoyaltyPointsDto,
+    @CurrentUser() userId: string,
+  ) {
+    return this.loyaltyService.redeemCustomerPoints(
       businessId,
       customerId,
       dto.points,

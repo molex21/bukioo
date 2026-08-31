@@ -24,6 +24,7 @@ import { EmployeeRegistrationRepository } from "./employee-registration.reposito
 import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
 import { TwoFactorRepository } from "./two-factor.repository";
+import { LoginProtectionRepository } from "./login-protection.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 describe("AuthService", () => {
@@ -83,6 +84,12 @@ describe("AuthService", () => {
     consumeRecoveryCode: jest.fn(),
   };
 
+  const loginProtectionRepositoryMock = {
+    isUserLocked: jest.fn(),
+    recordUserFailure: jest.fn(),
+    clearUserFailures: jest.fn(),
+  };
+
   const configServiceMock = {
     getOrThrow: jest.fn(),
   };
@@ -127,6 +134,10 @@ describe("AuthService", () => {
         {
           provide: TwoFactorRepository,
           useValue: twoFactorRepositoryMock,
+        },
+        {
+          provide: LoginProtectionRepository,
+          useValue: loginProtectionRepositoryMock,
         },
         {
           provide: EmailProvider,
@@ -179,6 +190,9 @@ describe("AuthService", () => {
     twoFactorRepositoryMock.enable.mockReset();
     twoFactorRepositoryMock.findUnusedRecoveryCodes.mockReset();
     twoFactorRepositoryMock.consumeRecoveryCode.mockReset();
+    loginProtectionRepositoryMock.isUserLocked.mockReset();
+    loginProtectionRepositoryMock.recordUserFailure.mockReset();
+    loginProtectionRepositoryMock.clearUserFailures.mockReset();
     configServiceMock.getOrThrow.mockReset();
   });
 
@@ -468,6 +482,24 @@ describe("AuthService", () => {
         password: "wrong-password",
       } satisfies LoginDto),
     ).rejects.toMatchObject({ status: 401 });
+
+    expect(
+      loginProtectionRepositoryMock.recordUserFailure,
+    ).toHaveBeenCalledWith(user.id);
+  });
+
+  it("rejects a temporarily locked account without checking its password", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    loginProtectionRepositoryMock.isUserLocked.mockResolvedValue(true);
+
+    await expect(
+      service.validateCredentials({
+        email: user.email,
+        password: "a-secure-password",
+      } satisfies LoginDto),
+    ).rejects.toMatchObject({ status: 401 });
+
+    expect(argon2.verify).not.toHaveBeenCalled();
   });
 
   it("rejects credentials when the account is inactive", async () => {
@@ -517,6 +549,9 @@ describe("AuthService", () => {
         refreshTokenHash: "refresh-token-hash",
       }),
     );
+    expect(
+      loginProtectionRepositoryMock.clearUserFailures,
+    ).toHaveBeenCalledWith(user.id);
   });
 
   it("does not issue an access token when credentials are invalid", async () => {

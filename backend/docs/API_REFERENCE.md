@@ -3,6 +3,12 @@
 Guia operativa para frontend e integraciones. Refleja los controllers y DTOs
 actuales. Base URL local: `http://localhost:3000/api/v1`.
 
+Con `NODE_ENV=development` y `SWAGGER_ENABLED=true`, hay documentacion
+interactiva en `http://localhost:3000/api/docs` y OpenAPI en
+`http://localhost:3000/api/docs-json`. Swagger nunca se publica en produccion.
+Esta guia sigue siendo la referencia de flujos, limites y casos limite que
+Swagger no expresa.
+
 ## Convenciones globales
 
 - Cuerpo: JSON UTF-8, maximo `1mb`. Campos desconocidos devuelven `400`.

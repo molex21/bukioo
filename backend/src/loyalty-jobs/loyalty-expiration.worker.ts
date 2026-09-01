@@ -30,6 +30,11 @@ export class LoyaltyExpirationWorker implements OnModuleInit, OnModuleDestroy {
     if (!this.pgBoss) return;
 
     await this.pgBoss.start();
+    await this.pgBoss.createQueue(LOYALTY_EXPIRATION_JOB);
+    await this.pgBoss.createQueue(LOYALTY_EXPIRATION_NOTICE_30_DAYS_JOB);
+    await this.pgBoss.createQueue(LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB);
+    await this.pgBoss.createQueue(APPOINTMENT_REMINDER_JOB);
+
     await this.pgBoss.work(LOYALTY_EXPIRATION_JOB, async () => {
       const expired = await this.loyaltyService.expireDuePoints();
       if (expired > 0) {

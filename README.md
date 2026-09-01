@@ -247,7 +247,7 @@ Frontend Vite en modo desarrollo
 Cuando los servicios estén disponibles:
 
 * Frontend: `http://localhost:5173`
-* API: `http://localhost:3000`
+* Swagger API: `http://localhost:3000/api/docs`
 
 También puedes controlar únicamente PostgreSQL mediante los scripts Docker:
 
@@ -335,10 +335,10 @@ Frontend:
 http://localhost:5173
 ```
 
-Backend:
+Swagger API:
 
 ```text
-http://localhost:3000
+http://localhost:3000/api/docs
 ```
 
 ## Compilación y comprobaciones

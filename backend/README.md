@@ -7,6 +7,11 @@ La referencia completa de endpoints, flujos, limites y casos limite esta en
 
 API REST de **BUKIOO** desarrollada con NestJS y TypeScript.
 
+Swagger esta desactivado por defecto y nunca se publica en produccion. Para
+habilitarlo solo en desarrollo local, define `SWAGGER_ENABLED=true` en tu
+`.env`; entonces estara disponible en `http://localhost:3000/api/docs` y el
+documento OpenAPI en `http://localhost:3000/api/docs-json`.
+
 El backend será responsable de la autenticación, gestión multiempresa, usuarios, empleados, clientes, servicios, calendarios, reservas, fidelización, licencias, notificaciones y demás lógica de negocio.
 
 ## Arquitectura
@@ -39,6 +44,7 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 - `pg` como cliente PostgreSQL
 - `dbmate` para migraciones SQL
 - `@nestjs/jwt` para access tokens JWT de corta duracion
+- `@nestjs/swagger` y `swagger-ui-express` para la documentacion OpenAPI
 - `otplib` para codigos TOTP de segundo factor
 - `pino`, `pino-http` y `nestjs-pino` para logs tecnicos estructurados
 - Supertest para pruebas de API

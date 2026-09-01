@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 
 const urls = [
   "http://localhost:5173",
-  "http://localhost:3000",
+  "http://localhost:3000/api/docs",
 ];
 
 const sleep = (ms) =>
@@ -74,7 +74,7 @@ function openUrl(url) {
 
 try {
   console.log(
-    "Esperando a frontend y backend...",
+    "Esperando al frontend y a Swagger...",
   );
 
   await Promise.all(
@@ -82,7 +82,7 @@ try {
   );
 
   console.log(
-    "Frontend y backend disponibles.",
+    "Frontend y Swagger disponibles.",
   );
 
   console.log(

@@ -10,6 +10,7 @@ import {
 
 describe("LoyaltyExpirationWorker", () => {
   const pgBoss = {
+    createQueue: jest.fn(),
     start: jest.fn(),
     stop: jest.fn(),
     work: jest.fn(),
@@ -28,6 +29,7 @@ describe("LoyaltyExpirationWorker", () => {
     loyaltyService.sendExpirationNotices.mockReset();
     appointmentsService.sendAppointmentReminders.mockReset();
     pgBoss.start.mockResolvedValue(undefined);
+    pgBoss.createQueue.mockResolvedValue(undefined);
     workHandlers.clear();
     pgBoss.work.mockImplementation(
       (jobName: string, handler: () => Promise<void>) => {
@@ -49,6 +51,22 @@ describe("LoyaltyExpirationWorker", () => {
     await worker.onModuleInit();
 
     expect(pgBoss.start).toHaveBeenCalledTimes(1);
+    expect(pgBoss.createQueue).toHaveBeenNthCalledWith(
+      1,
+      LOYALTY_EXPIRATION_JOB,
+    );
+    expect(pgBoss.createQueue).toHaveBeenNthCalledWith(
+      2,
+      LOYALTY_EXPIRATION_NOTICE_30_DAYS_JOB,
+    );
+    expect(pgBoss.createQueue).toHaveBeenNthCalledWith(
+      3,
+      LOYALTY_EXPIRATION_NOTICE_7_DAYS_JOB,
+    );
+    expect(pgBoss.createQueue).toHaveBeenNthCalledWith(
+      4,
+      APPOINTMENT_REMINDER_JOB,
+    );
     expect(pgBoss.work).toHaveBeenCalledWith(
       LOYALTY_EXPIRATION_JOB,
       expect.any(Function),

@@ -3,7 +3,10 @@ import type { PgBoss } from "pg-boss";
 
 export const PG_BOSS = Symbol("PG_BOSS");
 
-export type PgBossClient = Pick<PgBoss, "start" | "stop" | "work" | "schedule">;
+export type PgBossClient = Pick<
+  PgBoss,
+  "createQueue" | "start" | "stop" | "work" | "schedule"
+>;
 
 type PgBossModule = {
   PgBoss: new (connectionString: string) => PgBossClient;

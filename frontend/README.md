@@ -7,6 +7,8 @@ Aplicación web de BUKIOO desarrollada con React, TypeScript y Vite.
 - React 19 y React DOM
 - Vite 8 con `@vitejs/plugin-react`
 - TypeScript 6
+- React Router para el enrutado de la aplicacion
+- Lucide React para iconos de interfaz
 - ESLint con las configuraciones de TypeScript, React Hooks y React Refresh
 
 ## Instalación

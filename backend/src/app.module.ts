@@ -61,6 +61,8 @@ import Joi from "joi";
 
         PGBOSS_ENABLED: Joi.boolean().default(true),
 
+        SWAGGER_ENABLED: Joi.boolean().default(false),
+
         EMAIL_DELIVERY_ENABLED: Joi.boolean().default(true),
 
         RESEND_API_KEY: Joi.string().when("NODE_ENV", {

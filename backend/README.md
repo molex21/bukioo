@@ -1,5 +1,10 @@
 # Backend de BUKIOO
 
+La referencia completa de endpoints, flujos, limites y casos limite esta en
+[`docs/API_REFERENCE.md`](docs/API_REFERENCE.md). Para Postman importa
+`../postman/BUKIOO.postman_collection.json` y el entorno
+`../postman/BUKIOO.local.postman_environment.json`.
+
 API REST de **BUKIOO** desarrollada con NestJS y TypeScript.
 
 El backend será responsable de la autenticación, gestión multiempresa, usuarios, empleados, clientes, servicios, calendarios, reservas, fidelización, licencias, notificaciones y demás lógica de negocio.
@@ -42,7 +47,7 @@ No se utilizarán Prisma, TypeORM, Drizzle ni Sequelize.
 - TypeScript ESLint
 - Prettier
 
-Actualmente `pg` está instalado, pero todavía debe implementarse la capa de conexión de NestJS con PostgreSQL.
+La capa de conexión de NestJS con PostgreSQL está implementada mediante `DatabaseModule` y `pg`.
 
 El esquema de la base de datos se gestionará mediante migraciones SQL con `dbmate`.
 

@@ -1,0 +1,159 @@
+{
+  "info": {
+    "name": "BUKIOO API",
+    "description": "Importa tambien BUKIOO Local. POST login guarda accessToken automaticamente; Postman conserva cookies HttpOnly para refresh.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "customerAccessToken", "value": "" }
+  ],
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+  "event": [{ "listen": "prerequest", "script": { "exec": ["if (pm.request.body) pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"] } }],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        { "name": "Health", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/health" } },
+        { "name": "Root", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/" } }
+      ]
+    },
+    {
+      "name": "Staff Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.environment.set('accessToken', body.accessToken);"] } }],
+          "request": { "method": "POST", "auth": { "type": "noauth" }, "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{staffPassword}}\"\n}" }, "url": "{{baseUrl}}/auth/login" }
+        },
+        { "name": "Refresh", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/auth/refresh" } },
+        { "name": "Logout", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/auth/logout" } },
+        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" } },
+        { "name": "Request email verification", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"email\":\"{{staffEmail}}\"}" }, "url": "{{baseUrl}}/auth/email/verification/request" } },
+        { "name": "Verify initial email", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\"}" }, "url": "{{baseUrl}}/auth/activate/verify" } },
+        { "name": "Set initial password", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"password\":\"password-de-12-caracteres\"}" }, "url": "{{baseUrl}}/auth/activate/password" } },
+        { "name": "Forgot password", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"email\":\"{{staffEmail}}\"}" }, "url": "{{baseUrl}}/auth/password/forgot" } },
+        { "name": "Reset password", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\",\"password\":\"password-de-12-caracteres\"}" }, "url": "{{baseUrl}}/auth/password/reset" } },
+        { "name": "2FA setup", "request": { "method": "POST", "url": "{{baseUrl}}/auth/2fa/setup" } },
+        { "name": "2FA setup verify", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"code\":\"123456\"}" }, "url": "{{baseUrl}}/auth/2fa/setup/verify" } },
+        { "name": "2FA login verify", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"code\":\"123456\"}" }, "url": "{{baseUrl}}/auth/2fa/verify" } },
+        { "name": "2FA recovery", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"code\":\"AAAA-BBBB-CCCC\"}" }, "url": "{{baseUrl}}/auth/2fa/recovery" } }
+      ]
+    },
+    {
+      "name": "Public and Customer Auth",
+      "item": [
+        { "name": "Public services", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/services?businessId={{businessId}}" } },
+        { "name": "Public employees", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/employees?businessId={{businessId}}&serviceId={{serviceId}}" } },
+        { "name": "Public availability", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/availability?businessId={{businessId}}&employeeId={{employeeId}}&serviceId={{serviceId}}&from={{from}}&to={{to}}" } },
+        { "name": "Public create appointment", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"businessId\":\"{{businessId}}\",\"employeeId\":\"{{employeeId}}\",\"serviceId\":\"{{serviceId}}\",\"startAt\":\"2026-09-07T10:00:00.000Z\",\"firstName\":\"Ana\",\"email\":\"{{customerEmail}}\",\"phone\":\"600000000\"}" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/appointments" } },
+        { "name": "Customer register", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"email\":\"{{customerEmail}}\",\"password\":\"{{customerPassword}}\"}" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/register" } },
+        { "name": "Customer login", "event": [{ "listen": "test", "script": { "exec": ["const body = pm.response.json();", "if (body.accessToken) pm.environment.set('customerAccessToken', body.accessToken);"] } }], "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"email\":\"{{customerEmail}}\",\"password\":\"{{customerPassword}}\"}" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/login" } },
+        { "name": "Customer me", "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerAccessToken}}", "type": "string" }] }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/me" } },
+        { "name": "Customer appointments", "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerAccessToken}}", "type": "string" }] }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/appointments?from={{from}}&to={{to}}" } }
+      ]
+    },
+    {
+      "name": "Business management",
+      "item": [
+        { "name": "List businesses", "request": { "method": "GET", "url": "{{baseUrl}}/businesses?organizationId={{organizationId}}" } },
+        { "name": "Get business", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}" } },
+        { "name": "Create employee", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"firstName\":\"Ana\",\"lastName\":\"Diaz\",\"email\":\"ana@example.com\",\"inviteUser\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees" } },
+        { "name": "List employees", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/employees" } },
+        { "name": "Create category", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"name\":\"Cortes\",\"sortOrder\":0}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories" } },
+        { "name": "List categories", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories" } },
+        { "name": "Create service", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"name\":\"Corte\",\"categoryId\":\"{{categoryId}}\",\"durationMinutes\":60,\"price\":\"25.00\",\"autoConfirmAppointments\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/services" } },
+        { "name": "List services", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/services" } },
+        { "name": "Create customer", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"firstName\":\"Lucia\",\"email\":\"lucia@example.com\",\"phone\":\"600000001\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/customers" } },
+        { "name": "List customers", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/customers" } },
+        { "name": "Working hours", "request": { "method": "PUT", "body": { "mode": "raw", "raw": "{\"items\":[{\"dayOfWeek\":1,\"startTime\":\"09:00\",\"endTime\":\"18:00\"}]}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/working-hours" } },
+        { "name": "Availability", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/availability?employeeId={{employeeId}}&serviceId={{serviceId}}&from={{from}}&to={{to}}" } }
+      ]
+    },
+    {
+      "name": "Appointments, reports and Superadmin",
+      "item": [
+        { "name": "Create appointment", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"customerId\":\"{{customerId}}\",\"employeeId\":\"{{employeeId}}\",\"serviceId\":\"{{serviceId}}\",\"startAt\":\"2026-09-07T10:00:00.000Z\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/appointments" } },
+        { "name": "List appointments", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments?from={{from}}&to={{to}}" } },
+        { "name": "Occupancy", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/occupancy?from={{from}}&to={{to}}&employeeId={{employeeId}}" } },
+        { "name": "Confirm appointment", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}/confirm" } },
+        { "name": "Cancel appointment", "request": { "method": "DELETE", "body": { "mode": "raw", "raw": "{\"reason\":\"Peticion del cliente\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}" } },
+        { "name": "Reports overview", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/overview?from={{from}}&to={{to}}" } },
+        { "name": "Reports appointments XLSX", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/appointments.xlsx?from={{from}}&to={{to}}" } },
+        { "name": "Audit logs", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/audit-logs?limit=50&offset=0" } },
+        { "name": "Superadmin dashboard", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/dashboard" } },
+        { "name": "Superadmin organizations", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/organizations?limit=50&offset=0" } },
+        { "name": "Superadmin plans", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/plans" } }
+      ]
+    },
+    {
+      "name": "Complete endpoint catalog",
+      "description": "Rutas adicionales. Consulta API_REFERENCE.md para contratos y ejemplos de body.",
+      "item": [
+        { "name": "Onboard", "request": { "method": "POST", "auth": { "type": "noauth" }, "header": [{ "key": "X-Onboarding-Secret", "value": "{{onboardingSecret}}" }], "body": { "mode": "raw", "raw": "{\"email\":\"owner@example.com\",\"organizationName\":\"Mi empresa\",\"organizationSlug\":\"mi-empresa\"}" }, "url": "{{baseUrl}}/auth/onboard" } },
+        { "name": "Register staff", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"email\":\"employee@example.com\",\"organizationId\":\"{{organizationId}}\",\"businessIds\":[\"{{businessId}}\"],\"role\":\"EMPLOYEE\"}" }, "url": "{{baseUrl}}/auth/register" } },
+        { "name": "Verify email", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\"}" }, "url": "{{baseUrl}}/auth/email/verify" } },
+        { "name": "Customer refresh", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/refresh" } },
+        { "name": "Customer logout", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/logout" } },
+        { "name": "Customer appointment", "request": { "method": "GET", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerAccessToken}}" }] }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/appointments/{{appointmentId}}" } },
+        { "name": "Customer cancel", "request": { "method": "POST", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerAccessToken}}" }] }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/appointments/{{appointmentId}}/cancel" } },
+        { "name": "Public appointment token", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/appointments/{{publicAppointmentToken}}" } },
+        { "name": "Public appointment token cancel", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/appointments/{{publicAppointmentToken}}/cancel" } },
+        { "name": "Create business", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"organizationId\":\"{{organizationId}}\",\"name\":\"Sucursal\",\"slug\":\"sucursal\"}" }, "url": "{{baseUrl}}/businesses" } },
+        { "name": "Update business", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"status\":\"SUSPENDED\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}" } },
+        { "name": "Delete business", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}" } },
+        { "name": "Employee detail/update/delete/invite/reset 2FA", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
+        { "name": "Update employee", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"color\":\"#228B22\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
+        { "name": "Invite employee", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/invite" } },
+        { "name": "Reset employee 2FA", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/2fa/reset" } },
+        { "name": "Delete employee", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
+        { "name": "Update category", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"name\":\"Novedades\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories/{{categoryId}}" } },
+        { "name": "Delete category", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories/{{categoryId}}" } },
+        { "name": "Service employees", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/services/{{serviceId}}/employees" } },
+        { "name": "Replace service employees", "request": { "method": "PUT", "body": { "mode": "raw", "raw": "{\"employeeIds\":[\"{{employeeId}}\"]}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/services/{{serviceId}}/employees" } },
+        { "name": "Update service", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"price\":\"30.00\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/services/{{serviceId}}" } },
+        { "name": "Delete service", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/services/{{serviceId}}" } },
+        { "name": "Customer detail", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}" } },
+        { "name": "Update customer", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"notes\":\"Nota interna\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}" } },
+        { "name": "Delete customer", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}" } },
+        { "name": "Get working hours", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/working-hours" } },
+        { "name": "Create calendar block", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"employeeId\":\"{{employeeId}}\",\"type\":\"BREAK\",\"startAt\":\"2026-09-07T12:00:00.000Z\",\"endAt\":\"2026-09-07T13:00:00.000Z\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/calendar/blocks" } },
+        { "name": "List calendar blocks", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/calendar/blocks?from={{from}}&to={{to}}" } },
+        { "name": "Employee calendar blocks", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/calendar/blocks/employees/{{employeeId}}?from={{from}}&to={{to}}" } },
+        { "name": "Update calendar block", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"reason\":\"Cambio\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/calendar/blocks/{{blockId}}" } },
+        { "name": "Delete calendar block", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/calendar/blocks/{{blockId}}" } },
+        { "name": "Appointment detail", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}" } },
+        { "name": "Update appointment", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"startAt\":\"2026-09-07T11:00:00.000Z\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}" } },
+        { "name": "Membership eligibility", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"countsTowardMembership\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}/membership-eligibility" } },
+        { "name": "Complete appointment", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}/complete" } },
+        { "name": "No-show appointment", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}/no-show" } },
+        { "name": "Reschedule proposal", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"startAt\":\"2026-09-08T10:00:00.000Z\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/appointments/{{appointmentId}}/reschedule-proposals" } },
+        { "name": "Accept reschedule proposal", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"{{rescheduleToken}}\"}" }, "url": "{{baseUrl}}/appointments/reschedule-proposals/accept" } },
+        { "name": "Reject reschedule proposal", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"{{rescheduleToken}}\"}" }, "url": "{{baseUrl}}/appointments/reschedule-proposals/reject" } },
+        { "name": "Loyalty levels", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/levels" } },
+        { "name": "Create loyalty level", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"name\":\"Oro\",\"minimumPoints\":500}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/levels" } },
+        { "name": "Update loyalty level", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"name\":\"Oro Plus\",\"minimumPoints\":600}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/levels/{{loyaltyLevelId}}" } },
+        { "name": "Delete loyalty level", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/levels/{{loyaltyLevelId}}" } },
+        { "name": "Loyalty settings", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/settings" } },
+        { "name": "Update loyalty settings", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"enabled\":true,\"pointsExpireAfterDays\":365}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/loyalty/settings" } },
+        { "name": "Customer loyalty", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}/loyalty" } },
+        { "name": "Adjust loyalty", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"points\":100,\"reason\":\"Compensacion\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}/loyalty/adjust" } },
+        { "name": "Redeem loyalty", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"points\":100,\"reason\":\"Canje\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/customers/{{customerId}}/loyalty/redeem" } },
+        { "name": "Notification settings", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/notification-settings" } },
+        { "name": "Update notification settings", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"appointmentReminderEnabled\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/notification-settings" } },
+        { "name": "Notifications", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/notifications?limit=50&offset=0" } },
+        { "name": "Reports appointments CSV", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/appointments.csv?from={{from}}&to={{to}}" } },
+        { "name": "Reports appointments JSON", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/appointments?from={{from}}&to={{to}}&limit=50&offset=0" } },
+        { "name": "Reports employees", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/employees?from={{from}}&to={{to}}" } },
+        { "name": "Superadmin organization", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}" } },
+        { "name": "Superadmin organization status", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"status\":\"SUSPENDED\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/status" } },
+        { "name": "Superadmin organization security", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"require2faForAdmins\":true}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/security" } },
+        { "name": "Superadmin subscription", "request": { "method": "PUT", "body": { "mode": "raw", "raw": "{\"planCode\":\"pro\",\"status\":\"ACTIVE\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/subscription" } },
+        { "name": "Create plan", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"code\":\"pro\",\"name\":\"Pro\"}" }, "url": "{{baseUrl}}/superadmin/plans" } },
+        { "name": "Update plan", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"isActive\":false}" }, "url": "{{baseUrl}}/superadmin/plans/pro" } },
+        { "name": "Delete plan", "request": { "method": "DELETE", "url": "{{baseUrl}}/superadmin/plans/pro" } }
+      ]
+    }
+  ]
+}

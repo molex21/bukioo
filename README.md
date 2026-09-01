@@ -10,7 +10,7 @@ El repositorio contiene una aplicación React que consume una API REST de NestJS
 Frontend (React + Vite) -> API REST (NestJS) -> PostgreSQL
 ```
 
-Actualmente, el backend no incluye una integración con PostgreSQL en su módulo de aplicación.
+El backend integra PostgreSQL mediante `DatabaseModule` y SQL directo con `pg`.
 
 ## Estructura
 
@@ -508,3 +508,8 @@ for portfolio and demonstration purposes only.
 
 No permission is granted to copy, modify, distribute or use the
 software without prior written authorization.
+# Documentacion de API
+
+La referencia de integracion para frontend se encuentra en
+[`backend/docs/API_REFERENCE.md`](backend/docs/API_REFERENCE.md). La coleccion
+importable y el entorno local seguro de Postman estan en [`postman/`](postman/).

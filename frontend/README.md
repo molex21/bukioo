@@ -9,7 +9,16 @@ Aplicación web de BUKIOO desarrollada con React, TypeScript y Vite.
 - TypeScript 6
 - React Router para el enrutado de la aplicacion
 - Lucide React para iconos de interfaz
+- Lucide Animated y Motion para los iconos animados de navegación
+- Mantine para componentes y tema visual de la aplicacion
+- Mantine Dates para los selectores de fecha y rangos
+- Day.js para el locale en castellano de los controles de fecha
+- Mantine Notifications para toasts de exito y error
 - ESLint con las configuraciones de TypeScript, React Hooks y React Refresh
+
+El tema de Mantine se define en `src/theme.ts`. Durante la definicion visual,
+los componentes se revisan en la ruta interna `/design-system`; no forma parte
+de las pantallas de producto.
 
 ## Instalación
 

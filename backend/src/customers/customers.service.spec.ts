@@ -74,6 +74,35 @@ describe("CustomersService", () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  it("checks business access before applying customer list filters", async () => {
+    repositoryMock.canAccessBusiness.mockResolvedValue(true);
+    const paginatedCustomers = {
+      data: [],
+      pagination: { limit: 25, offset: 0, total: 0 },
+    };
+    repositoryMock.listByBusiness.mockResolvedValue(paginatedCustomers);
+    const filters = {
+      q: "ada",
+      sortBy: "lastName" as const,
+      sortDirection: "asc" as const,
+      limit: 25,
+      offset: 0,
+    };
+
+    await expect(
+      service.list(customer.business_id, filters, "employee-id"),
+    ).resolves.toBe(paginatedCustomers);
+
+    expect(repositoryMock.canAccessBusiness).toHaveBeenCalledWith(
+      "employee-id",
+      customer.business_id,
+    );
+    expect(repositoryMock.listByBusiness).toHaveBeenCalledWith(
+      customer.business_id,
+      filters,
+    );
+  });
+
   it("anonymizes instead of physically deleting a customer", async () => {
     repositoryMock.canManageBusiness.mockResolvedValue(true);
     repositoryMock.findById.mockResolvedValue(customer);

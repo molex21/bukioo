@@ -831,7 +831,7 @@ Sus sesiones de refresh se almacenan de forma independiente en
 `customer_sessions`.
 
 ```text
-GET    /api/v1/businesses/<businessId>/customers
+GET    /api/v1/businesses/<businessId>/customers?q=<texto>&sortBy=<firstName|lastName|email|phone|createdAt>&sortDirection=<asc|desc>&limit=<10|25|50|100>&offset=<numero>
 POST   /api/v1/businesses/<businessId>/customers
 GET    /api/v1/businesses/<businessId>/customers/<customerId>
 PATCH  /api/v1/businesses/<businessId>/customers/<customerId>

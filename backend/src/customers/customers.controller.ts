@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from "@nestjs/common";
 import { AuthorizeScope } from "../auth/authorization-scope.decorator";
@@ -18,6 +19,7 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { CustomersService } from "./customers.service";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
+import { ListCustomersDto } from "./dto/list-customers.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 
 @Controller("businesses/:businessId/customers")
@@ -39,9 +41,10 @@ export class CustomersController {
   @Get()
   list(
     @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Query() filters: ListCustomersDto,
     @CurrentUser() userId: string,
   ) {
-    return this.customersService.list(businessId, userId);
+    return this.customersService.list(businessId, filters, userId);
   }
 
   @Get(":customerId")

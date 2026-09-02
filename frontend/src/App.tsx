@@ -1,6 +1,7 @@
 import { CalendarDays, LayoutDashboard, ShieldCheck, Store } from "lucide-react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import "./App.css";
+import { DesignSystemPage } from "./pages/DesignSystemPage";
 
 type PlaceholderPageProps = {
   icon: typeof CalendarDays;
@@ -41,6 +42,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate replace to="/login" />} />
+        <Route path="/design-system" element={<DesignSystemPage />} />
         <Route path="/login" element={<PlaceholderPage icon={ShieldCheck} eyebrow="Acceso staff" title="Bienvenido a BUKIOO" description="Aqui construiremos el acceso seguro para el equipo del negocio." />} />
         <Route path="/app/*" element={<PlaceholderPage icon={LayoutDashboard} eyebrow="Panel interno" title="Gestiona tu negocio" description="La agenda, los clientes y la configuracion viviran en este espacio." />} />
         <Route path="/book/:organizationSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Este sera el flujo publico de reserva para cada negocio." />} />

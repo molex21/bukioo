@@ -49,11 +49,16 @@ el estado real del repositorio y de la API.
 - [x] Definir colores, tipografia, iconografia, espaciados y sombras.
 - [x] Definir escala reutilizable de radios, bordes, elevacion, tamaños de
       control, estados y espaciado.
-- [ ] Crear componentes base: boton, campo, select, textarea y checkbox.
-- [ ] Crear modal, menu, tabs, badge y tooltip.
-- [ ] Crear tabla, paginacion, skeleton, empty state, toast y alertas.
+- [x] Configurar Mantine y sus componentes base: boton, campo, select,
+      textarea y checkbox.
+- [x] Crear modal, menu, tabs, badge y tooltip.
+- [x] Crear badge reutilizable.
+- [x] Crear alertas reutilizables.
+- [x] Crear tabla, paginacion, skeleton, empty state y toast.
+- [x] Crear DataTable visual con busqueda, filtros, orden y estado vacio.
 - [ ] Asegurar foco visible, teclado, labels y mensajes de error accesibles.
 - [ ] Definir comportamiento responsive para movil, tablet y escritorio.
+- [x] Crear laboratorio interno `/design-system` para validar componentes.
 
 ## Bloque 1 — Acceso staff
 

@@ -169,7 +169,7 @@ del slug; `Public` no requiere header. Todas las rutas protegidas pueden dar
 | GET/PATCH/DELETE `/businesses/:businessId/employees/:employeeId` | Auth; PATCH Employee | Detalle/edicion/borrado `204`; DELETE solo sin referencias. |
 | POST `/businesses/:businessId/employees/:employeeId/invite` | OWNER/ADMIN | Reenvia invitacion. |
 | POST `/businesses/:businessId/employees/:employeeId/2fa/reset` | OWNER/ADMIN | Revoca 2FA/sesiones del empleado. |
-| POST/GET `/businesses/:businessId/customers` | OWNER/ADMIN para POST; Customer | Crear/listar clientes. |
+| POST/GET `/businesses/:businessId/customers` | OWNER/ADMIN para POST; GET acepta `q,sortBy,sortDirection,limit,offset` | Crea clientes o lista paginada `{data,pagination}`. `q` busca nombre, apellido, email y telefono sin mayusculas. `sortBy`: `firstName,lastName,email,phone,createdAt`; `sortDirection`: `asc,desc`; `limit`: `10,25,50,100` (25 por defecto); `offset >= 0`. Orden estable con `id ASC`. |
 | GET/PATCH/DELETE `/businesses/:businessId/customers/:customerId` | Auth; PATCH Customer | Detalle, actualizar o anonimizar/eliminar segun referencias. |
 | POST/GET `/businesses/:businessId/service-categories` | OWNER/ADMIN para POST; category | Crear/listar categorias. |
 | PATCH/DELETE `/businesses/:businessId/service-categories/:categoryId` | OWNER/ADMIN | Editar/eliminar `204`; `409` si tiene servicios. |
@@ -231,10 +231,16 @@ persisten y se pueden consultar; el proveedor de email puede estar desactivado
 con `EMAIL_DELIVERY_ENABLED=false`, en cuyo caso no sale correo pero el flujo
 no falla. No hay webhook saliente ni endpoint de webhook entrante.
 
-Los listados que exponen paginacion usan `limit` por defecto 50, maximo 100 y
-`offset` desde 0. Informes y disponibilidad exigen `from < to`; disponibilidad
-limita rango a 31 dias. Las descargas de informe no se paginan: frontend debe
-restringir rangos grandes.
+Los listados que exponen paginacion usan `offset` desde 0. Salvo que la ruta
+indique otra cosa, `limit` tiene por defecto 50 y maximo 100. El listado de
+clientes admite solo `10`, `25`, `50` o `100`, con 25 por defecto. Informes y
+disponibilidad exigen `from < to`; disponibilidad limita rango a 31 dias. Las
+descargas de informe no se paginan: frontend debe restringir rangos grandes.
+
+El listado de clientes usa un indice parcial por negocio/nombre y `pg_trgm`
+para la busqueda parcial sobre nombre, apellidos, email y telefono. Antes de
+anadir nuevos indices de ordenacion, medir las consultas reales con `EXPLAIN
+ANALYZE`.
 
 ## Tecnologias aplicadas
 
@@ -242,4 +248,5 @@ NestJS 11, TypeScript 5, Express, PostgreSQL y SQL directo con `pg`; dbmate
 para migraciones; JWT y Argon2id; `otplib` para TOTP cifrado AES-256-GCM;
 `nestjs-pino`/Pino para logs JSON con redaccion; Helmet, CORS y throttling;
 pg-boss para jobs; Resend para email; ExcelJS para XLSX; Jest/Supertest para
-unitarias e integracion. Frontend: React, TypeScript y Vite.
+unitarias e integracion. Frontend: React, TypeScript, Vite, Mantine y Lucide
+React.

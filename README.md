@@ -4,7 +4,7 @@ BUKIOO es un SaaS multiempresa para la gestión de citas, reservas, clientes y n
 
 ## Arquitectura
 
-El repositorio contiene una aplicación React que consume una API REST de NestJS. PostgreSQL se ejecuta como servicio mediante Docker Compose.
+El repositorio contiene una aplicación React con Vite y Mantine que consume una API REST de NestJS. PostgreSQL se ejecuta como servicio mediante Docker Compose.
 
 ```text
 Frontend (React + Vite) -> API REST (NestJS) -> PostgreSQL

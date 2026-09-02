@@ -4,10 +4,12 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
+import { ListCustomersDto } from "./dto/list-customers.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import {
   CustomersRepository,
   type CustomerRecord,
+  type PaginatedCustomers,
 } from "./customers.repository";
 
 @Injectable()
@@ -23,9 +25,13 @@ export class CustomersService {
     return this.customersRepository.create(businessId, this.normalize(dto));
   }
 
-  async list(businessId: string, userId: string): Promise<CustomerRecord[]> {
+  async list(
+    businessId: string,
+    filters: ListCustomersDto,
+    userId: string,
+  ): Promise<PaginatedCustomers> {
     await this.assertCanAccess(userId, businessId);
-    return this.customersRepository.listByBusiness(businessId);
+    return this.customersRepository.listByBusiness(businessId, filters);
   }
 
   async get(

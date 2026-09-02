@@ -66,7 +66,7 @@
         { "name": "Create service", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"name\":\"Corte\",\"categoryId\":\"{{categoryId}}\",\"durationMinutes\":60,\"price\":\"25.00\",\"autoConfirmAppointments\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/services" } },
         { "name": "List services", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/services" } },
         { "name": "Create customer", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"firstName\":\"Lucia\",\"email\":\"lucia@example.com\",\"phone\":\"600000001\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/customers" } },
-        { "name": "List customers", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/customers" } },
+        { "name": "List customers", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/customers?q=lucia&sortBy=lastName&sortDirection=asc&limit=25&offset=0" } },
         { "name": "Working hours", "request": { "method": "PUT", "body": { "mode": "raw", "raw": "{\"items\":[{\"dayOfWeek\":1,\"startTime\":\"09:00\",\"endTime\":\"18:00\"}]}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/working-hours" } },
         { "name": "Availability", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/availability?employeeId={{employeeId}}&serviceId={{serviceId}}&from={{from}}&to={{to}}" } }
       ]

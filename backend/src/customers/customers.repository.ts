@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { DatabaseService } from "../database/database.service";
 import type { CreateCustomerDto } from "./dto/create-customer.dto";
 import type { UpdateCustomerDto } from "./dto/update-customer.dto";
+import type { ListCustomersDto } from "./dto/list-customers.dto";
 
 export interface CustomerRecord {
   id: string;
@@ -19,6 +20,31 @@ export interface CustomerRecord {
   updated_at: Date;
   anonymized_at: Date | null;
 }
+
+export interface ListedCustomer {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string;
+  phone: string;
+}
+
+export interface PaginatedCustomers {
+  data: ListedCustomer[];
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+  };
+}
+
+const customerSortColumns = {
+  firstName: "first_name",
+  lastName: "last_name",
+  email: "email",
+  phone: "phone",
+  createdAt: "created_at",
+} as const;
 
 @Injectable()
 export class CustomersRepository {
@@ -90,15 +116,50 @@ export class CustomersRepository {
     return result.rows[0];
   }
 
-  async listByBusiness(businessId: string): Promise<CustomerRecord[]> {
-    const result = await this.databaseService.query<CustomerRecord>(
-      `SELECT id, organization_id, business_id, user_id, first_name, last_name,
-        email, phone, notes, points_balance, created_at, updated_at, anonymized_at
-      FROM customers WHERE business_id = $1 AND anonymized_at IS NULL
-      ORDER BY first_name ASC, last_name ASC, created_at ASC`,
-      [businessId],
-    );
-    return result.rows;
+  async listByBusiness(
+    businessId: string,
+    filters: ListCustomersDto,
+  ): Promise<PaginatedCustomers> {
+    const values: unknown[] = [businessId];
+    const conditions = ["business_id = $1", "anonymized_at IS NULL"];
+
+    if (filters.q) {
+      values.push(`%${filters.q}%`);
+      const queryParameter = `$${values.length}`;
+      conditions.push(
+        `(first_name || ' ' || COALESCE(last_name, '') || ' ' || email || ' ' || phone) ILIKE ${queryParameter}`,
+      );
+    }
+
+    const whereClause = conditions.join(" AND ");
+    const countValues = [...values];
+    const sortColumn = customerSortColumns[filters.sortBy];
+    const sortDirection = filters.sortDirection === "desc" ? "DESC" : "ASC";
+    values.push(filters.limit, filters.offset);
+
+    const [dataResult, countResult] = await Promise.all([
+      this.databaseService.query<ListedCustomer>(
+        `SELECT id, first_name AS "firstName", last_name AS "lastName", email, phone
+        FROM customers
+        WHERE ${whereClause}
+        ORDER BY ${sortColumn} ${sortDirection}, id ASC
+        LIMIT $${values.length - 1} OFFSET $${values.length}`,
+        values,
+      ),
+      this.databaseService.query<{ total: string }>(
+        `SELECT COUNT(*)::text AS total FROM customers WHERE ${whereClause}`,
+        countValues,
+      ),
+    ]);
+
+    return {
+      data: dataResult.rows,
+      pagination: {
+        limit: filters.limit,
+        offset: filters.offset,
+        total: Number(countResult.rows[0]?.total ?? 0),
+      },
+    };
   }
 
   async findById(

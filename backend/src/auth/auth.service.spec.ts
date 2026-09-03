@@ -68,6 +68,7 @@ describe("AuthService", () => {
     completeInitialPassword: jest.fn(),
     replacePasswordResetToken: jest.fn(),
     consumePasswordResetToken: jest.fn(),
+    isPasswordResetTokenValid: jest.fn(),
   };
 
   const emailProviderMock = {
@@ -80,8 +81,6 @@ describe("AuthService", () => {
     findState: jest.fn(),
     replacePendingSecret: jest.fn(),
     enable: jest.fn(),
-    findUnusedRecoveryCodes: jest.fn(),
-    consumeRecoveryCode: jest.fn(),
   };
 
   const loginProtectionRepositoryMock = {
@@ -97,6 +96,8 @@ describe("AuthService", () => {
   const user: UserRecord = {
     id: "c8fdcddd-9d7f-4ebf-b11e-a02821e2ca04",
     email: "user@example.com",
+    first_name: "Ada",
+    last_name: "Lovelace",
     password_hash: "hashed-password",
     password_change_required: false,
     email_verified_at: null,
@@ -182,14 +183,13 @@ describe("AuthService", () => {
     userTokensRepositoryMock.completeInitialPassword.mockReset();
     userTokensRepositoryMock.replacePasswordResetToken.mockReset();
     userTokensRepositoryMock.consumePasswordResetToken.mockReset();
+    userTokensRepositoryMock.isPasswordResetTokenValid.mockReset();
     emailProviderMock.sendEmailVerification.mockReset();
     emailProviderMock.sendAccountCredentials.mockReset();
     emailProviderMock.sendPasswordReset.mockReset();
     twoFactorRepositoryMock.findState.mockReset();
     twoFactorRepositoryMock.replacePendingSecret.mockReset();
     twoFactorRepositoryMock.enable.mockReset();
-    twoFactorRepositoryMock.findUnusedRecoveryCodes.mockReset();
-    twoFactorRepositoryMock.consumeRecoveryCode.mockReset();
     loginProtectionRepositoryMock.isUserLocked.mockReset();
     loginProtectionRepositoryMock.recordUserFailure.mockReset();
     loginProtectionRepositoryMock.clearUserFailures.mockReset();
@@ -305,6 +305,8 @@ describe("AuthService", () => {
         organizationId: "organization-id",
         businessId: "business-id",
         employeeId: "employee-id",
+        firstName: "Ada",
+        lastName: "Lovelace",
       }),
     ).resolves.toEqual({ id: "employee-id", user_id: user.id });
 
@@ -399,6 +401,8 @@ describe("AuthService", () => {
       service.onboard(
         {
           email: "  OWNER@EXAMPLE.COM  ",
+          firstName: " Ada ",
+          lastName: " Lovelace ",
           organizationName: " Example Company ",
           organizationSlug: "example-company",
           timezone: "Atlantic/Canary",
@@ -431,6 +435,8 @@ describe("AuthService", () => {
 
     expect(onboardingRepositoryMock.create).toHaveBeenCalledWith({
       email: "owner@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
       passwordHash: "onboarding-password-hash",
       organizationName: "Example Company",
       organizationSlug: "example-company",
@@ -448,6 +454,8 @@ describe("AuthService", () => {
       service.onboard(
         {
           email: "any-email@example.com",
+          firstName: "Ada",
+          lastName: "Lovelace",
           organizationName: "Example Company",
           organizationSlug: "example-company",
         },
@@ -645,6 +653,33 @@ describe("AuthService", () => {
     expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
   });
 
+  it("resumes password activation without resending email after initial verification", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue({
+      ...user,
+      password_change_required: true,
+      email_verified_at: new Date("2026-09-03T10:00:00.000Z"),
+    });
+    jest.mocked(argon2.verify).mockResolvedValue(true);
+    jwtServiceMock.signAsync.mockResolvedValue("password-activation-token");
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: "a-secure-password",
+      }),
+    ).resolves.toEqual({
+      passwordChangeRequired: true,
+      passwordActivationAttemptToken: "password-activation-token",
+    });
+
+    expect(
+      userTokensRepositoryMock.replaceEmailVerificationToken,
+    ).not.toHaveBeenCalled();
+    expect(emailProviderMock.sendEmailVerification).not.toHaveBeenCalled();
+    expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
   it("verifies an initial email and creates a password-activation attempt", async () => {
     jwtServiceMock.verifyAsync.mockResolvedValue({
       sub: user.id,
@@ -820,6 +855,7 @@ describe("AuthService", () => {
       {
         id: "organization-id",
         name: "Example Company",
+        logo_url: "https://cdn.example.com/organization-logo.png",
         role: "OWNER",
       },
     ]);
@@ -829,6 +865,7 @@ describe("AuthService", () => {
         organization_id: "organization-id",
         name: "Example Location",
         slug: "example-location",
+        logo_url: "https://cdn.example.com/business-logo.png",
         status: "ACTIVE",
       },
     ]);
@@ -836,6 +873,8 @@ describe("AuthService", () => {
     await expect(service.me(user.id)).resolves.toEqual({
       id: user.id,
       email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
       emailVerified: true,
       preferredLocale: user.preferred_locale,
       isSuperadmin: false,
@@ -845,12 +884,14 @@ describe("AuthService", () => {
         {
           id: "organization-id",
           name: "Example Company",
+          logoUrl: "https://cdn.example.com/organization-logo.png",
           role: "OWNER",
           businesses: [
             {
               id: "business-id",
               name: "Example Location",
               slug: "example-location",
+              logoUrl: "https://cdn.example.com/business-logo.png",
               status: "ACTIVE",
             },
           ],
@@ -942,6 +983,7 @@ describe("AuthService", () => {
 
   it("sends a hashed six-digit password-reset code for an active user", async () => {
     usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    usersRepositoryMock.findById.mockResolvedValue(user);
     userTokensRepositoryMock.replacePasswordResetToken.mockResolvedValue(
       undefined,
     );
@@ -955,6 +997,25 @@ describe("AuthService", () => {
       userTokensRepositoryMock.replacePasswordResetToken,
     ).toHaveBeenCalledTimes(1);
     expect(emailProviderMock.sendPasswordReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces the pending password-reset code for an active user ID", async () => {
+    usersRepositoryMock.findById.mockResolvedValue(user);
+    userTokensRepositoryMock.replacePasswordResetToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendPasswordReset.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestPasswordResetForUser(user.id),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replacePasswordResetToken,
+    ).toHaveBeenCalledWith(expect.objectContaining({ userId: user.id }));
+    expect(emailProviderMock.sendPasswordReset).toHaveBeenCalledWith(
+      expect.objectContaining({ email: user.email }),
+    );
   });
 
   it("does not disclose whether a password-reset email exists", async () => {
@@ -995,6 +1056,29 @@ describe("AuthService", () => {
         token: "000000",
         password: "new-secure-password",
       }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("verifies a valid password-reset code without consuming it", async () => {
+    userTokensRepositoryMock.isPasswordResetTokenValid.mockResolvedValue(true);
+
+    await expect(
+      service.verifyPasswordResetCode({ token: "123456" }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.isPasswordResetTokenValid,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      userTokensRepositoryMock.consumePasswordResetToken,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid password-reset code before changing the password", async () => {
+    userTokensRepositoryMock.isPasswordResetTokenValid.mockResolvedValue(false);
+
+    await expect(
+      service.verifyPasswordResetCode({ token: "000000" }),
     ).rejects.toMatchObject({ status: 400 });
   });
 });

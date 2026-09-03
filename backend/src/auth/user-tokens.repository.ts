@@ -166,6 +166,23 @@ export class UserTokensRepository {
     });
   }
 
+  async isPasswordResetTokenValid(tokenHash: string): Promise<boolean> {
+    const result = await this.databaseService.query(
+      `SELECT 1
+      FROM user_tokens
+      INNER JOIN users ON users.id = user_tokens.user_id
+      WHERE user_tokens.type = $1
+        AND user_tokens.token_hash = $2
+        AND user_tokens.used_at IS NULL
+        AND user_tokens.expires_at > NOW()
+        AND users.status = 'ACTIVE'
+      LIMIT 1`,
+      [PASSWORD_RESET_TOKEN_TYPE, tokenHash],
+    );
+
+    return (result.rowCount ?? 0) === 1;
+  }
+
   async verifyInitialEmail(input: VerifyInitialEmailInput): Promise<boolean> {
     return this.databaseService.transaction(async (client) => {
       const tokenResult = await client.query<EmailVerificationTokenRecord>(

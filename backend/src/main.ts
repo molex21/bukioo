@@ -59,7 +59,6 @@ function markPublicSwaggerOperations(paths: PathsObject): void {
     "post /api/v1/auth/password/forgot",
     "post /api/v1/auth/password/reset",
     "post /api/v1/auth/2fa/verify",
-    "post /api/v1/auth/2fa/recovery",
     "post /api/v1/auth/activate/verify",
     "post /api/v1/auth/activate/password",
     "post /api/v1/appointments/reschedule-proposals/accept",

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { AuthService } from "../auth/auth.service";
+import { AuditService } from "../audit/audit.service";
 import { TwoFactorRepository } from "../auth/two-factor.repository";
 import { EmployeesRepository } from "./employees.repository";
 import { EmployeesService } from "./employees.service";
@@ -20,10 +21,12 @@ describe("EmployeesService", () => {
   const authServiceMock = {
     inviteEmployee: jest.fn(),
     inviteExistingEmployee: jest.fn(),
+    requestPasswordResetForUser: jest.fn(),
   };
   const twoFactorRepositoryMock = {
     reset: jest.fn(),
   };
+  const auditServiceMock = { record: jest.fn() };
 
   const employee = {
     id: "11111111-1111-4111-8111-111111111111",
@@ -49,6 +52,7 @@ describe("EmployeesService", () => {
         { provide: EmployeesRepository, useValue: repositoryMock },
         { provide: AuthService, useValue: authServiceMock },
         { provide: TwoFactorRepository, useValue: twoFactorRepositoryMock },
+        { provide: AuditService, useValue: auditServiceMock },
       ],
     }).compile();
 
@@ -59,7 +63,9 @@ describe("EmployeesService", () => {
     Object.values(repositoryMock).forEach((mock) => mock.mockReset());
     authServiceMock.inviteEmployee.mockReset();
     authServiceMock.inviteExistingEmployee.mockReset();
+    authServiceMock.requestPasswordResetForUser.mockReset();
     twoFactorRepositoryMock.reset.mockReset();
+    auditServiceMock.record.mockReset();
   });
 
   it("creates an employee only for a business the actor manages", async () => {
@@ -163,6 +169,63 @@ describe("EmployeesService", () => {
     expect(twoFactorRepositoryMock.reset).toHaveBeenCalledWith("user-id");
   });
 
+  it("sends a password reset for an active employee account and audits it", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findActiveById.mockResolvedValue({
+      ...employee,
+      user_id: "user-id",
+    });
+    authServiceMock.requestPasswordResetForUser.mockResolvedValue(undefined);
+    auditServiceMock.record.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestPasswordReset(
+        employee.business_id,
+        employee.id,
+        "actor-id",
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(authServiceMock.requestPasswordResetForUser).toHaveBeenCalledWith(
+      "user-id",
+    );
+    expect(auditServiceMock.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "actor-id",
+        businessId: employee.business_id,
+        entityId: employee.id,
+        action: "EMPLOYEE_PASSWORD_RESET_REQUESTED",
+      }),
+    );
+  });
+
+  it("rejects a password reset for an employee without an account", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findActiveById.mockResolvedValue(employee);
+
+    await expect(
+      service.requestPasswordReset(
+        employee.business_id,
+        employee.id,
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(authServiceMock.requestPasswordResetForUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a password reset when the actor cannot manage the business", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(false);
+
+    await expect(
+      service.requestPasswordReset(
+        employee.business_id,
+        employee.id,
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
   it("invites an existing employee without a user account", async () => {
     repositoryMock.canManageBusiness.mockResolvedValue(true);
     repositoryMock.findActiveById.mockResolvedValue(employee);
@@ -180,6 +243,8 @@ describe("EmployeesService", () => {
       organizationId: employee.organization_id,
       businessId: employee.business_id,
       employeeId: employee.id,
+      firstName: employee.first_name,
+      lastName: employee.last_name,
     });
   });
 

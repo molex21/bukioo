@@ -32,8 +32,8 @@ import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { SetInitialPasswordDto } from "./dto/set-initial-password.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
-import { UseRecoveryCodeDto } from "./dto/use-recovery-code.dto";
 import { EmailProvider } from "./email.provider";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { OnboardingRepository } from "./onboarding.repository";
@@ -88,6 +88,8 @@ export interface InviteExistingEmployeeInput {
   organizationId: string;
   businessId: string;
   employeeId: string;
+  firstName: string;
+  lastName: string;
 }
 
 const EMAIL_VERIFICATION_TOKEN_EXPIRES_IN_SECONDS = 10 * 60;
@@ -235,6 +237,8 @@ export class AuthService {
           organizationId: input.organizationId,
           businessId: input.businessId,
           employeeId: input.employeeId,
+          firstName: input.firstName,
+          lastName: input.lastName,
         });
 
       await this.emailProvider.sendAccountCredentials({
@@ -298,6 +302,8 @@ export class AuthService {
     try {
       const onboarding = await this.onboardingRepository.create({
         email,
+        firstName: onboardDto.firstName.trim(),
+        lastName: onboardDto.lastName.trim(),
         passwordHash,
         organizationName: onboardDto.organizationName.trim(),
         organizationSlug: onboardDto.organizationSlug.trim().toLowerCase(),
@@ -349,6 +355,14 @@ export class AuthService {
     const user = await this.validateCredentials(loginDto);
 
     if (user.password_change_required) {
+      if (user.email_verified_at !== null) {
+        return {
+          passwordChangeRequired: true,
+          passwordActivationAttemptToken:
+            await this.createPasswordActivationAttemptToken(user.id),
+        };
+      }
+
       await this.requestEmailVerification({ email: user.email });
       return {
         emailVerificationRequired: true,
@@ -403,12 +417,9 @@ export class AuthService {
     userId: string,
     verifyTwoFactorDto: VerifyTwoFactorDto,
   ) {
-    const recoveryCodes = await this.enableTwoFactorForUser(
-      userId,
-      verifyTwoFactorDto.code,
-    );
+    await this.enableTwoFactorForUser(userId, verifyTwoFactorDto.code);
 
-    return { recoveryCodes };
+    return { twoFactorEnabled: true };
   }
 
   async verifyTwoFactor(
@@ -441,54 +452,6 @@ export class AuthService {
     }
 
     return this.createSession(user, sessionMetadata);
-  }
-
-  async useRecoveryCode(
-    useRecoveryCodeDto: UseRecoveryCodeDto,
-    twoFactorAttemptToken: string | undefined,
-    sessionMetadata: LoginSessionMetadata = {},
-  ) {
-    const userId = await this.verifyTwoFactorAttemptToken(
-      twoFactorAttemptToken,
-    );
-    const state = await this.twoFactorRepository.findState(userId);
-
-    if (!state?.enabled) {
-      throw new UnauthorizedException("Codigo de recuperacion invalido");
-    }
-
-    const recoveryCodes =
-      await this.twoFactorRepository.findUnusedRecoveryCodes(userId);
-    const normalizedCode = useRecoveryCodeDto.code.toUpperCase();
-
-    for (const recoveryCode of recoveryCodes) {
-      if (await argon2.verify(recoveryCode.code_hash, normalizedCode)) {
-        const consumed = await this.twoFactorRepository.consumeRecoveryCode(
-          recoveryCode.id,
-          userId,
-        );
-
-        if (!consumed) {
-          break;
-        }
-
-        const user = await this.usersRepository.findById(userId);
-
-        if (
-          !user ||
-          user.status !== "ACTIVE" ||
-          user.email_verified_at === null
-        ) {
-          throw new UnauthorizedException(
-            "No se pudo completar la autenticacion",
-          );
-        }
-
-        return this.createSession(user, sessionMetadata);
-      }
-    }
-
-    throw new UnauthorizedException("Codigo de recuperacion invalido");
   }
 
   async verifyInitialEmail(
@@ -667,6 +630,8 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
+      firstName: user.first_name,
+      lastName: user.last_name,
       emailVerified: user.email_verified_at !== null,
       preferredLocale: user.preferred_locale,
       isSuperadmin: user.is_superadmin,
@@ -675,6 +640,7 @@ export class AuthService {
       organizations: organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
+        logoUrl: organization.logo_url,
         role: organization.role,
         businesses: businesses
           .filter((business) => business.organization_id === organization.id)
@@ -682,6 +648,7 @@ export class AuthService {
             id: business.id,
             name: business.name,
             slug: business.slug,
+            logoUrl: business.logo_url,
             status: business.status,
           })),
       })),
@@ -737,6 +704,16 @@ export class AuthService {
       return;
     }
 
+    await this.requestPasswordResetForUser(user.id);
+  }
+
+  async requestPasswordResetForUser(userId: string): Promise<void> {
+    const user = await this.usersRepository.findById(userId);
+
+    if (!user || user.status !== "ACTIVE") {
+      throw new ConflictException("La cuenta de usuario no esta activa");
+    }
+
     const token = randomInt(0, 1_000_000).toString().padStart(6, "0");
     await this.userTokensRepository.replacePasswordResetToken({
       userId: user.id,
@@ -760,6 +737,20 @@ export class AuthService {
     if (!reset) {
       throw new BadRequestException(
         "Codigo de recuperacion invalido o caducado",
+      );
+    }
+  }
+
+  async verifyPasswordResetCode(
+    verifyPasswordResetDto: VerifyPasswordResetDto,
+  ): Promise<void> {
+    const valid = await this.userTokensRepository.isPasswordResetTokenValid(
+      this.hashToken(verifyPasswordResetDto.token),
+    );
+
+    if (!valid) {
+      throw new BadRequestException(
+        "Código de recuperación inválido o caducado",
       );
     }
   }
@@ -795,7 +786,7 @@ export class AuthService {
   private async enableTwoFactorForUser(
     userId: string,
     code: string,
-  ): Promise<string[]> {
+  ): Promise<void> {
     const state = await this.twoFactorRepository.findState(userId);
 
     if (!state?.secret_encrypted || state.enabled) {
@@ -813,17 +804,7 @@ export class AuthService {
       throw new BadRequestException("Codigo TOTP invalido");
     }
 
-    const recoveryCodes = Array.from({ length: 8 }, () =>
-      this.createRecoveryCode(),
-    );
-    const recoveryCodeHashes = await Promise.all(
-      recoveryCodes.map((recoveryCode) =>
-        argon2.hash(recoveryCode, { type: argon2.argon2id }),
-      ),
-    );
-    await this.twoFactorRepository.enable(userId, recoveryCodeHashes);
-
-    return recoveryCodes;
+    await this.twoFactorRepository.enable(userId);
   }
 
   private async createTwoFactorAttemptToken(userId: string): Promise<string> {
@@ -926,14 +907,6 @@ export class AuthService {
     return createHash("sha256")
       .update(this.configService.getOrThrow<string>("TOTP_ENCRYPTION_KEY"))
       .digest();
-  }
-
-  private createRecoveryCode(): string {
-    return randomBytes(6)
-      .toString("hex")
-      .toUpperCase()
-      .match(/.{1,4}/g)!
-      .join("-");
   }
 
   private hashToken(token: string): string {

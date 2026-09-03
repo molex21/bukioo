@@ -3,6 +3,7 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   MaxLength,
   MinLength,
@@ -40,4 +41,9 @@ export class UpdateBusinessDto {
   @IsOptional()
   @IsIn(["ACTIVE", "SUSPENDED"])
   status?: "ACTIVE" | "SUSPENDED";
+
+  @IsOptional()
+  @IsUrl({ protocols: ["http", "https"], require_protocol: true })
+  @MaxLength(2048)
+  logoUrl?: string | null;
 }

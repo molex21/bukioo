@@ -20,6 +20,26 @@ El tema de Mantine se define en `src/theme.ts`. Durante la definicion visual,
 los componentes se revisan en la ruta interna `/design-system`; no forma parte
 de las pantallas de producto.
 
+## Rutas de acceso
+
+- `/platform/access`: acceso interno a la plataforma. Tras iniciar sesión se
+  comprueba que la cuenta sea superadmin.
+- `/:organizationSlug/staff/login`: acceso del equipo de una organización.
+- `/:organizationSlug/login`: acceso de clientes de una organización. La vista
+  ya está diferenciada y se conectará al flujo customer en el siguiente bloque.
+
+No existe una ruta genérica `/login`.
+
+El dashboard de `/platform` consulta las métricas reales de
+`/superadmin/dashboard`. Las rutas de Organizaciones y Planes ya están
+disponibles en su navegación y se desarrollarán en los siguientes bloques.
+
+La sesión staff conserva el access token únicamente en memoria. Al cargar la
+aplicación intenta restaurarla con la cookie HttpOnly mediante `/auth/refresh`.
+Las llamadas protegidas añaden el header Bearer y, ante un único `401`, renuevan
+el token y repiten la petición. Las rutas `/app` y `/platform` requieren sesión;
+la segunda también exige una cuenta superadmin.
+
 ## Instalación
 
 Desde este directorio:
@@ -62,4 +82,4 @@ El archivo [`.env.example`](.env.example) incluye:
 | --- | --- |
 | `VITE_API_URL` | `http://localhost:3000` |
 
-Puedes copiarlo a `.env` para configurar valores locales. Actualmente el código del frontend no lee `VITE_API_URL`, por lo que esa variable no cambia el comportamiento de la aplicación todavía.
+Puedes copiarlo a `.env` para configurar valores locales. El cliente HTTP usa `VITE_API_URL` como origen de la API y añade `/api/v1` si no está incluido. El acceso staff usa cookies HttpOnly para refresh y conserva el access token solo en memoria.

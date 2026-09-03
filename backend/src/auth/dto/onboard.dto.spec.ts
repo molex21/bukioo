@@ -6,6 +6,8 @@ describe("OnboardDto", () => {
   it("accepts onboarding without employee organization or business IDs", async () => {
     const dto = plainToInstance(OnboardDto, {
       email: "owner@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
       organizationName: "Example Company",
       organizationSlug: "example-company",
       timezone: "Atlantic/Canary",
@@ -17,6 +19,8 @@ describe("OnboardDto", () => {
   it("rejects an invalid organization slug", async () => {
     const dto = plainToInstance(OnboardDto, {
       email: "owner@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
       organizationName: "Example Company",
       organizationSlug: "Example Company",
     });

@@ -16,6 +16,7 @@ import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
+import { Throttle } from "@nestjs/throttler";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
 import { EmployeesService } from "./employees.service";
@@ -91,6 +92,23 @@ export class EmployeesController {
     @CurrentUser() userId: string,
   ): Promise<void> {
     await this.employeesService.resetTwoFactor(businessId, employeeId, userId);
+  }
+
+  @Post(":employeeId/password-reset")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Roles("OWNER", "ADMIN")
+  @AuthorizeScope({ resource: "business", source: "params", key: "businessId" })
+  async requestPasswordReset(
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Param("employeeId", ParseUUIDPipe) employeeId: string,
+    @CurrentUser() userId: string,
+  ): Promise<void> {
+    await this.employeesService.requestPasswordReset(
+      businessId,
+      employeeId,
+      userId,
+    );
   }
 
   @Delete(":employeeId")

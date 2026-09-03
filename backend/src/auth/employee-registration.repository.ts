@@ -42,6 +42,8 @@ export interface EmployeeInviteRecord {
 
 export interface InviteExistingEmployeeInput {
   email: string;
+  firstName: string;
+  lastName: string;
   passwordHash: string;
   organizationId: string;
   businessId: string;
@@ -83,7 +85,7 @@ export class EmployeeRegistrationRepository {
       const userResult = await client.query<UserRecord>(
         `INSERT INTO users (email, password_hash, password_change_required)
         VALUES ($1, $2, TRUE)
-        RETURNING id, email, password_hash, password_change_required,
+        RETURNING id, email, first_name, last_name, password_hash, password_change_required,
           email_verified_at, preferred_locale, is_superadmin, status,
           created_at, updated_at`,
         [input.email, input.passwordHash],
@@ -111,12 +113,18 @@ export class EmployeeRegistrationRepository {
   ): Promise<{ user: UserRecord; employee: EmployeeInviteRecord }> {
     return this.databaseService.transaction(async (client) => {
       const userResult = await client.query<UserRecord>(
-        `INSERT INTO users (email, password_hash, password_change_required)
-        VALUES ($1, $2, TRUE)
-        RETURNING id, email, password_hash, password_change_required,
+        `INSERT INTO users
+          (email, first_name, last_name, password_hash, password_change_required)
+        VALUES ($1, $2, $3, $4, TRUE)
+        RETURNING id, email, first_name, last_name, password_hash, password_change_required,
           email_verified_at, preferred_locale, is_superadmin, status,
           created_at, updated_at`,
-        [input.email, input.passwordHash],
+        [
+          input.email,
+          input.employee.firstName,
+          input.employee.lastName,
+          input.passwordHash,
+        ],
       );
       const user = userResult.rows[0];
 
@@ -159,12 +167,13 @@ export class EmployeeRegistrationRepository {
   ): Promise<EmployeeInviteRecord> {
     return this.databaseService.transaction(async (client) => {
       const userResult = await client.query<UserRecord>(
-        `INSERT INTO users (email, password_hash, password_change_required)
-        VALUES ($1, $2, TRUE)
-        RETURNING id, email, password_hash, password_change_required,
+        `INSERT INTO users
+          (email, first_name, last_name, password_hash, password_change_required)
+        VALUES ($1, $2, $3, $4, TRUE)
+        RETURNING id, email, first_name, last_name, password_hash, password_change_required,
           email_verified_at, preferred_locale, is_superadmin, status,
           created_at, updated_at`,
-        [input.email, input.passwordHash],
+        [input.email, input.firstName, input.lastName, input.passwordHash],
       );
       const user = userResult.rows[0];
 

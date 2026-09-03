@@ -7,6 +7,7 @@ import { Notifications } from "@mantine/notifications";
 import "dayjs/locale/es";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { AuthProvider } from "./auth/AuthProvider";
 import "./index.css";
 import App from "./App.tsx";
 import { bukiooTheme } from "./theme";
@@ -16,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
     <MantineProvider theme={bukiooTheme}>
       <DatesProvider settings={{ firstDayOfWeek: 1, locale: "es" }}>
         <Notifications autoClose={15000} position="top-right" />
-        <App />
+        <AuthProvider><App /></AuthProvider>
       </DatesProvider>
     </MantineProvider>
   </StrictMode>,

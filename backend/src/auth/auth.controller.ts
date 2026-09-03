@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Headers,
+  Header,
   HttpCode,
   HttpStatus,
   Ip,
@@ -32,8 +33,8 @@ import { VerifyEmailDto } from "./dto/verify-email.dto";
 import { SetInitialPasswordDto } from "./dto/set-initial-password.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
-import { UseRecoveryCodeDto } from "./dto/use-recovery-code.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import type { AuthenticatedRequest } from "./jwt-auth.guard";
 
@@ -87,6 +88,18 @@ export class AuthController {
     }
 
     if (
+      "passwordActivationAttemptToken" in loginResult &&
+      loginResult.passwordActivationAttemptToken
+    ) {
+      this.setPasswordActivationAttemptCookie(
+        response,
+        loginResult.passwordActivationAttemptToken,
+      );
+      response.status(HttpStatus.ACCEPTED);
+      return { passwordChangeRequired: true };
+    }
+
+    if (
       "twoFactorAttemptToken" in loginResult &&
       loginResult.twoFactorAttemptToken
     ) {
@@ -136,6 +149,7 @@ export class AuthController {
   }
 
   @Get("me")
+  @Header("Cache-Control", "no-store")
   @UseGuards(JwtAuthGuard)
   me(@Req() request: AuthenticatedRequest) {
     return this.authService.me(request.userId!);
@@ -174,6 +188,16 @@ export class AuthController {
     return { passwordReset: true };
   }
 
+  @Post("password/reset/verify")
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async verifyPasswordResetCode(
+    @Body() verifyPasswordResetDto: VerifyPasswordResetDto,
+  ) {
+    await this.authService.verifyPasswordResetCode(verifyPasswordResetDto);
+    return { codeVerified: true };
+  }
+
   @Post("2fa/setup")
   @UseGuards(JwtAuthGuard)
   setupTwoFactor(@Req() request: AuthenticatedRequest) {
@@ -205,29 +229,6 @@ export class AuthController {
     const { refreshToken, ...loginResponse } =
       await this.authService.verifyTwoFactor(
         verifyTwoFactorDto,
-        this.getCookie(cookieHeader, TWO_FACTOR_ATTEMPT_COOKIE_NAME),
-        { userAgent, ipAddress },
-      );
-
-    this.setRefreshTokenCookie(response, refreshToken);
-    this.clearTwoFactorAttemptCookie(response);
-
-    return loginResponse;
-  }
-
-  @Post("2fa/recovery")
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async useRecoveryCode(
-    @Body() useRecoveryCodeDto: UseRecoveryCodeDto,
-    @Headers("cookie") cookieHeader: string | undefined,
-    @Headers("user-agent") userAgent: string | undefined,
-    @Ip() ipAddress: string,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const { refreshToken, ...loginResponse } =
-      await this.authService.useRecoveryCode(
-        useRecoveryCodeDto,
         this.getCookie(cookieHeader, TWO_FACTOR_ATTEMPT_COOKIE_NAME),
         { userAgent, ipAddress },
       );

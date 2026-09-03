@@ -24,6 +24,7 @@ describe("BusinessesService", () => {
     email: null,
     phone: null,
     timezone: "Atlantic/Canary",
+    logo_url: null,
     status: "ACTIVE" as const,
     created_at: new Date("2026-08-25T10:00:00.000Z"),
     updated_at: new Date("2026-08-25T10:00:00.000Z"),
@@ -54,6 +55,7 @@ describe("BusinessesService", () => {
           organizationId: business.organization_id,
           name: " Example Company ",
           slug: "Example-Company",
+          logoUrl: " https://cdn.example.com/logo.png ",
         },
         "actor-id",
       ),
@@ -63,6 +65,7 @@ describe("BusinessesService", () => {
       expect.objectContaining({
         name: "Example Company",
         slug: "example-company",
+        logoUrl: "https://cdn.example.com/logo.png",
       }),
       "actor-id",
     );

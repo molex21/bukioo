@@ -11,6 +11,7 @@ export interface BusinessRecord {
   email: string | null;
   phone: string | null;
   timezone: string;
+  logo_url: string | null;
   status: "ACTIVE" | "SUSPENDED";
   created_at: Date;
   updated_at: Date;
@@ -48,10 +49,10 @@ export class BusinessesRepository {
     return this.databaseService.transaction(async (client) => {
       const result = await client.query<BusinessRecord>(
         `INSERT INTO businesses
-          (organization_id, name, slug, email, phone, timezone)
-        VALUES ($1, $2, $3, $4, $5, $6)
+          (organization_id, name, slug, email, phone, timezone, logo_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, organization_id, name, slug, email, phone, timezone,
-          status, created_at, updated_at`,
+          logo_url, status, created_at, updated_at`,
         [
           createBusinessDto.organizationId,
           createBusinessDto.name,
@@ -59,6 +60,7 @@ export class BusinessesRepository {
           createBusinessDto.email ?? null,
           createBusinessDto.phone ?? null,
           createBusinessDto.timezone ?? "UTC",
+          createBusinessDto.logoUrl ?? null,
         ],
       );
       const business = result.rows[0];
@@ -86,8 +88,8 @@ export class BusinessesRepository {
 
   async listByOrganization(organizationId: string): Promise<BusinessRecord[]> {
     const result = await this.databaseService.query<BusinessRecord>(
-      `SELECT id, organization_id, name, slug, email, phone, timezone, status,
-        created_at, updated_at
+      `SELECT id, organization_id, name, slug, email, phone, timezone, logo_url,
+        status, created_at, updated_at
       FROM businesses
       WHERE organization_id = $1
       ORDER BY created_at ASC`,
@@ -104,7 +106,8 @@ export class BusinessesRepository {
     const result = await this.databaseService.query<BusinessRecord>(
       `SELECT businesses.id, businesses.organization_id, businesses.name,
         businesses.slug, businesses.email, businesses.phone, businesses.timezone,
-        businesses.status, businesses.created_at, businesses.updated_at
+        businesses.logo_url, businesses.status, businesses.created_at,
+        businesses.updated_at
       FROM businesses
       INNER JOIN organization_memberships
         ON organization_memberships.organization_id = businesses.organization_id
@@ -128,7 +131,8 @@ export class BusinessesRepository {
     const result = await this.databaseService.query<BusinessRecord>(
       `SELECT businesses.id, businesses.organization_id, businesses.name,
         businesses.slug, businesses.email, businesses.phone, businesses.timezone,
-        businesses.status, businesses.created_at, businesses.updated_at
+        businesses.logo_url, businesses.status, businesses.created_at,
+        businesses.updated_at
       FROM businesses
       INNER JOIN organization_memberships
         ON organization_memberships.organization_id = businesses.organization_id
@@ -166,11 +170,12 @@ export class BusinessesRepository {
           phone = COALESCE($4, phone),
           timezone = COALESCE($5, timezone),
           status = COALESCE($6, status),
+          logo_url = CASE WHEN $7 THEN $8 ELSE logo_url END,
           updated_at = NOW()
-      WHERE id = $7
-        AND organization_id = $8
-      RETURNING id, organization_id, name, slug, email, phone, timezone, status,
-        created_at, updated_at`,
+      WHERE id = $9
+        AND organization_id = $10
+      RETURNING id, organization_id, name, slug, email, phone, timezone, logo_url,
+        status, created_at, updated_at`,
       [
         updateBusinessDto.name?.trim(),
         updateBusinessDto.slug?.trim().toLowerCase(),
@@ -178,6 +183,10 @@ export class BusinessesRepository {
         updateBusinessDto.phone?.trim(),
         updateBusinessDto.timezone?.trim(),
         updateBusinessDto.status,
+        Object.prototype.hasOwnProperty.call(updateBusinessDto, "logoUrl"),
+        typeof updateBusinessDto.logoUrl === "string"
+          ? updateBusinessDto.logoUrl.trim()
+          : (updateBusinessDto.logoUrl ?? null),
         business.id,
         business.organization_id,
       ],

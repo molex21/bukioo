@@ -7,6 +7,20 @@ La referencia completa de endpoints, flujos, limites y casos limite esta en
 
 API REST de **BUKIOO** desarrollada con NestJS y TypeScript.
 
+## Logos de organizacion y negocio
+
+La API guarda `logoUrl` como una URL absoluta `http` o `https`; no almacena
+archivos ni Base64 en PostgreSQL. `OWNER` y `ADMIN` actualizan el logo comun
+mediante `PATCH /organizations/:organizationId/branding` y el especifico de un
+negocio con `POST` o `PATCH /businesses`. Enviar `{"logoUrl":null}` en un
+PATCH elimina el logo. Para una seleccion de archivos desde el frontend se
+debe integrar antes un proveedor de almacenamiento de objetos.
+
+Las pantallas publicas sin sesion cargan el branding comun mediante
+`GET /public/:organizationSlug/branding`. Cuando la URL identifica una sede,
+`GET /public/:organizationSlug/businesses/:businessSlug/branding` devuelve el
+logo especifico del negocio junto al de la organizacion.
+
 Swagger esta desactivado por defecto y nunca se publica en produccion. Para
 habilitarlo solo en desarrollo local, define `SWAGGER_ENABLED=true` en tu
 `.env`; entonces estara disponible en `http://localhost:3000/api/docs` y el
@@ -624,15 +638,17 @@ Al crear un empleado, `inviteUser: true` requiere su email y crea también su
 cuenta, membresías y perfil en una transacción. Recibe por email una contraseña
 temporal de un solo uso y completa el flujo de verificación y nueva contraseña
 en su primer acceso. Si se omite o es `false`, se crea únicamente el perfil.
-`OWNER` y `ADMIN` pueden resetear una configuración TOTP perdida; el reset
-elimina los recovery codes y revoca todas las sesiones del empleado, sin revelar
-el secreto TOTP al administrador. Cada usuario decide si activa 2FA en su propia
-cuenta; la plataforma no lo impone por rol ni por empleado.
+`OWNER` y `ADMIN` pueden enviar una recuperación de contraseña a un empleado
+con cuenta activa o restablecer una configuración TOTP perdida. El reset de 2FA
+revoca todas las sesiones del empleado, sin revelar el secreto TOTP al
+administrador. Cada usuario decide si activa 2FA en su propia cuenta; la
+plataforma no lo impone por rol ni por empleado.
 
 ```text
 GET    /api/v1/businesses/<businessId>/employees
 POST   /api/v1/businesses/<businessId>/employees
 POST   /api/v1/businesses/<businessId>/employees/<employeeId>/invite
+POST   /api/v1/businesses/<businessId>/employees/<employeeId>/password-reset
 POST   /api/v1/businesses/<businessId>/employees/<employeeId>/2fa/reset
 GET    /api/v1/businesses/<businessId>/employees/<employeeId>
 PATCH  /api/v1/businesses/<businessId>/employees/<employeeId>
@@ -1000,24 +1016,25 @@ pendientes de cambiar su contrasena temporal.
 `POST /api/v1/auth/password/forgot` siempre responde `202` para no revelar si
 un email tiene cuenta. Para las cuentas activas, envia un codigo numerico de
 seis digitos, de un solo uso y con 10 minutos de validez. `POST
-/api/v1/auth/password/reset` consume ese codigo, establece la nueva contrasena
+/api/v1/auth/password/reset/verify` comprueba el codigo sin consumirlo para
+separar la verificacion del establecimiento de la contrasena. `POST
+/api/v1/auth/password/reset` consume el codigo, establece la nueva contrasena
 con Argon2id y revoca todas las sesiones activas del usuario.
 
 Las cuentas con 2FA activo, los superadmins y los `OWNER`/`ADMIN` cuando su
 organizacion activa `require_2fa_for_admins` pausan el Login y responden `202`.
 La API guarda un intento temporal en una cookie HttpOnly de 10 minutos y no
-crea una sesion hasta completar uno de estos endpoints:
+crea una sesion hasta completar este endpoint:
 
 ```text
 POST /api/v1/auth/2fa/verify
-POST /api/v1/auth/2fa/recovery
 ```
 
 Un usuario autenticado inicia la configuracion con `POST /api/v1/auth/2fa/setup`
 y la confirma con `POST /api/v1/auth/2fa/setup/verify`. El secreto TOTP se guarda
-cifrado con AES-256-GCM usando `TOTP_ENCRYPTION_KEY`; la respuesta de confirmacion
-incluye ocho recovery codes, que deben guardarse una sola vez por el usuario. En
-base de datos solo se almacenan hashes Argon2id y cada recovery code se consume al usarlo.
+cifrado con AES-256-GCM usando `TOTP_ENCRYPTION_KEY`; la respuesta de confirmación
+indica que 2FA se ha activado. Si se pierde el autenticador, un OWNER o ADMIN
+debe restablecer 2FA para que el empleado configure uno nuevo.
 
 Esto permitirá mantener aislados los datos de cada negocio.
 

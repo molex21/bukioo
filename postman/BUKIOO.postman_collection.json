@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "BUKIOO API",
-    "description": "Importa tambien BUKIOO Local. POST login guarda accessToken automaticamente; Postman conserva cookies HttpOnly para refresh.",
+    "description": "Importa tambien BUKIOO Local. POST login guarda accessToken automaticamente; Postman conserva cookies HttpOnly para refresh y activacion. Un 202 con passwordChangeRequired permite llamar directamente a Set initial password.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -29,7 +29,7 @@
         },
         { "name": "Refresh", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/auth/refresh" } },
         { "name": "Logout", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/auth/logout" } },
-        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/auth/me" } },
+        { "name": "Me", "request": { "method": "GET", "description": "Perfil de sesion, incluidos firstName y lastName.", "url": "{{baseUrl}}/auth/me" } },
         { "name": "Request email verification", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"email\":\"{{staffEmail}}\"}" }, "url": "{{baseUrl}}/auth/email/verification/request" } },
         { "name": "Verify initial email", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\"}" }, "url": "{{baseUrl}}/auth/activate/verify" } },
         { "name": "Set initial password", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"password\":\"password-de-12-caracteres\"}" }, "url": "{{baseUrl}}/auth/activate/password" } },
@@ -37,13 +37,14 @@
         { "name": "Reset password", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\",\"password\":\"password-de-12-caracteres\"}" }, "url": "{{baseUrl}}/auth/password/reset" } },
         { "name": "2FA setup", "request": { "method": "POST", "url": "{{baseUrl}}/auth/2fa/setup" } },
         { "name": "2FA setup verify", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"code\":\"123456\"}" }, "url": "{{baseUrl}}/auth/2fa/setup/verify" } },
-        { "name": "2FA login verify", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"code\":\"123456\"}" }, "url": "{{baseUrl}}/auth/2fa/verify" } },
-        { "name": "2FA recovery", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"code\":\"AAAA-BBBB-CCCC\"}" }, "url": "{{baseUrl}}/auth/2fa/recovery" } }
+        { "name": "2FA login verify", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"code\":\"123456\"}" }, "url": "{{baseUrl}}/auth/2fa/verify" } }
       ]
     },
     {
       "name": "Public and Customer Auth",
       "item": [
+        { "name": "Public organization branding", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/branding" } },
+        { "name": "Public business branding", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/businesses/{{businessSlug}}/branding" } },
         { "name": "Public services", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/services?businessId={{businessId}}" } },
         { "name": "Public employees", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/employees?businessId={{businessId}}&serviceId={{serviceId}}" } },
         { "name": "Public availability", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/availability?businessId={{businessId}}&employeeId={{employeeId}}&serviceId={{serviceId}}&from={{from}}&to={{to}}" } },
@@ -57,6 +58,7 @@
     {
       "name": "Business management",
       "item": [
+        { "name": "Update organization branding", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"logoUrl\":\"https://cdn.example.com/organization-logo.png\"}" }, "url": "{{baseUrl}}/organizations/{{organizationId}}/branding" } },
         { "name": "List businesses", "request": { "method": "GET", "url": "{{baseUrl}}/businesses?organizationId={{organizationId}}" } },
         { "name": "Get business", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}" } },
         { "name": "Create employee", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"firstName\":\"Ana\",\"lastName\":\"Diaz\",\"email\":\"ana@example.com\",\"inviteUser\":true}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees" } },
@@ -91,7 +93,7 @@
       "name": "Complete endpoint catalog",
       "description": "Rutas adicionales. Consulta API_REFERENCE.md para contratos y ejemplos de body.",
       "item": [
-        { "name": "Onboard", "request": { "method": "POST", "auth": { "type": "noauth" }, "header": [{ "key": "X-Onboarding-Secret", "value": "{{onboardingSecret}}" }], "body": { "mode": "raw", "raw": "{\"email\":\"owner@example.com\",\"organizationName\":\"Mi empresa\",\"organizationSlug\":\"mi-empresa\"}" }, "url": "{{baseUrl}}/auth/onboard" } },
+        { "name": "Onboard", "request": { "method": "POST", "auth": { "type": "noauth" }, "header": [{ "key": "X-Onboarding-Secret", "value": "{{onboardingSecret}}" }], "body": { "mode": "raw", "raw": "{\"email\":\"owner@example.com\",\"firstName\":\"Alejandro\",\"lastName\":\"Hernandez Escudero\",\"organizationName\":\"Mi empresa\",\"organizationSlug\":\"mi-empresa\"}" }, "url": "{{baseUrl}}/auth/onboard" } },
         { "name": "Register staff", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"email\":\"employee@example.com\",\"organizationId\":\"{{organizationId}}\",\"businessIds\":[\"{{businessId}}\"],\"role\":\"EMPLOYEE\"}" }, "url": "{{baseUrl}}/auth/register" } },
         { "name": "Verify email", "request": { "method": "POST", "auth": { "type": "noauth" }, "body": { "mode": "raw", "raw": "{\"token\":\"123456\"}" }, "url": "{{baseUrl}}/auth/email/verify" } },
         { "name": "Customer refresh", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/refresh" } },
@@ -100,13 +102,14 @@
         { "name": "Customer cancel", "request": { "method": "POST", "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{customerAccessToken}}" }] }, "url": "{{baseUrl}}/public/{{organizationSlug}}/auth/appointments/{{appointmentId}}/cancel" } },
         { "name": "Public appointment token", "request": { "method": "GET", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/appointments/{{publicAppointmentToken}}" } },
         { "name": "Public appointment token cancel", "request": { "method": "POST", "auth": { "type": "noauth" }, "url": "{{baseUrl}}/public/appointments/{{publicAppointmentToken}}/cancel" } },
-        { "name": "Create business", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"organizationId\":\"{{organizationId}}\",\"name\":\"Sucursal\",\"slug\":\"sucursal\"}" }, "url": "{{baseUrl}}/businesses" } },
-        { "name": "Update business", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"status\":\"SUSPENDED\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}" } },
+        { "name": "Create business", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"organizationId\":\"{{organizationId}}\",\"name\":\"Sucursal\",\"slug\":\"sucursal\",\"logoUrl\":\"https://cdn.example.com/business-logo.png\"}" }, "url": "{{baseUrl}}/businesses" } },
+        { "name": "Update business", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"logoUrl\":\"https://cdn.example.com/business-logo.png\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}" } },
         { "name": "Delete business", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}" } },
         { "name": "Employee detail/update/delete/invite/reset 2FA", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
         { "name": "Update employee", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"color\":\"#228B22\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
         { "name": "Invite employee", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/invite" } },
         { "name": "Reset employee 2FA", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/2fa/reset" } },
+        { "name": "Request employee password reset", "request": { "method": "POST", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}/password-reset" } },
         { "name": "Delete employee", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/employees/{{employeeId}}" } },
         { "name": "Update category", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"name\":\"Novedades\"}" }, "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories/{{categoryId}}" } },
         { "name": "Delete category", "request": { "method": "DELETE", "url": "{{baseUrl}}/businesses/{{businessId}}/service-categories/{{categoryId}}" } },

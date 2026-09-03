@@ -80,9 +80,9 @@ el estado real del repositorio y de la API.
 ### 1.3 Segundo factor
 
 - [ ] Crear desafio TOTP posterior al login.
-- [ ] Crear acceso mediante recovery code.
 - [ ] Crear configuracion de 2FA desde el perfil.
-- [ ] Mostrar QR, confirmar el codigo y entregar recovery codes una unica vez.
+- [ ] Mostrar QR, confirmar el codigo y reflejar la activacion de 2FA.
+- [ ] Indicar que quien pierda el autenticador debe contactar con un administrador.
 
 ## Bloque 2 — Panel interno y puesta en marcha
 
@@ -123,6 +123,7 @@ el estado real del repositorio y de la API.
 - [ ] Crear alta y edicion de empleado, incluyendo color y notas.
 - [ ] Permitir invitar y reenviar invitacion.
 - [ ] Permitir reset de 2FA solo a usuarios autorizados.
+- [ ] Permitir enviar recuperacion de contrasena solo a usuarios autorizados.
 - [ ] Permitir eliminar con confirmacion y manejo de referencias existentes.
 
 ### 3.3 Asignaciones y horarios

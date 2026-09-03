@@ -9,6 +9,22 @@ import { PublicBookingService } from "./public-booking.service";
 export class PublicBookingController {
   constructor(private readonly publicBookingService: PublicBookingService) {}
 
+  @Get("branding")
+  getBranding(@Param("organizationSlug") organizationSlug: string) {
+    return this.publicBookingService.getBranding(organizationSlug);
+  }
+
+  @Get("businesses/:businessSlug/branding")
+  getBusinessBranding(
+    @Param("organizationSlug") organizationSlug: string,
+    @Param("businessSlug") businessSlug: string,
+  ) {
+    return this.publicBookingService.getBusinessBranding(
+      organizationSlug,
+      businessSlug,
+    );
+  }
+
   @Get("services")
   listServices(
     @Param("organizationSlug") organizationSlug: string,

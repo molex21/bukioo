@@ -3,6 +3,8 @@ import { DatabaseService } from "../database/database.service";
 
 export interface CreateOnboardingInput {
   email: string;
+  firstName: string;
+  lastName: string;
   passwordHash: string;
   organizationName: string;
   organizationSlug: string;
@@ -39,10 +41,11 @@ export class OnboardingRepository {
   async create(input: CreateOnboardingInput): Promise<OnboardingRecord> {
     return this.databaseService.transaction(async (client) => {
       const userResult = await client.query<OnboardingRecord["user"]>(
-        `INSERT INTO users (email, password_hash, password_change_required)
-        VALUES ($1, $2, TRUE)
-        RETURNING id, email, email_verified_at, created_at`,
-        [input.email, input.passwordHash],
+        `INSERT INTO users
+          (email, first_name, last_name, password_hash, password_change_required)
+        VALUES ($1, $2, $3, $4, TRUE)
+        RETURNING id, email, first_name, last_name, email_verified_at, created_at`,
+        [input.email, input.firstName, input.lastName, input.passwordHash],
       );
       const user = userResult.rows[0];
 

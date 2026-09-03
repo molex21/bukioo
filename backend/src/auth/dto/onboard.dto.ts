@@ -13,6 +13,16 @@ export class OnboardDto {
   email!: string;
 
   @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  firstName!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(150)
+  lastName!: string;
+
+  @IsString()
   @MinLength(2)
   @MaxLength(150)
   organizationName!: string;

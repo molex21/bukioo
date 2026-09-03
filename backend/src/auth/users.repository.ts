@@ -4,6 +4,8 @@ import { DatabaseService } from "../database/database.service";
 export interface UserRecord {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
   password_hash: string;
   password_change_required: boolean;
   email_verified_at: Date | null;
@@ -17,6 +19,7 @@ export interface UserRecord {
 export interface UserOrganizationRecord {
   id: string;
   name: string;
+  logo_url: string | null;
   role: "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "CLIENT";
 }
 
@@ -25,6 +28,7 @@ export interface UserBusinessRecord {
   organization_id: string;
   name: string;
   slug: string;
+  logo_url: string | null;
   status: "ACTIVE" | "SUSPENDED";
 }
 
@@ -34,7 +38,7 @@ export class UsersRepository {
 
   async findByEmail(email: string): Promise<UserRecord | null> {
     const result = await this.databaseService.query<UserRecord>(
-      "SELECT id, email, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1",
+      "SELECT id, email, first_name, last_name, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1",
       [email],
     );
     return result.rows[0] ?? null;
@@ -42,7 +46,7 @@ export class UsersRepository {
 
   async findById(id: string): Promise<UserRecord | null> {
     const result = await this.databaseService.query<UserRecord>(
-      "SELECT id, email, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at FROM users WHERE id = $1 LIMIT 1",
+      "SELECT id, email, first_name, last_name, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at FROM users WHERE id = $1 LIMIT 1",
       [id],
     );
     return result.rows[0] ?? null;
@@ -52,7 +56,8 @@ export class UsersRepository {
     userId: string,
   ): Promise<UserOrganizationRecord[]> {
     const result = await this.databaseService.query<UserOrganizationRecord>(
-      `SELECT organizations.id, organizations.name, organization_memberships.role
+      `SELECT organizations.id, organizations.name, organizations.logo_url,
+        organization_memberships.role
       FROM organization_memberships
       INNER JOIN organizations
         ON organizations.id = organization_memberships.organization_id
@@ -71,7 +76,7 @@ export class UsersRepository {
   ): Promise<UserBusinessRecord[]> {
     const result = await this.databaseService.query<UserBusinessRecord>(
       `SELECT businesses.id, businesses.organization_id, businesses.name,
-        businesses.slug, businesses.status
+        businesses.slug, businesses.logo_url, businesses.status
       FROM businesses
       INNER JOIN organization_memberships
         ON organization_memberships.organization_id = businesses.organization_id
@@ -95,7 +100,7 @@ export class UsersRepository {
 
   async create(email: string, passwordHash: string): Promise<UserRecord> {
     const result = await this.databaseService.query<UserRecord>(
-      "INSERT INTO users (email, password_hash, password_change_required) VALUES ($1, $2, TRUE) RETURNING id, email, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at",
+      "INSERT INTO users (email, password_hash, password_change_required) VALUES ($1, $2, TRUE) RETURNING id, email, first_name, last_name, password_hash, password_change_required, email_verified_at, preferred_locale, is_superadmin, status, created_at, updated_at",
       [email, passwordHash],
     );
     return result.rows[0];

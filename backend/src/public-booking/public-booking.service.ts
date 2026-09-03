@@ -28,6 +28,7 @@ export class PublicBookingService {
         name: organization.name,
         slug: organization.slug,
         timezone: organization.timezone,
+        logoUrl: organization.logo_url,
       },
       services: services.map((service) => ({
         id: service.id,
@@ -38,8 +39,39 @@ export class PublicBookingService {
         business: {
           id: service.business_id,
           name: service.business_name,
+          logoUrl: service.business_logo_url,
         },
       })),
+    };
+  }
+
+  async getBranding(organizationSlug: string) {
+    const organization = await this.getActiveOrganization(organizationSlug);
+
+    return {
+      organization: this.toPublicOrganizationBranding(organization),
+    };
+  }
+
+  async getBusinessBranding(organizationSlug: string, businessSlug: string) {
+    const organization = await this.getActiveOrganization(organizationSlug);
+    const business =
+      await this.publicBookingRepository.findActiveBusinessBranding(
+        organization.id,
+        businessSlug.trim().toLowerCase(),
+      );
+
+    if (!business) {
+      throw new NotFoundException("Negocio no encontrado");
+    }
+
+    return {
+      organization: this.toPublicOrganizationBranding(organization),
+      business: {
+        name: business.name,
+        slug: business.slug,
+        logoUrl: business.logo_url,
+      },
     };
   }
 
@@ -150,5 +182,17 @@ export class PublicBookingService {
       throw new NotFoundException("Organizacion no encontrada");
     }
     return organization;
+  }
+
+  private toPublicOrganizationBranding(organization: {
+    name: string;
+    slug: string;
+    logo_url: string | null;
+  }) {
+    return {
+      name: organization.name,
+      slug: organization.slug,
+      logoUrl: organization.logo_url,
+    };
   }
 }

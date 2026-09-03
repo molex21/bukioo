@@ -75,6 +75,8 @@ describe("OnboardingRepository", () => {
     await expect(
       repository.create({
         email: "owner@example.com",
+        firstName: "Ada",
+        lastName: "Lovelace",
         passwordHash: "password-hash",
         organizationName: "Example Company",
         organizationSlug: "example-company",

@@ -24,6 +24,7 @@ import { LoyaltyJobsModule } from "./loyalty-jobs/loyalty-jobs.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { ReportsModule } from "./reports/reports.module";
 import { SuperadminModule } from "./superadmin/superadmin.module";
+import { OrganizationsModule } from "./organizations/organizations.module";
 import { LoggerModule } from "nestjs-pino";
 import { createPinoHttpOptions } from "./logging-configuration";
 import Joi from "joi";
@@ -131,6 +132,7 @@ import Joi from "joi";
     NotificationsModule,
     ReportsModule,
     SuperadminModule,
+    OrganizationsModule,
   ],
   controllers: [AppController],
   providers: [

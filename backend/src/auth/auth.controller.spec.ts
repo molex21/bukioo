@@ -19,10 +19,10 @@ describe("AuthController", () => {
     verifyEmail: jest.fn(),
     requestPasswordReset: jest.fn(),
     resetPassword: jest.fn(),
+    verifyPasswordResetCode: jest.fn(),
     createTwoFactorSetup: jest.fn(),
     enableTwoFactor: jest.fn(),
     verifyTwoFactor: jest.fn(),
-    useRecoveryCode: jest.fn(),
     verifyInitialEmail: jest.fn(),
     setInitialPassword: jest.fn(),
   };
@@ -215,6 +215,36 @@ describe("AuthController", () => {
     );
   });
 
+  it("resumes password activation with a scoped cookie after email verification", async () => {
+    const cookie = jest.fn();
+    const status = jest.fn();
+    const httpResponse = { cookie, status } as unknown as Response;
+    authServiceMock.login.mockResolvedValue({
+      passwordChangeRequired: true,
+      passwordActivationAttemptToken: "password-activation-token",
+    });
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.login(
+        { email: "user@example.com", password: "temporary-password" },
+        "test-agent",
+        "127.0.0.1",
+        httpResponse,
+      ),
+    ).resolves.toEqual({ passwordChangeRequired: true });
+
+    expect(status).toHaveBeenCalledWith(202);
+    expect(cookie).toHaveBeenCalledWith(
+      "password_activation_attempt",
+      "password-activation-token",
+      expect.objectContaining({
+        httpOnly: true,
+        path: "/api/v1/auth/activate/password",
+      }),
+    );
+  });
+
   it("pauses a 2FA login and stores its attempt in a scoped cookie", async () => {
     const cookie = jest.fn();
     const status = jest.fn();
@@ -317,6 +347,8 @@ describe("AuthController", () => {
     const profile = {
       id: "user-id",
       email: "user@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace",
       emailVerified: true,
       preferredLocale: "es",
       isSuperadmin: false,
@@ -377,6 +409,18 @@ describe("AuthController", () => {
     });
     expect(authServiceMock.resetPassword).toHaveBeenCalledWith(
       resetPasswordDto,
+    );
+  });
+
+  it("verifies a password-reset code without changing the password", async () => {
+    const verifyPasswordResetDto = { token: "123456" };
+    authServiceMock.verifyPasswordResetCode.mockResolvedValue(undefined);
+
+    await expect(
+      controller.verifyPasswordResetCode(verifyPasswordResetDto),
+    ).resolves.toEqual({ codeVerified: true });
+    expect(authServiceMock.verifyPasswordResetCode).toHaveBeenCalledWith(
+      verifyPasswordResetDto,
     );
   });
 

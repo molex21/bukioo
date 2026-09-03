@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import { AuthService } from "../auth/auth.service";
+import { AuditService } from "../audit/audit.service";
 import { TwoFactorRepository } from "../auth/two-factor.repository";
 import {
   EmployeesRepository,
@@ -19,6 +21,7 @@ export class EmployeesService {
     private readonly employeesRepository: EmployeesRepository,
     private readonly authService: AuthService,
     private readonly twoFactorRepository: TwoFactorRepository,
+    private readonly auditService: AuditService,
   ) {}
 
   async create(
@@ -88,6 +91,8 @@ export class EmployeesService {
       organizationId: employee.organization_id,
       businessId: employee.business_id,
       employeeId: employee.id,
+      firstName: employee.first_name,
+      lastName: employee.last_name,
     });
   }
 
@@ -131,6 +136,30 @@ export class EmployeesService {
     if (!reset) {
       throw new NotFoundException("El empleado no tiene 2FA activo");
     }
+  }
+
+  async requestPasswordReset(
+    businessId: string,
+    employeeId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.assertCanManageBusiness(userId, businessId);
+    const employee = await this.getActiveEmployee(businessId, employeeId);
+
+    if (!employee.user_id) {
+      throw new ConflictException("El empleado no tiene una cuenta asociada");
+    }
+
+    await this.authService.requestPasswordResetForUser(employee.user_id);
+    await this.auditService.record({
+      organizationId: employee.organization_id,
+      businessId: employee.business_id,
+      actorUserId: userId,
+      action: "EMPLOYEE_PASSWORD_RESET_REQUESTED",
+      entityType: "EMPLOYEE",
+      entityId: employee.id,
+      newValues: { userId: employee.user_id },
+    });
   }
 
   async remove(

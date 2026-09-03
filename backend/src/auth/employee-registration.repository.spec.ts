@@ -137,6 +137,8 @@ describe("EmployeeRegistrationRepository", () => {
     await expect(
       repository.inviteExistingEmployee({
         email: "employee@example.com",
+        firstName: "Ada",
+        lastName: "Lovelace",
         passwordHash: "password-hash",
         organizationId: "organization-id",
         businessId: "business-id",

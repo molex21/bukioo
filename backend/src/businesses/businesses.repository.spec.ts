@@ -85,6 +85,27 @@ describe("BusinessesRepository", () => {
     );
   });
 
+  it("updates and can clear a business logo without interpolating values in SQL", async () => {
+    databaseServiceMock.query.mockResolvedValue({
+      rows: [{ id: "business-id", logo_url: null }],
+    });
+
+    await expect(
+      repository.update(
+        {
+          id: "business-id",
+          organization_id: "organization-id",
+        } as never,
+        { logoUrl: null },
+      ),
+    ).resolves.toMatchObject({ id: "business-id", logo_url: null });
+
+    expect(databaseServiceMock.query).toHaveBeenCalledWith(
+      expect.stringContaining("logo_url = CASE WHEN $7 THEN $8"),
+      expect.arrayContaining([true, null, "business-id", "organization-id"]),
+    );
+  });
+
   it("finds a business through direct assignment or an administrative role", async () => {
     databaseServiceMock.query.mockResolvedValue({
       rows: [{ id: "business-id", organization_id: "organization-id" }],

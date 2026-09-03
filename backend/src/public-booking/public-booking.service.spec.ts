@@ -8,12 +8,14 @@ describe("PublicBookingService", () => {
     findActiveOrganization: jest.fn(),
     listActiveServices: jest.fn(),
     listActiveEmployees: jest.fn(),
+    findActiveBusinessBranding: jest.fn(),
   };
   const organization = {
     id: "organization-id",
     name: "Mi organizacion",
     slug: "mi-organizacion",
     timezone: "Atlantic/Canary",
+    logo_url: "https://cdn.example.com/organization-logo.png",
   };
   const availabilityService = { listPublic: jest.fn() };
   let service: PublicBookingService;
@@ -27,6 +29,7 @@ describe("PublicBookingService", () => {
     repository.findActiveOrganization.mockResolvedValue(organization);
     repository.listActiveServices.mockResolvedValue([]);
     repository.listActiveEmployees.mockResolvedValue([]);
+    repository.findActiveBusinessBranding.mockResolvedValue(null);
     availabilityService.listPublic.mockResolvedValue({ slots: [] });
   });
 
@@ -40,6 +43,7 @@ describe("PublicBookingService", () => {
         duration_minutes: 30,
         business_id: "business-id",
         business_name: "Mi negocio",
+        business_logo_url: "https://cdn.example.com/business-logo.png",
       },
     ]);
 
@@ -52,6 +56,7 @@ describe("PublicBookingService", () => {
         name: "Mi organizacion",
         slug: "mi-organizacion",
         timezone: "Atlantic/Canary",
+        logoUrl: "https://cdn.example.com/organization-logo.png",
       },
       services: [
         {
@@ -60,7 +65,11 @@ describe("PublicBookingService", () => {
           description: "Corte de pelo",
           price: "20.00",
           durationMinutes: 30,
-          business: { id: "business-id", name: "Mi negocio" },
+          business: {
+            id: "business-id",
+            name: "Mi negocio",
+            logoUrl: "https://cdn.example.com/business-logo.png",
+          },
         },
       ],
     });
@@ -80,6 +89,50 @@ describe("PublicBookingService", () => {
       service.listServices("missing", { businessId: "business-id" }),
     ).rejects.toThrow(NotFoundException);
     expect(repository.listActiveServices).not.toHaveBeenCalled();
+  });
+
+  it("returns public organization branding without a session", async () => {
+    await expect(service.getBranding(" MI-ORGANIZACION ")).resolves.toEqual({
+      organization: {
+        name: "Mi organizacion",
+        slug: "mi-organizacion",
+        logoUrl: "https://cdn.example.com/organization-logo.png",
+      },
+    });
+  });
+
+  it("returns business branding only when it belongs to the active organization", async () => {
+    repository.findActiveBusinessBranding.mockResolvedValue({
+      name: "Mi negocio",
+      slug: "mi-negocio",
+      logo_url: "https://cdn.example.com/business-logo.png",
+    });
+
+    await expect(
+      service.getBusinessBranding("mi-organizacion", " MI-NEGOCIO "),
+    ).resolves.toEqual({
+      organization: {
+        name: "Mi organizacion",
+        slug: "mi-organizacion",
+        logoUrl: "https://cdn.example.com/organization-logo.png",
+      },
+      business: {
+        name: "Mi negocio",
+        slug: "mi-negocio",
+        logoUrl: "https://cdn.example.com/business-logo.png",
+      },
+    });
+
+    expect(repository.findActiveBusinessBranding).toHaveBeenCalledWith(
+      "organization-id",
+      "mi-negocio",
+    );
+  });
+
+  it("hides a missing, cross-tenant, or suspended business as not found", async () => {
+    await expect(
+      service.getBusinessBranding("mi-organizacion", "other-business"),
+    ).rejects.toThrow(NotFoundException);
   });
 
   it("returns only active employees assigned to the selected service", async () => {

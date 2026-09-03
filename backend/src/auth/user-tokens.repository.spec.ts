@@ -139,6 +139,19 @@ describe("UserTokensRepository", () => {
     expect(clientMock.query).toHaveBeenCalledTimes(1);
   });
 
+  it("checks a password-reset token without consuming it", async () => {
+    databaseServiceMock.query.mockResolvedValueOnce({ rowCount: 1 });
+
+    await expect(
+      repository.isPasswordResetTokenValid("token-hash"),
+    ).resolves.toBe(true);
+
+    expect(databaseServiceMock.query).toHaveBeenCalledWith(
+      expect.stringContaining("users.status = 'ACTIVE'"),
+      ["PASSWORD_RESET", "token-hash"],
+    );
+  });
+
   it("does not consume an unknown, expired, or used token", async () => {
     clientMock.query.mockResolvedValueOnce({ rows: [] });
 

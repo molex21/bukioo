@@ -29,6 +29,7 @@ export class BusinessesService {
           email: createBusinessDto.email?.trim().toLowerCase(),
           phone: createBusinessDto.phone?.trim(),
           timezone: createBusinessDto.timezone?.trim(),
+          logoUrl: createBusinessDto.logoUrl?.trim(),
         },
         userId,
       );

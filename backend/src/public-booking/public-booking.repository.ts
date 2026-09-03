@@ -6,6 +6,7 @@ export interface PublicOrganizationRecord {
   name: string;
   slug: string;
   timezone: string;
+  logo_url: string | null;
 }
 
 export interface PublicServiceRecord {
@@ -16,12 +17,19 @@ export interface PublicServiceRecord {
   duration_minutes: number;
   business_id: string;
   business_name: string;
+  business_logo_url: string | null;
 }
 
 export interface PublicEmployeeRecord {
   id: string;
   first_name: string;
   last_name: string;
+}
+
+export interface PublicBusinessBrandingRecord {
+  name: string;
+  slug: string;
+  logo_url: string | null;
 }
 
 @Injectable()
@@ -32,7 +40,7 @@ export class PublicBookingRepository {
     slug: string,
   ): Promise<PublicOrganizationRecord | null> {
     const result = await this.databaseService.query<PublicOrganizationRecord>(
-      `SELECT id, name, slug, timezone
+      `SELECT id, name, slug, timezone, logo_url
       FROM organizations
       WHERE LOWER(slug) = LOWER($1) AND status = 'ACTIVE'
       LIMIT 1`,
@@ -48,7 +56,7 @@ export class PublicBookingRepository {
     const result = await this.databaseService.query<PublicServiceRecord>(
       `SELECT services.id, services.name, services.description, services.price,
         services.duration_minutes, businesses.id AS business_id,
-        businesses.name AS business_name
+        businesses.name AS business_name, businesses.logo_url AS business_logo_url
       FROM services
       INNER JOIN businesses
         ON businesses.id = services.business_id
@@ -61,6 +69,24 @@ export class PublicBookingRepository {
       [organizationId, businessId],
     );
     return result.rows;
+  }
+
+  async findActiveBusinessBranding(
+    organizationId: string,
+    slug: string,
+  ): Promise<PublicBusinessBrandingRecord | null> {
+    const result =
+      await this.databaseService.query<PublicBusinessBrandingRecord>(
+        `SELECT name, slug, logo_url
+        FROM businesses
+        WHERE organization_id = $1
+          AND LOWER(slug) = LOWER($2)
+          AND status = 'ACTIVE'
+        LIMIT 1`,
+        [organizationId, slug],
+      );
+
+    return result.rows[0] ?? null;
   }
 
   async listActiveEmployees(

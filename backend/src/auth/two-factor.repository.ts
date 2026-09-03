@@ -6,11 +6,6 @@ export interface TwoFactorState {
   enabled: boolean;
 }
 
-interface RecoveryCodeRecord {
-  id: string;
-  code_hash: string;
-}
-
 @Injectable()
 export class TwoFactorRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -43,51 +38,15 @@ export class TwoFactorRepository {
     );
   }
 
-  async enable(userId: string, recoveryCodeHashes: string[]): Promise<void> {
-    await this.databaseService.transaction(async (client) => {
-      await client.query(
-        `UPDATE user_two_factor
-        SET enabled = TRUE,
-            enabled_at = NOW()
-        WHERE user_id = $1
-          AND enabled = FALSE`,
-        [userId],
-      );
-      await client.query("DELETE FROM user_recovery_codes WHERE user_id = $1", [
-        userId,
-      ]);
-      for (const codeHash of recoveryCodeHashes) {
-        await client.query(
-          "INSERT INTO user_recovery_codes (user_id, code_hash) VALUES ($1, $2)",
-          [userId, codeHash],
-        );
-      }
-    });
-  }
-
-  async findUnusedRecoveryCodes(userId: string): Promise<RecoveryCodeRecord[]> {
-    const result = await this.databaseService.query<RecoveryCodeRecord>(
-      `SELECT id, code_hash
-      FROM user_recovery_codes
+  async enable(userId: string): Promise<void> {
+    await this.databaseService.query(
+      `UPDATE user_two_factor
+      SET enabled = TRUE,
+          enabled_at = NOW()
       WHERE user_id = $1
-        AND used_at IS NULL`,
+        AND enabled = FALSE`,
       [userId],
     );
-
-    return result.rows;
-  }
-
-  async consumeRecoveryCode(id: string, userId: string): Promise<boolean> {
-    const result = await this.databaseService.query(
-      `UPDATE user_recovery_codes
-      SET used_at = NOW()
-      WHERE id = $1
-        AND user_id = $2
-        AND used_at IS NULL`,
-      [id, userId],
-    );
-
-    return (result.rowCount ?? 0) === 1;
   }
 
   async reset(userId: string): Promise<boolean> {
@@ -103,9 +62,6 @@ export class TwoFactorRepository {
         return false;
       }
 
-      await client.query("DELETE FROM user_recovery_codes WHERE user_id = $1", [
-        userId,
-      ]);
       await client.query(
         `UPDATE user_sessions
         SET revoked_at = NOW()

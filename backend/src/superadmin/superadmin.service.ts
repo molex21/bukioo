@@ -4,6 +4,8 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { CreatePlanDto } from "./dto/create-plan.dto";
+import { ListSuperadminBusinessesDto } from "./dto/list-superadmin-businesses.dto";
+import { ListSuperadminEmployeesDto } from "./dto/list-superadmin-employees.dto";
 import { ListSuperadminOrganizationsDto } from "./dto/list-superadmin-organizations.dto";
 import { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscription.dto";
 import { UpdatePlanDto } from "./dto/update-plan.dto";
@@ -47,6 +49,63 @@ export class SuperadminService {
     return this.organizationResponse(
       await this.getOrganizationOrFail(organizationId),
     );
+  }
+
+  async listOrganizationBusinesses(
+    organizationId: string,
+    filters: ListSuperadminBusinessesDto,
+  ) {
+    await this.getOrganizationOrFail(organizationId);
+    const result = await this.repository.listOrganizationBusinesses(
+      organizationId,
+      filters,
+    );
+    return {
+      pagination: {
+        limit: filters.limit ?? 50,
+        offset: filters.offset ?? 0,
+        total: Number(result.total),
+      },
+      items: result.items.map((item) => this.businessResponse(item)),
+    };
+  }
+
+  async getOrganizationBusiness(organizationId: string, businessId: string) {
+    await this.getOrganizationOrFail(organizationId);
+    return this.businessResponse(
+      await this.getOrganizationBusinessOrFail(organizationId, businessId),
+    );
+  }
+
+  async listBusinessEmployees(
+    organizationId: string,
+    businessId: string,
+    filters: ListSuperadminEmployeesDto,
+  ) {
+    await this.getOrganizationOrFail(organizationId);
+    await this.getOrganizationBusinessOrFail(organizationId, businessId);
+    const result = await this.repository.listBusinessEmployees(
+      organizationId,
+      businessId,
+      filters,
+    );
+    return {
+      pagination: {
+        limit: filters.limit ?? 50,
+        offset: filters.offset ?? 0,
+        total: Number(result.total),
+      },
+      items: result.items.map((item) => ({
+        id: item.id,
+        firstName: item.first_name,
+        lastName: item.last_name,
+        email: item.email,
+        phone: item.phone,
+        color: item.color,
+        isActive: item.is_active,
+        createdAt: item.created_at,
+      })),
+    };
   }
 
   async updateOrganizationStatus(
@@ -191,6 +250,40 @@ export class SuperadminService {
     if (!organization)
       throw new NotFoundException("Organizacion no encontrada");
     return organization;
+  }
+
+  private async getOrganizationBusinessOrFail(
+    organizationId: string,
+    businessId: string,
+  ) {
+    const business = await this.repository.findOrganizationBusiness(
+      organizationId,
+      businessId,
+    );
+    if (!business) throw new NotFoundException("Negocio no encontrado");
+    return business;
+  }
+
+  private businessResponse(
+    business: Awaited<
+      ReturnType<SuperadminRepository["findOrganizationBusiness"]>
+    > extends infer T
+      ? Exclude<T, null>
+      : never,
+  ) {
+    return {
+      id: business.id,
+      organizationId: business.organization_id,
+      name: business.name,
+      slug: business.slug,
+      email: business.email,
+      phone: business.phone,
+      timezone: business.timezone,
+      logoUrl: business.logo_url,
+      status: business.status,
+      employeeCount: Number(business.employee_count),
+      createdAt: business.created_at,
+    };
   }
 
   private organizationResponse(

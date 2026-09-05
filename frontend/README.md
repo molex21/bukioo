@@ -31,14 +31,26 @@ de las pantallas de producto.
 No existe una ruta genérica `/login`.
 
 El dashboard de `/platform` consulta las métricas reales de
-`/superadmin/dashboard`. Las rutas de Organizaciones y Planes ya están
-disponibles en su navegación y se desarrollarán en los siguientes bloques.
+`/superadmin/dashboard`. La sección `/platform/organizations` lista tenants
+reales mediante `/superadmin/organizations`, con búsqueda, filtros por estado
+y plan, paginación y suscripciones. La ficha de cada organización usa
+`/superadmin/organizations/:organizationId` para consultar detalle y permite
+actualizar el estado de la organización y su suscripción. También consulta
+`/superadmin/plans` para ofrecer y asignar planes. Desde la organización se
+accede a sus negocios y, desde cada negocio, a sus empleados mediante rutas
+anidadas. Esas pantallas consumen los endpoints superadmin anidados de negocios
+y empleados, con búsqueda, filtros de estado y paginación. No hay un punto de
+menú global para Planes, Negocios o Empleados.
 
 La sesión staff conserva el access token únicamente en memoria. Al cargar la
 aplicación intenta restaurarla con la cookie HttpOnly mediante `/auth/refresh`.
 Las llamadas protegidas añaden el header Bearer y, ante un único `401`, renuevan
 el token y repiten la petición. Las rutas `/app` y `/platform` requieren sesión;
 la segunda también exige una cuenta superadmin.
+
+Desde el menú de cuenta de plataforma se pueden editar el nombre, los apellidos
+y el teléfono propio con `PATCH /auth/me`. El correo electrónico se muestra como
+dato de consulta y no puede cambiarse desde ese formulario.
 
 ## Instalación
 

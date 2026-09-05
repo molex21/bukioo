@@ -36,6 +36,7 @@ describe("AuthService", () => {
     findActiveOrganizationsByUserId: jest.fn(),
     findAccessibleBusinessesByUserId: jest.fn(),
     create: jest.fn(),
+    updateMyProfile: jest.fn(),
   };
 
   const jwtServiceMock = {
@@ -96,6 +97,7 @@ describe("AuthService", () => {
   const user: UserRecord = {
     id: "c8fdcddd-9d7f-4ebf-b11e-a02821e2ca04",
     email: "user@example.com",
+    phone: null,
     first_name: "Ada",
     last_name: "Lovelace",
     password_hash: "hashed-password",
@@ -166,6 +168,7 @@ describe("AuthService", () => {
     usersRepositoryMock.findActiveOrganizationsByUserId.mockReset();
     usersRepositoryMock.findAccessibleBusinessesByUserId.mockReset();
     usersRepositoryMock.create.mockReset();
+    usersRepositoryMock.updateMyProfile.mockReset();
     employeeRegistrationRepositoryMock.canManageEmployees.mockReset();
     employeeRegistrationRepositoryMock.create.mockReset();
     employeeRegistrationRepositoryMock.createWithEmployee.mockReset();
@@ -234,6 +237,42 @@ describe("AuthService", () => {
       }),
     );
     expect(emailProviderMock.sendAccountCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates only the authenticated user's permitted profile fields", async () => {
+    const activeUser = {
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    };
+    usersRepositoryMock.findById
+      .mockResolvedValueOnce(activeUser)
+      .mockResolvedValueOnce({
+        ...activeUser,
+        first_name: "Grace",
+        phone: "600000001",
+      });
+    usersRepositoryMock.updateMyProfile.mockResolvedValue({
+      ...activeUser,
+      first_name: "Grace",
+      phone: "600000001",
+    });
+    usersRepositoryMock.findActiveOrganizationsByUserId.mockResolvedValue([]);
+    usersRepositoryMock.findAccessibleBusinessesByUserId.mockResolvedValue([]);
+
+    await expect(
+      service.updateMyProfile(user.id, {
+        firstName: " Grace ",
+        phone: " 600000001 ",
+        preferredLocale: "EN",
+      }),
+    ).resolves.toMatchObject({ firstName: "Grace", phone: "600000001" });
+
+    expect(usersRepositoryMock.updateMyProfile).toHaveBeenCalledWith(user.id, {
+      firstName: "Grace",
+      lastName: undefined,
+      phone: "600000001",
+      preferredLocale: "en",
+    });
   });
 
   it("rejects an email that already exists before hashing a password", async () => {
@@ -873,6 +912,7 @@ describe("AuthService", () => {
     await expect(service.me(user.id)).resolves.toEqual({
       id: user.id,
       email: user.email,
+      phone: user.phone,
       firstName: user.first_name,
       lastName: user.last_name,
       emailVerified: true,

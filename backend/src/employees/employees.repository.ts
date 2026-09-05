@@ -20,6 +20,11 @@ export interface EmployeeRecord {
   archived_at: Date | null;
 }
 
+export interface EmployeeCapacityRecord {
+  active_employees: string;
+  max_employees: number | null;
+}
+
 @Injectable()
 export class EmployeesRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -105,6 +110,34 @@ export class EmployeesRepository {
     );
 
     return result.rows[0];
+  }
+
+  async getEmployeeCapacityForBusiness(
+    businessId: string,
+  ): Promise<EmployeeCapacityRecord | null> {
+    const result = await this.databaseService.query<EmployeeCapacityRecord>(
+      `SELECT COUNT(employees.id)::text AS active_employees,
+        subscription.max_employees
+      FROM businesses
+      LEFT JOIN LATERAL (
+        SELECT plans.max_employees
+        FROM organization_subscriptions
+        INNER JOIN plans ON plans.code = organization_subscriptions.plan_code
+        WHERE organization_subscriptions.organization_id = businesses.organization_id
+          AND organization_subscriptions.status IN ('TRIAL', 'ACTIVE', 'SUSPENDED')
+        ORDER BY organization_subscriptions.created_at DESC
+        LIMIT 1
+      ) subscription ON TRUE
+      LEFT JOIN employees
+        ON employees.organization_id = businesses.organization_id
+        AND employees.is_active = TRUE
+      WHERE businesses.id = $1
+        AND businesses.status = 'ACTIVE'
+      GROUP BY subscription.max_employees`,
+      [businessId],
+    );
+
+    return result.rows[0] ?? null;
   }
 
   async findActiveBusinessOrganizationId(

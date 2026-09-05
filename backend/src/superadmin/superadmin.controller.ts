@@ -14,6 +14,8 @@ import {
 import { CurrentUser } from "../auth/current-user.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { CreatePlanDto } from "./dto/create-plan.dto";
+import { ListSuperadminBusinessesDto } from "./dto/list-superadmin-businesses.dto";
+import { ListSuperadminEmployeesDto } from "./dto/list-superadmin-employees.dto";
 import { ListSuperadminOrganizationsDto } from "./dto/list-superadmin-organizations.dto";
 import { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscription.dto";
 import { UpdateOrganizationSecurityDto } from "./dto/update-organization-security.dto";
@@ -39,6 +41,31 @@ export class SuperadminController {
     @Param("organizationId", ParseUUIDPipe) id: string,
   ) {
     return this.service.getOrganization(id);
+  }
+  @Get("organizations/:organizationId/businesses") listOrganizationBusinesses(
+    @Param("organizationId", ParseUUIDPipe) organizationId: string,
+    @Query() filters: ListSuperadminBusinessesDto,
+  ) {
+    return this.service.listOrganizationBusinesses(organizationId, filters);
+  }
+  @Get("organizations/:organizationId/businesses/:businessId")
+  getOrganizationBusiness(
+    @Param("organizationId", ParseUUIDPipe) organizationId: string,
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+  ) {
+    return this.service.getOrganizationBusiness(organizationId, businessId);
+  }
+  @Get("organizations/:organizationId/businesses/:businessId/employees")
+  listBusinessEmployees(
+    @Param("organizationId", ParseUUIDPipe) organizationId: string,
+    @Param("businessId", ParseUUIDPipe) businessId: string,
+    @Query() filters: ListSuperadminEmployeesDto,
+  ) {
+    return this.service.listBusinessEmployees(
+      organizationId,
+      businessId,
+      filters,
+    );
   }
   @Patch("organizations/:organizationId/status") updateStatus(
     @Param("organizationId", ParseUUIDPipe) id: string,

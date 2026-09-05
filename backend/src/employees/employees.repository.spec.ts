@@ -38,4 +38,23 @@ describe("EmployeesRepository", () => {
       ["employee-id", "business-id"],
     );
   });
+
+  it("counts active employees across the organization using its current plan", async () => {
+    databaseServiceMock.query.mockResolvedValue({ rows: [] });
+
+    await expect(
+      repository.getEmployeeCapacityForBusiness("business-id"),
+    ).resolves.toBeNull();
+
+    expect(databaseServiceMock.query).toHaveBeenCalledWith(
+      expect.stringContaining("COUNT(employees.id)::text AS active_employees"),
+      ["business-id"],
+    );
+    expect(databaseServiceMock.query).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "employees.organization_id = businesses.organization_id",
+      ),
+      ["business-id"],
+    );
+  });
 });

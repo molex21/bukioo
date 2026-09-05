@@ -128,12 +128,13 @@ del slug; `Public` no requiere header. Todas las rutas protegidas pueden dar
 | --- | --- | --- |
 | GET `/` | Public | Texto de bienvenida, `200`; no usar como health. |
 | GET `/health` | Public | Estado de API/DB, `200`; usar para healthcheck. |
-| POST `/auth/onboard` | Header `X-Onboarding-Secret`; Onboard `{email,firstName,lastName,organizationName,organizationSlug,timezone?}` | Crea tenant/owner y envia password temporal. `201`, `400`, `401`, `409`. Solo provisioning. |
+| POST `/auth/onboard` | Header `X-Onboarding-Secret`; Onboard `{email,firstName,lastName,organizationName,organizationSlug,timezone?}` | Crea tenant/owner, asigna el plan `free` activo y envia password temporal. `201`, `400`, `401`, `409`. Solo provisioning. |
 | POST `/auth/register` | Auth OWNER/ADMIN; `{email,organizationId,businessIds,role?:MANAGER|EMPLOYEE}` | Invita staff, `201`; conflicto email/membership `409`. |
 | POST `/auth/login` | Login | `201` tokens/cookie, o `202` con `emailVerificationRequired`, `passwordChangeRequired` o `twoFactorRequired`. `401` invalido/bloqueado. |
 | POST `/auth/refresh` | Cookie refresh | `201` nuevo access token y cookie rotada; `401` limpiar sesion. |
 | POST `/auth/logout` | Cookie refresh | `204`, elimina cookie/sesion; idempotente de cara al frontend. |
-| GET `/auth/me` | Auth; `Cache-Control: no-store` | Perfil, incluidos `firstName`, `lastName`, organizaciones, businesses, rol, 2FA y `isSuperadmin`; `200`. Cargar al iniciar app. |
+| GET `/auth/me` | Auth; `Cache-Control: no-store` | Perfil, incluidos `firstName`, `lastName`, `phone`, organizaciones, businesses, rol, 2FA y `isSuperadmin`; `200`. Cargar al iniciar app. |
+| PATCH `/auth/me` | Auth; `{firstName?,lastName?,phone?,preferredLocale?}` | Actualiza el perfil propio. Nombre y telefono se sincronizan con fichas activas de empleado vinculadas. No admite email, `color`, notas, rol, 2FA ni estado. `200`; `400` body invalido; `401` sesion no valida. |
 | POST `/auth/email/verification/request` | `{email}` | Solicita codigo; respuesta generica `202` para no enumerar email. |
 | POST `/auth/email/verify` | Cookie de intento; `{token:"123456"}` | Verifica email; `200`, `400/401` codigo/cookie expirado. |
 | POST `/auth/activate/verify` | Cookie email; `{token:"123456"}` | Valida email inicial y crea cookie de password; `200`. |
@@ -180,7 +181,7 @@ logo.
 | POST `/businesses` | OWNER/ADMIN; `{organizationId,name,slug,email?,phone?,timezone?,logoUrl?}` | Crea empresa, `201`, `409` slug. |
 | GET `/businesses?organizationId` | Auth | Lista empresas gestionables, `200`. |
 | GET/PATCH/DELETE `/businesses/:businessId` | Auth; PATCH Business incluye `logoUrl` | Lee/edita/suspende/elimina. `logoUrl:null` elimina el logo. DELETE `204`, `409` si es ultima o tiene datos. |
-| POST/GET `/businesses/:businessId/employees` | OWNER/ADMIN para POST; Employee | Crear/listar. `inviteUser:true` envia activacion. |
+| POST/GET `/businesses/:businessId/employees` | OWNER/ADMIN para POST; Employee | Crear/listar. `inviteUser:true` envia activacion. `409` si el total de empleados activos de la organizacion alcanza `maxEmployees` del plan. |
 | GET/PATCH/DELETE `/businesses/:businessId/employees/:employeeId` | Auth; PATCH Employee | Detalle/edicion/borrado `204`; DELETE solo sin referencias. |
 | POST `/businesses/:businessId/employees/:employeeId/invite` | OWNER/ADMIN | Reenvia invitacion. |
 | POST `/businesses/:businessId/employees/:employeeId/2fa/reset` | OWNER/ADMIN | Revoca 2FA/sesiones del empleado. |
@@ -233,10 +234,13 @@ logo.
 | GET `/superadmin/dashboard` | Superadmin | Metricas globales. |
 | GET `/superadmin/organizations?search&status&planCode&limit&offset` | Superadmin | Lista paginada de tenants. |
 | GET `/superadmin/organizations/:organizationId` | Superadmin | Detalle y suscripcion. |
+| GET `/superadmin/organizations/:organizationId/businesses?search&status&limit&offset` | Superadmin | Negocios de la organizacion. `search` consulta nombre, slug o email; `status` es `ACTIVE` o `SUSPENDED`; paginacion 50 por defecto, maximo 100. Devuelve `items` con `employeeCount` y `pagination`. `400` para UUID/filtros invalidos; `403` sin superadmin; `404` si la organizacion no existe. |
+| GET `/superadmin/organizations/:organizationId/businesses/:businessId` | Superadmin | Detalle del negocio dentro de esa organizacion, incluido `employeeCount`. `404` cuando el negocio no existe o pertenece a otra organizacion. |
+| GET `/superadmin/organizations/:organizationId/businesses/:businessId/employees?search&status&limit&offset` | Superadmin | Empleados del negocio. `search` consulta nombre, apellidos, email o telefono; `status` es `ACTIVE` o `ARCHIVED`; paginacion 50 por defecto, maximo 100. No expone notas, usuario, secretos ni 2FA. `400` para UUID/filtros invalidos; `403` sin superadmin; `404` fuera del contexto. |
 | PATCH `/superadmin/organizations/:organizationId/status` | `{status:"ACTIVE"|"SUSPENDED"}` | Activa/suspende tenant. |
 | PATCH `/superadmin/organizations/:organizationId/security` | `{require2faForAdmins:boolean}` | Obliga 2FA a OWNER/ADMIN del tenant. |
 | PUT `/superadmin/organizations/:organizationId/subscription` | `{planCode,status:"TRIAL"|"ACTIVE"|"SUSPENDED",trialEndsAt?,expiresAt?}` | Asigna suscripcion manual e historica. |
-| GET/POST `/superadmin/plans` | POST Plan | Lista/crea planes. |
+| GET/POST `/superadmin/plans` | POST Plan | Lista/crea planes. Se inicializan `free`, `essential`, `professional`, `business` y `unlimited`; los limites `null` son ilimitados. |
 | PATCH/DELETE `/superadmin/plans/:planCode` | PATCH Plan | Edita/elimina. DELETE `409` si tiene suscripciones. |
 
 ## Procesos asincronos y limites

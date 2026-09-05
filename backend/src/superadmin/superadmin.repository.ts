@@ -1,6 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
 import type { CreatePlanDto } from "./dto/create-plan.dto";
+import type { ListSuperadminBusinessesDto } from "./dto/list-superadmin-businesses.dto";
+import type { ListSuperadminEmployeesDto } from "./dto/list-superadmin-employees.dto";
 import type { ListSuperadminOrganizationsDto } from "./dto/list-superadmin-organizations.dto";
 import type { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscription.dto";
 import type { UpdatePlanDto } from "./dto/update-plan.dto";
@@ -45,6 +47,31 @@ interface OrganizationRecord {
   employee_count: string;
   subscription_plan_code: string | null;
   subscription_status: string | null;
+}
+
+interface SuperadminBusinessRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  phone: string | null;
+  timezone: string;
+  logo_url: string | null;
+  status: "ACTIVE" | "SUSPENDED";
+  employee_count: string;
+  created_at: Date;
+}
+
+interface SuperadminEmployeeRecord {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  color: string | null;
+  is_active: boolean;
+  created_at: Date;
 }
 
 @Injectable()
@@ -161,6 +188,114 @@ export class SuperadminRepository {
     return result.rows[0] ?? null;
   }
 
+  async listOrganizationBusinesses(
+    organizationId: string,
+    filters: ListSuperadminBusinessesDto,
+  ) {
+    const params = [
+      organizationId,
+      filters.search?.trim() || null,
+      filters.status ?? null,
+    ];
+    const [items, total] = await Promise.all([
+      this.databaseService.query<SuperadminBusinessRecord>(
+        `SELECT businesses.id, businesses.organization_id, businesses.name,
+          businesses.slug, businesses.email, businesses.phone, businesses.timezone,
+          businesses.logo_url, businesses.status, businesses.created_at,
+          COUNT(DISTINCT employees.id) FILTER (WHERE employees.is_active = TRUE)::text
+            AS employee_count
+        FROM businesses
+        LEFT JOIN employees ON employees.business_id = businesses.id
+          AND employees.organization_id = businesses.organization_id
+        WHERE businesses.organization_id = $1
+          AND ($2::varchar IS NULL OR businesses.name ILIKE '%' || $2 || '%'
+            OR businesses.slug ILIKE '%' || $2 || '%'
+            OR businesses.email ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR businesses.status = $3::varchar)
+        GROUP BY businesses.id
+        ORDER BY businesses.created_at DESC
+        LIMIT $4 OFFSET $5`,
+        [...params, filters.limit ?? 50, filters.offset ?? 0],
+      ),
+      this.databaseService.query<{ total: string }>(
+        `SELECT COUNT(*)::text AS total
+        FROM businesses
+        WHERE organization_id = $1
+          AND ($2::varchar IS NULL OR name ILIKE '%' || $2 || '%'
+            OR slug ILIKE '%' || $2 || '%'
+            OR email ILIKE '%' || $2 || '%')
+          AND ($3::varchar IS NULL OR status = $3::varchar)`,
+        params,
+      ),
+    ]);
+    return { items: items.rows, total: total.rows[0]?.total ?? "0" };
+  }
+
+  async findOrganizationBusiness(
+    organizationId: string,
+    businessId: string,
+  ): Promise<SuperadminBusinessRecord | null> {
+    const result = await this.databaseService.query<SuperadminBusinessRecord>(
+      `SELECT businesses.id, businesses.organization_id, businesses.name,
+        businesses.slug, businesses.email, businesses.phone, businesses.timezone,
+        businesses.logo_url, businesses.status, businesses.created_at,
+        COUNT(DISTINCT employees.id) FILTER (WHERE employees.is_active = TRUE)::text
+          AS employee_count
+      FROM businesses
+      LEFT JOIN employees ON employees.business_id = businesses.id
+        AND employees.organization_id = businesses.organization_id
+      WHERE businesses.organization_id = $1 AND businesses.id = $2
+      GROUP BY businesses.id
+      LIMIT 1`,
+      [organizationId, businessId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async listBusinessEmployees(
+    organizationId: string,
+    businessId: string,
+    filters: ListSuperadminEmployeesDto,
+  ) {
+    const params = [
+      organizationId,
+      businessId,
+      filters.search?.trim() || null,
+      filters.status ?? null,
+    ];
+    const [items, total] = await Promise.all([
+      this.databaseService.query<SuperadminEmployeeRecord>(
+        `SELECT id, first_name, last_name, email, phone, color, is_active, created_at
+        FROM employees
+        WHERE organization_id = $1 AND business_id = $2
+          AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%'
+            OR last_name ILIKE '%' || $3 || '%'
+            OR email ILIKE '%' || $3 || '%'
+            OR phone ILIKE '%' || $3 || '%')
+          AND ($4::varchar IS NULL
+            OR ($4::varchar = 'ACTIVE' AND is_active = TRUE)
+            OR ($4::varchar = 'ARCHIVED' AND is_active = FALSE))
+        ORDER BY first_name ASC, last_name ASC, created_at ASC
+        LIMIT $5 OFFSET $6`,
+        [...params, filters.limit ?? 50, filters.offset ?? 0],
+      ),
+      this.databaseService.query<{ total: string }>(
+        `SELECT COUNT(*)::text AS total
+        FROM employees
+        WHERE organization_id = $1 AND business_id = $2
+          AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%'
+            OR last_name ILIKE '%' || $3 || '%'
+            OR email ILIKE '%' || $3 || '%'
+            OR phone ILIKE '%' || $3 || '%')
+          AND ($4::varchar IS NULL
+            OR ($4::varchar = 'ACTIVE' AND is_active = TRUE)
+            OR ($4::varchar = 'ARCHIVED' AND is_active = FALSE))`,
+        params,
+      ),
+    ]);
+    return { items: items.rows, total: total.rows[0]?.total ?? "0" };
+  }
+
   async updateOrganizationStatus(id: string, status: string): Promise<boolean> {
     const result = await this.databaseService.query(
       "UPDATE organizations SET status = $1, updated_at = NOW() WHERE id = $2",
@@ -272,8 +407,8 @@ export class SuperadminRepository {
       const result = await client.query<OrganizationSubscriptionRecord>(
         `INSERT INTO organization_subscriptions
           (organization_id, plan_code, status, trial_started_at, trial_ends_at, expires_at)
-        VALUES ($1, $2, $3,
-          CASE WHEN $3 = 'TRIAL' THEN NOW() ELSE NULL END,
+        VALUES ($1, $2, $3::varchar,
+          CASE WHEN $3::varchar = 'TRIAL' THEN NOW() ELSE NULL END,
           $4::timestamptz, $5::timestamptz)
         RETURNING id, organization_id, plan_code, status, trial_started_at,
           trial_ends_at, starts_at, expires_at, created_at, updated_at`,

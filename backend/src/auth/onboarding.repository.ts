@@ -93,6 +93,12 @@ export class OnboardingRepository {
         [business.id, organization.id],
       );
       await client.query(
+        `INSERT INTO organization_subscriptions
+          (organization_id, plan_code, status)
+        VALUES ($1, 'free', 'ACTIVE')`,
+        [organization.id],
+      );
+      await client.query(
         "INSERT INTO organization_locales (organization_id, locale, is_default) VALUES ($1, $2, TRUE)",
         [organization.id, "es"],
       );

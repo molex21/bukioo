@@ -12,6 +12,7 @@ describe("EmployeesService", () => {
     canAccessBusiness: jest.fn(),
     canManageBusiness: jest.fn(),
     create: jest.fn(),
+    getEmployeeCapacityForBusiness: jest.fn(),
     findActiveBusinessOrganizationId: jest.fn(),
     listByBusiness: jest.fn(),
     findActiveById: jest.fn(),
@@ -108,6 +109,41 @@ describe("EmployeesService", () => {
     ).rejects.toMatchObject({ status: 403 });
 
     expect(repositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects employee creation when the plan limit is reached", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.getEmployeeCapacityForBusiness.mockResolvedValue({
+      active_employees: "1",
+      max_employees: 1,
+    });
+
+    await expect(
+      service.create(
+        employee.business_id,
+        { firstName: "Grace", lastName: "Hopper" },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+
+    expect(repositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("allows employee creation when the plan is unlimited", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.getEmployeeCapacityForBusiness.mockResolvedValue({
+      active_employees: "500",
+      max_employees: null,
+    });
+    repositoryMock.create.mockResolvedValue(employee);
+
+    await expect(
+      service.create(
+        employee.business_id,
+        { firstName: "Grace", lastName: "Hopper" },
+        "actor-id",
+      ),
+    ).resolves.toEqual(employee);
   });
 
   it("invites an employee when requested during creation", async () => {

@@ -6,6 +6,9 @@ describe("SuperadminService", () => {
     getDashboard: jest.fn(),
     listOrganizations: jest.fn(),
     findOrganization: jest.fn(),
+    listOrganizationBusinesses: jest.fn(),
+    findOrganizationBusiness: jest.fn(),
+    listBusinessEmployees: jest.fn(),
     updateOrganizationStatus: jest.fn(),
     updateOrganizationSecurity: jest.fn(),
     listPlans: jest.fn(),
@@ -45,6 +48,19 @@ describe("SuperadminService", () => {
     is_active: true,
     created_at: new Date(),
     updated_at: new Date(),
+  };
+  const business = {
+    id: "business-id",
+    organization_id: organization.id,
+    name: "Centro",
+    slug: "centro",
+    email: "centro@example.com",
+    phone: "600000000",
+    timezone: "Atlantic/Canary",
+    logo_url: null,
+    status: "ACTIVE" as const,
+    employee_count: "4",
+    created_at: new Date("2026-08-02"),
   };
 
   beforeEach(() =>
@@ -108,5 +124,75 @@ describe("SuperadminService", () => {
       planCode: "pro",
       status: "ACTIVE",
     });
+  });
+
+  it("lists businesses within an existing organization with pagination", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    repository.listOrganizationBusinesses.mockResolvedValue({
+      items: [business],
+      total: "1",
+    });
+
+    await expect(
+      service.listOrganizationBusinesses(organization.id, { limit: 25 }),
+    ).resolves.toEqual({
+      pagination: { limit: 25, offset: 0, total: 1 },
+      items: [
+        expect.objectContaining({
+          id: business.id,
+          organizationId: organization.id,
+          employeeCount: 4,
+        }),
+      ],
+    });
+  });
+
+  it("returns 404 when a business is outside its organization", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    repository.findOrganizationBusiness.mockResolvedValue(null);
+
+    await expect(
+      service.getOrganizationBusiness(organization.id, "other-business-id"),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("lists only employees of the scoped business", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    repository.findOrganizationBusiness.mockResolvedValue(business);
+    repository.listBusinessEmployees.mockResolvedValue({
+      items: [
+        {
+          id: "employee-id",
+          first_name: "Ana",
+          last_name: "Diaz",
+          email: "ana@example.com",
+          phone: "600000001",
+          color: "#6C5CE7",
+          is_active: false,
+          created_at: new Date("2026-08-03"),
+        },
+      ],
+      total: "1",
+    });
+
+    await expect(
+      service.listBusinessEmployees(organization.id, business.id, {
+        status: "ARCHIVED",
+      }),
+    ).resolves.toMatchObject({
+      pagination: { limit: 50, offset: 0, total: 1 },
+      items: [
+        {
+          id: "employee-id",
+          firstName: "Ana",
+          isActive: false,
+        },
+      ],
+    });
+    expect(repository.listBusinessEmployees).toHaveBeenCalledWith(
+      organization.id,
+      business.id,
+      { status: "ARCHIVED" },
+    );
   });
 });

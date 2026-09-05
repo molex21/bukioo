@@ -34,6 +34,7 @@ import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
+import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
 import { EmailProvider } from "./email.provider";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { OnboardingRepository } from "./onboarding.repository";
@@ -630,6 +631,7 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
+      phone: user.phone,
       firstName: user.first_name,
       lastName: user.last_name,
       emailVerified: user.email_verified_at !== null,
@@ -653,6 +655,28 @@ export class AuthService {
           })),
       })),
     };
+  }
+
+  async updateMyProfile(userId: string, input: UpdateMyProfileDto) {
+    const user = await this.usersRepository.findById(userId);
+    if (
+      !user ||
+      user.status !== "ACTIVE" ||
+      user.email_verified_at === null ||
+      user.password_change_required
+    ) {
+      throw new UnauthorizedException("Access token invalido");
+    }
+
+    const updated = await this.usersRepository.updateMyProfile(userId, {
+      firstName: input.firstName?.trim(),
+      lastName: input.lastName?.trim(),
+      phone: input.phone?.trim(),
+      preferredLocale: input.preferredLocale?.trim().toLowerCase(),
+    });
+    if (!updated) throw new UnauthorizedException("Access token invalido");
+
+    return this.me(userId);
   }
 
   async requestEmailVerification(

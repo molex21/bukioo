@@ -30,6 +30,7 @@ export class EmployeesService {
     userId: string,
   ): Promise<EmployeeRecord> {
     await this.assertCanManageBusiness(userId, businessId);
+    await this.assertEmployeeCapacity(businessId);
     const employeeDto = this.normalize(createEmployeeDto);
 
     if (!employeeDto.inviteUser) {
@@ -214,6 +215,21 @@ export class EmployeesService {
     }
 
     return employee;
+  }
+
+  private async assertEmployeeCapacity(businessId: string): Promise<void> {
+    const capacity =
+      await this.employeesRepository.getEmployeeCapacityForBusiness(businessId);
+
+    if (
+      capacity &&
+      capacity.max_employees !== null &&
+      Number(capacity.active_employees) >= capacity.max_employees
+    ) {
+      throw new ConflictException(
+        `El plan actual permite hasta ${capacity.max_employees} empleados activos`,
+      );
+    }
   }
 
   private normalize<T extends CreateEmployeeDto | UpdateEmployeeDto>(

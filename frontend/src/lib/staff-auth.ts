@@ -19,6 +19,13 @@ export type StaffProfile = {
   id: string;
   isSuperadmin: boolean;
   lastName: string | null;
+  phone: string | null;
+};
+
+export type UpdateMyProfileInput = {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
 };
 
 export const staffAuth = {
@@ -27,6 +34,7 @@ export const staffAuth = {
   login: (email: string, password: string) => apiRequest<LoginResponse>("/auth/login", { body: JSON.stringify({ email, password }), method: "POST" }),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
   me: () => authenticatedApiRequest<StaffProfile>("/auth/me", { cache: "no-store" }),
+  updateMyProfile: (input: UpdateMyProfileInput) => authenticatedApiRequest<StaffProfile>("/auth/me", { body: JSON.stringify(input), method: "PATCH" }),
   requestPasswordReset: (email: string) => apiRequest<{ status: "accepted" }>("/auth/password/forgot", { body: JSON.stringify({ email }), method: "POST" }),
   resetPassword: (token: string, password: string) => apiRequest<{ passwordReset: true }>("/auth/password/reset", { body: JSON.stringify({ token, password }), method: "POST" }),
   verifyPasswordResetCode: (token: string) => apiRequest<{ codeVerified: true }>("/auth/password/reset/verify", { body: JSON.stringify({ token }), method: "POST" }),

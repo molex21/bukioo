@@ -993,7 +993,10 @@ verifica y rota el token, actualiza su hash y devuelve un access token nuevo.
 `POST /api/v1/auth/logout` revoca la sesion del refresh token y elimina la
 cookie HttpOnly.
 `GET /api/v1/auth/me` requiere `Authorization: Bearer <accessToken>` y
-devuelve el perfil seguro del usuario autenticado.
+devuelve el perfil seguro del usuario autenticado. `PATCH /api/v1/auth/me`
+permite actualizar el propio nombre, apellidos, telefono e idioma preferido.
+No permite editar email, color, notas, rol, estado ni configuracion de 2FA; los
+nombres y telefono se sincronizan con las fichas activas de empleado vinculadas.
 
 `POST /api/v1/auth/email/verification/request` genera un codigo numerico de
 seis digitos, de un solo uso y 10 minutos de validez para un email activo no
@@ -1074,6 +1077,9 @@ Estas rutas requieren un access token de un usuario activo con
 GET    /api/v1/superadmin/dashboard
 GET    /api/v1/superadmin/organizations?search=<text>&status=<ACTIVE|SUSPENDED>&planCode=<code>&limit=<1-100>&offset=<number>
 GET    /api/v1/superadmin/organizations/<organizationId>
+GET    /api/v1/superadmin/organizations/<organizationId>/businesses?search=<text>&status=<ACTIVE|SUSPENDED>&limit=<1-100>&offset=<number>
+GET    /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>
+GET    /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>/employees?search=<text>&status=<ACTIVE|ARCHIVED>&limit=<1-100>&offset=<number>
 PATCH  /api/v1/superadmin/organizations/<organizationId>/status
 PATCH  /api/v1/superadmin/organizations/<organizationId>/security
 PUT    /api/v1/superadmin/organizations/<organizationId>/subscription
@@ -1087,6 +1093,10 @@ DELETE /api/v1/superadmin/plans/<planCode>
 sin cobro integrado; recibe `planCode`, `status` (`TRIAL`, `ACTIVE` o
 `SUSPENDED`) y opcionalmente `trialEndsAt` y `expiresAt`. Los cambios quedan en
 `platform_audit_logs`.
+
+La navegacion de plataforma es jerarquica: organizacion, sus negocios y los
+empleados de cada negocio. Estas rutas solo son para superadmin; no sustituyen
+ni relajan los endpoints tenant `/businesses` y `/businesses/:businessId/employees`.
 
 ## Pruebas E2E
 

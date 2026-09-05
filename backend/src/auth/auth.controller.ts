@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Ip,
   Get,
+  Patch,
   Post,
   Req,
   Res,
@@ -35,6 +36,7 @@ import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
+import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import type { AuthenticatedRequest } from "./jwt-auth.guard";
 
@@ -153,6 +155,18 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@Req() request: AuthenticatedRequest) {
     return this.authService.me(request.userId!);
+  }
+
+  @Patch("me")
+  @UseGuards(JwtAuthGuard)
+  updateMyProfile(
+    @Body() updateMyProfileDto: UpdateMyProfileDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.authService.updateMyProfile(
+      request.userId!,
+      updateMyProfileDto,
+    );
   }
 
   @Post("email/verification/request")

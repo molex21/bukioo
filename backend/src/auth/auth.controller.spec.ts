@@ -15,6 +15,7 @@ describe("AuthController", () => {
     refresh: jest.fn(),
     logout: jest.fn(),
     me: jest.fn(),
+    updateMyProfile: jest.fn(),
     requestEmailVerification: jest.fn(),
     verifyEmail: jest.fn(),
     requestPasswordReset: jest.fn(),
@@ -59,6 +60,22 @@ describe("AuthController", () => {
 
   it("should be defined", () => {
     expect(controller).toBeDefined();
+  });
+
+  it("delegates self profile updates using the authenticated user", async () => {
+    const dto = { firstName: "Grace", phone: "600000001" };
+    const request = { userId: "user-id" };
+    authServiceMock.updateMyProfile.mockResolvedValue({ firstName: "Grace" });
+
+    await expect(
+      controller.updateMyProfile(dto, request as never),
+    ).resolves.toEqual({
+      firstName: "Grace",
+    });
+    expect(authServiceMock.updateMyProfile).toHaveBeenCalledWith(
+      "user-id",
+      dto,
+    );
   });
 
   it("delegates onboarding requests to the auth service", async () => {

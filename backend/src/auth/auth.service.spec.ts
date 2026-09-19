@@ -25,6 +25,7 @@ import { UserSessionsRepository } from "./user-sessions.repository";
 import { UserTokensRepository } from "./user-tokens.repository";
 import { TwoFactorRepository } from "./two-factor.repository";
 import { LoginProtectionRepository } from "./login-protection.repository";
+import { SecurityEventsRepository } from "./security-events.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
 
 describe("AuthService", () => {
@@ -70,12 +71,15 @@ describe("AuthService", () => {
     replacePasswordResetToken: jest.fn(),
     consumePasswordResetToken: jest.fn(),
     isPasswordResetTokenValid: jest.fn(),
+    replaceEmailChangeToken: jest.fn(),
+    consumeEmailChangeToken: jest.fn(),
   };
 
   const emailProviderMock = {
     sendEmailVerification: jest.fn(),
     sendAccountCredentials: jest.fn(),
     sendPasswordReset: jest.fn(),
+    sendEmailChange: jest.fn(),
   };
 
   const twoFactorRepositoryMock = {
@@ -86,9 +90,12 @@ describe("AuthService", () => {
 
   const loginProtectionRepositoryMock = {
     isUserLocked: jest.fn(),
+    getUserLockRemainingSeconds: jest.fn(),
     recordUserFailure: jest.fn(),
     clearUserFailures: jest.fn(),
   };
+
+  const securityEventsRepositoryMock = { record: jest.fn() };
 
   const configServiceMock = {
     getOrThrow: jest.fn(),
@@ -143,6 +150,10 @@ describe("AuthService", () => {
           useValue: loginProtectionRepositoryMock,
         },
         {
+          provide: SecurityEventsRepository,
+          useValue: securityEventsRepositoryMock,
+        },
+        {
           provide: EmailProvider,
           useValue: emailProviderMock,
         },
@@ -187,13 +198,17 @@ describe("AuthService", () => {
     userTokensRepositoryMock.replacePasswordResetToken.mockReset();
     userTokensRepositoryMock.consumePasswordResetToken.mockReset();
     userTokensRepositoryMock.isPasswordResetTokenValid.mockReset();
+    userTokensRepositoryMock.replaceEmailChangeToken.mockReset();
+    userTokensRepositoryMock.consumeEmailChangeToken.mockReset();
     emailProviderMock.sendEmailVerification.mockReset();
     emailProviderMock.sendAccountCredentials.mockReset();
     emailProviderMock.sendPasswordReset.mockReset();
+    emailProviderMock.sendEmailChange.mockReset();
     twoFactorRepositoryMock.findState.mockReset();
     twoFactorRepositoryMock.replacePendingSecret.mockReset();
     twoFactorRepositoryMock.enable.mockReset();
     loginProtectionRepositoryMock.isUserLocked.mockReset();
+    loginProtectionRepositoryMock.getUserLockRemainingSeconds.mockReset();
     loginProtectionRepositoryMock.recordUserFailure.mockReset();
     loginProtectionRepositoryMock.clearUserFailures.mockReset();
     configServiceMock.getOrThrow.mockReset();
@@ -538,13 +553,16 @@ describe("AuthService", () => {
   it("rejects a temporarily locked account without checking its password", async () => {
     usersRepositoryMock.findByEmail.mockResolvedValue(user);
     loginProtectionRepositoryMock.isUserLocked.mockResolvedValue(true);
+    loginProtectionRepositoryMock.getUserLockRemainingSeconds.mockResolvedValue(
+      125,
+    );
 
     await expect(
       service.validateCredentials({
         email: user.email,
         password: "a-secure-password",
       } satisfies LoginDto),
-    ).rejects.toMatchObject({ status: 401 });
+    ).rejects.toMatchObject({ status: 429 });
 
     expect(argon2.verify).not.toHaveBeenCalled();
   });
@@ -940,6 +958,80 @@ describe("AuthService", () => {
     });
   });
 
+  it("groups only the accessible active businesses under each active organization", async () => {
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    });
+    usersRepositoryMock.findActiveOrganizationsByUserId.mockResolvedValue([
+      {
+        id: "organization-ana",
+        name: "Peluqueria Ana",
+        logo_url: null,
+        role: "EMPLOYEE",
+      },
+      {
+        id: "organization-other",
+        name: "Otro negocio",
+        logo_url: null,
+        role: "MANAGER",
+      },
+    ]);
+    usersRepositoryMock.findAccessibleBusinessesByUserId.mockResolvedValue([
+      {
+        id: "business-ana",
+        organization_id: "organization-ana",
+        name: "Peluqueria Ana Centro",
+        slug: "peluqueria-ana-centro",
+        logo_url: null,
+        status: "ACTIVE",
+      },
+      {
+        id: "business-other",
+        organization_id: "organization-other",
+        name: "Otro negocio",
+        slug: "otro-negocio",
+        logo_url: null,
+        status: "ACTIVE",
+      },
+    ]);
+
+    await expect(service.me(user.id)).resolves.toMatchObject({
+      organizations: [
+        {
+          id: "organization-ana",
+          role: "EMPLOYEE",
+          businesses: [{ id: "business-ana" }],
+        },
+        {
+          id: "organization-other",
+          role: "MANAGER",
+          businesses: [{ id: "business-other" }],
+        },
+      ],
+    });
+  });
+
+  it("keeps active organizations with no accessible businesses empty", async () => {
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-08-24T10:00:00.000Z"),
+    });
+    usersRepositoryMock.findActiveOrganizationsByUserId.mockResolvedValue([
+      {
+        id: "organization-id",
+        name: "Example Company",
+        logo_url: null,
+        role: "EMPLOYEE",
+      },
+    ]);
+    usersRepositoryMock.findAccessibleBusinessesByUserId.mockResolvedValue([]);
+
+    await expect(service.me(user.id)).resolves.toMatchObject({
+      organizations: [{ id: "organization-id", businesses: [] }],
+    });
+  });
+
   it("rejects a missing or inactive user profile", async () => {
     usersRepositoryMock.findById.mockResolvedValueOnce(null);
 
@@ -1011,6 +1103,46 @@ describe("AuthService", () => {
     ).toHaveBeenCalledTimes(1);
   });
 
+  it("sends a hashed code to a normalized available replacement email", async () => {
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date(),
+    });
+    usersRepositoryMock.findByEmail.mockResolvedValue(null);
+    userTokensRepositoryMock.replaceEmailChangeToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendEmailChange.mockResolvedValue(undefined);
+
+    await expect(
+      service.requestEmailChange(user.id, { newEmail: " NEW@EXAMPLE.COM " }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      userTokensRepositoryMock.replaceEmailChangeToken,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({ newEmail: "new@example.com", userId: user.id }),
+    );
+    expect(emailProviderMock.sendEmailChange).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "new@example.com" }),
+    );
+  });
+
+  it("revokes the session after accepting a valid email-change code", async () => {
+    userTokensRepositoryMock.consumeEmailChangeToken.mockResolvedValue({
+      status: "changed",
+      email: "new@example.com",
+    });
+
+    await expect(
+      service.confirmEmailChange(user.id, { token: "123456" }),
+    ).resolves.toEqual({ email: "new@example.com", sessionRevoked: true });
+
+    expect(
+      userTokensRepositoryMock.consumeEmailChangeToken,
+    ).toHaveBeenCalledWith(user.id, expect.any(String));
+  });
+
   it("rejects a reused, expired, or unknown email-verification code", async () => {
     userTokensRepositoryMock.consumeEmailVerificationToken.mockResolvedValue(
       false,
@@ -1073,7 +1205,9 @@ describe("AuthService", () => {
 
   it("resets the password when a valid code is consumed", async () => {
     jest.mocked(argon2.hash).mockResolvedValue("new-password-hash");
-    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(true);
+    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(
+      user.id,
+    );
 
     await expect(
       service.resetPassword({
@@ -1089,7 +1223,7 @@ describe("AuthService", () => {
 
   it("rejects a reused, expired, or unknown password-reset code", async () => {
     jest.mocked(argon2.hash).mockResolvedValue("new-password-hash");
-    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(false);
+    userTokensRepositoryMock.consumePasswordResetToken.mockResolvedValue(null);
 
     await expect(
       service.resetPassword({

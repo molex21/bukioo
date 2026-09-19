@@ -7,11 +7,224 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
     { "key": "accessToken", "value": "" },
-    { "key": "customerAccessToken", "value": "" }
+    { "key": "customerAccessToken", "value": "" },
+    { "key": "membershipId", "value": "" },
+    { "key": "memberUserId", "value": "" },
+    { "key": "currentOwnerMembershipId", "value": "" },
+    { "key": "newOwnerMembershipId", "value": "" }
   ],
   "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
   "event": [{ "listen": "prerequest", "script": { "exec": ["if (pm.request.body) pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });"] } }],
   "item": [
+    {
+      "name": "Team and access",
+      "description": "Cuentas y permisos, separados de las fichas /employees. Bearer accessToken; superadmin usa las rutas Platform. Tras listar, copia membershipId y userId de la persona elegida a membershipId y memberUserId. expectedBusinessIds contiene todas sus asignaciones explicitas, incluidas las suspendidas. Ver backend/docs/API_REFERENCE.md.",
+      "item": [
+        {
+          "name": "Platform transfer ownership",
+          "request": {
+            "method": "POST",
+            "description": "Solo superadmin activo. Obtiene ambos membershipId del listado de miembros (no userId ni employeeId). El anterior queda ADMIN; el nuevo OWNER. 200 confirmado; 409 si el propietario cambio o el destino no es personal activo. Sin reintento automatico. No envia email ni modifica fichas/citas.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentOwnerMembershipId\": \"{{currentOwnerMembershipId}}\",\n  \"newOwnerMembershipId\": \"{{newOwnerMembershipId}}\"\n}"
+            },
+            "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/transfer-ownership"
+          }
+        },
+        {
+          "name": "Tenant list members",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/organizations/{{organizationId}}/members?limit=50&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "organizations",
+                "{{organizationId}}",
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "search",
+                  "value": "Ana",
+                  "disabled": true
+                },
+                {
+                  "key": "role",
+                  "value": "EMPLOYEE",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "businessId",
+                  "value": "{{businessId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tenant change member role",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Rol de toda la organizacion. ADMIN no puede conceder ADMIN ni editar otro ADMIN. Para conceder ADMIN omitir businessIds. Al quitar ADMIN la lista es obligatoria. OWNER protegido.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"MANAGER\",\n  \"businessIds\": [\n    \"{{businessId}}\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/members/{{membershipId}}/role"
+          }
+        },
+        {
+          "name": "Tenant suspend member access",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Solo suspende membresia del entorno, no cuenta global ni ficha. Para restaurar: status ACTIVE y expectedStatus SUSPENDED. 409 si expected* no coincide.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"expectedStatus\": \"ACTIVE\",\n  \"expectedRole\": \"EMPLOYEE\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/members/{{membershipId}}/status"
+          }
+        },
+        {
+          "name": "Tenant replace member businesses",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Sustituye TODOS los accesos explicitos, no mueve fichas de agenda. Rellena expectedBusinessIds desde el ultimo GET (explicitlyAssigned). Solo MANAGER/EMPLOYEE. 409 si estado desactualizado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessIds\": [\n    \"{{businessId}}\"\n  ],\n  \"expectedBusinessIds\": [],\n  \"expectedRole\": \"EMPLOYEE\"\n}"
+            },
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/members/{{membershipId}}/businesses"
+          }
+        },
+        {
+          "name": "Tenant link existing account as employee",
+          "request": {
+            "method": "POST",
+            "description": "201 ficha; 409 duplicada (tambien archivada) o limite del plan. No crea cuenta, no cambia roles ni envia email. memberUserId es userId del listado, no membershipId. No mezclar nombre/email/role/inviteUser.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberUserId}}\",\n  \"color\": \"#228B22\"\n}"
+            },
+            "url": "{{baseUrl}}/businesses/{{businessId}}/employees"
+          }
+        },
+        {
+          "name": "Platform list members",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/members?limit=50&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "superadmin",
+                "organizations",
+                "{{organizationId}}",
+                "members"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "search",
+                  "value": "Ana",
+                  "disabled": true
+                },
+                {
+                  "key": "role",
+                  "value": "EMPLOYEE",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE",
+                  "disabled": true
+                },
+                {
+                  "key": "businessId",
+                  "value": "{{businessId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Platform change member role",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Rol de toda la organizacion. ADMIN no puede conceder ADMIN ni editar otro ADMIN. Para conceder ADMIN omitir businessIds. Al quitar ADMIN la lista es obligatoria. OWNER protegido.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"MANAGER\",\n  \"businessIds\": [\n    \"{{businessId}}\"\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/members/{{membershipId}}/role"
+          }
+        },
+        {
+          "name": "Platform suspend member access",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Solo suspende membresia del entorno, no cuenta global ni ficha. Para restaurar: status ACTIVE y expectedStatus SUSPENDED. 409 si expected* no coincide.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"expectedStatus\": \"ACTIVE\",\n  \"expectedRole\": \"EMPLOYEE\"\n}"
+            },
+            "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/members/{{membershipId}}/status"
+          }
+        },
+        {
+          "name": "Platform replace member businesses",
+          "request": {
+            "method": "PATCH",
+            "description": "200. Sustituye TODOS los accesos explicitos, no mueve fichas de agenda. Rellena expectedBusinessIds desde el ultimo GET (explicitlyAssigned). Solo MANAGER/EMPLOYEE. 409 si estado desactualizado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessIds\": [\n    \"{{businessId}}\"\n  ],\n  \"expectedBusinessIds\": [],\n  \"expectedRole\": \"EMPLOYEE\"\n}"
+            },
+            "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/members/{{membershipId}}/businesses"
+          }
+        },
+        {
+          "name": "Platform link existing account as employee",
+          "request": {
+            "method": "POST",
+            "description": "201 ficha; 409 duplicada (tambien archivada) o limite del plan. No crea cuenta, no cambia roles ni envia email. memberUserId es userId del listado, no membershipId. No mezclar nombre/email/role/inviteUser.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{memberUserId}}\",\n  \"color\": \"#228B22\"\n}"
+            },
+            "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/businesses/{{businessId}}/employees"
+          }
+        }
+      ]
+    },
     {
       "name": "Health",
       "item": [
@@ -150,7 +363,10 @@
         { "name": "Reports appointments CSV", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/appointments.csv?from={{from}}&to={{to}}" } },
         { "name": "Reports appointments JSON", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/appointments?from={{from}}&to={{to}}&limit=50&offset=0" } },
         { "name": "Reports employees", "request": { "method": "GET", "url": "{{baseUrl}}/businesses/{{businessId}}/reports/employees?from={{from}}&to={{to}}" } },
+        { "name": "Superadmin create organization", "request": { "method": "POST", "description": "Provisiona owner, organizacion y negocio inicial. La contrasena temporal se envia por email y no aparece en la respuesta.", "body": { "mode": "raw", "raw": "{\"email\":\"owner@peluqueriaana.com\",\"firstName\":\"Ana\",\"lastName\":\"Garcia\",\"organizationName\":\"Peluqueria Ana\",\"organizationSlug\":\"peluqueria-ana\",\"timezone\":\"Atlantic/Canary\"}" }, "url": "{{baseUrl}}/superadmin/organizations" } },
         { "name": "Superadmin organization", "request": { "method": "GET", "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}" } },
+        { "name": "Superadmin create business", "request": { "method": "POST", "body": { "mode": "raw", "raw": "{\"name\":\"Peluqueria Ana Centro\",\"slug\":\"peluqueria-ana-centro\",\"email\":\"centro@peluqueriaana.com\",\"phone\":\"600000000\",\"timezone\":\"Atlantic/Canary\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/businesses" } },
+        { "name": "Superadmin create employee", "request": { "method": "POST", "description": "role solo admite MANAGER o EMPLOYEE.", "body": { "mode": "raw", "raw": "{\"email\":\"empleado@peluqueriaana.com\",\"firstName\":\"Lucia\",\"lastName\":\"Perez\",\"phone\":\"600000001\",\"color\":\"#6C5CE7\",\"role\":\"EMPLOYEE\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/businesses/{{businessId}}/employees" } },
         { "name": "Superadmin organization status", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"status\":\"SUSPENDED\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/status" } },
         { "name": "Superadmin organization security", "request": { "method": "PATCH", "body": { "mode": "raw", "raw": "{\"require2faForAdmins\":true}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/security" } },
         { "name": "Superadmin subscription", "request": { "method": "PUT", "body": { "mode": "raw", "raw": "{\"planCode\":\"pro\",\"status\":\"ACTIVE\"}" }, "url": "{{baseUrl}}/superadmin/organizations/{{organizationId}}/subscription" } },

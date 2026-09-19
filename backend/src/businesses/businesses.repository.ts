@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import type { PoolClient } from "pg";
 import { DatabaseService } from "../database/database.service";
 import type { CreateBusinessDto } from "./dto/create-business.dto";
 import type { UpdateBusinessDto } from "./dto/update-business.dto";
@@ -47,23 +48,7 @@ export class BusinessesRepository {
     creatorUserId: string,
   ): Promise<BusinessRecord> {
     return this.databaseService.transaction(async (client) => {
-      const result = await client.query<BusinessRecord>(
-        `INSERT INTO businesses
-          (organization_id, name, slug, email, phone, timezone, logo_url)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, organization_id, name, slug, email, phone, timezone,
-          logo_url, status, created_at, updated_at`,
-        [
-          createBusinessDto.organizationId,
-          createBusinessDto.name,
-          createBusinessDto.slug,
-          createBusinessDto.email ?? null,
-          createBusinessDto.phone ?? null,
-          createBusinessDto.timezone ?? "UTC",
-          createBusinessDto.logoUrl ?? null,
-        ],
-      );
-      const business = result.rows[0];
+      const business = await this.createWithSettings(client, createBusinessDto);
 
       await client.query(
         `INSERT INTO business_memberships
@@ -71,19 +56,52 @@ export class BusinessesRepository {
         VALUES ($1, $2, $3)`,
         [business.id, creatorUserId, business.organization_id],
       );
-      await client.query(
-        `INSERT INTO business_loyalty_settings (business_id, organization_id)
-        VALUES ($1, $2)`,
-        [business.id, business.organization_id],
-      );
-      await client.query(
-        `INSERT INTO business_notification_settings (business_id, organization_id)
-        VALUES ($1, $2)`,
-        [business.id, business.organization_id],
-      );
-
       return business;
     });
+  }
+
+  async createForOrganization(
+    createBusinessDto: CreateBusinessDto,
+  ): Promise<BusinessRecord> {
+    return this.databaseService.transaction((client) =>
+      this.createWithSettings(client, createBusinessDto),
+    );
+  }
+
+  private async createWithSettings(
+    client: PoolClient,
+    createBusinessDto: CreateBusinessDto,
+  ): Promise<BusinessRecord> {
+    const result = await client.query<BusinessRecord>(
+      `INSERT INTO businesses
+        (organization_id, name, slug, email, phone, timezone, logo_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, organization_id, name, slug, email, phone, timezone,
+        logo_url, status, created_at, updated_at`,
+      [
+        createBusinessDto.organizationId,
+        createBusinessDto.name,
+        createBusinessDto.slug,
+        createBusinessDto.email ?? null,
+        createBusinessDto.phone ?? null,
+        createBusinessDto.timezone ?? "UTC",
+        createBusinessDto.logoUrl ?? null,
+      ],
+    );
+    const business = result.rows[0];
+
+    await client.query(
+      `INSERT INTO business_loyalty_settings (business_id, organization_id)
+      VALUES ($1, $2)`,
+      [business.id, business.organization_id],
+    );
+    await client.query(
+      `INSERT INTO business_notification_settings (business_id, organization_id)
+      VALUES ($1, $2)`,
+      [business.id, business.organization_id],
+    );
+
+    return business;
   }
 
   async listByOrganization(organizationId: string): Promise<BusinessRecord[]> {

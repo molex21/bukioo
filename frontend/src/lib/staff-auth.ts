@@ -19,13 +19,35 @@ export type StaffProfile = {
   id: string;
   isSuperadmin: boolean;
   lastName: string | null;
+  organizations: StaffOrganization[];
   phone: string | null;
+};
+
+export type StaffBusiness = {
+  id: string;
+  logoUrl: string | null;
+  name: string;
+  slug: string;
+  status: "ACTIVE" | "SUSPENDED";
+};
+
+export type StaffOrganization = {
+  businesses: StaffBusiness[];
+  id: string;
+  logoUrl: string | null;
+  name: string;
+  role: "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "CLIENT";
 };
 
 export type UpdateMyProfileInput = {
   firstName?: string;
   lastName?: string;
   phone?: string;
+};
+
+export type ConfirmEmailChangeResponse = {
+  email: string;
+  sessionRevoked: true;
 };
 
 export const staffAuth = {
@@ -35,6 +57,8 @@ export const staffAuth = {
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
   me: () => authenticatedApiRequest<StaffProfile>("/auth/me", { cache: "no-store" }),
   updateMyProfile: (input: UpdateMyProfileInput) => authenticatedApiRequest<StaffProfile>("/auth/me", { body: JSON.stringify(input), method: "PATCH" }),
+  requestEmailChange: (newEmail: string) => authenticatedApiRequest<{ status: "accepted" }>("/auth/email/change/request", { body: JSON.stringify({ newEmail }), method: "POST" }),
+  confirmEmailChange: (token: string) => authenticatedApiRequest<ConfirmEmailChangeResponse>("/auth/email/change/confirm", { body: JSON.stringify({ token }), method: "POST" }),
   requestPasswordReset: (email: string) => apiRequest<{ status: "accepted" }>("/auth/password/forgot", { body: JSON.stringify({ email }), method: "POST" }),
   resetPassword: (token: string, password: string) => apiRequest<{ passwordReset: true }>("/auth/password/reset", { body: JSON.stringify({ token, password }), method: "POST" }),
   verifyPasswordResetCode: (token: string) => apiRequest<{ codeVerified: true }>("/auth/password/reset/verify", { body: JSON.stringify({ token }), method: "POST" }),

@@ -47,6 +47,46 @@ describe("SuperadminRepository", () => {
     );
   });
 
+  it("extends an active trial for the same plan without expiring it", async () => {
+    clientMock.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "subscription-id",
+            organization_id: "organization-id",
+            plan_code: "free",
+            status: "TRIAL",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "subscription-id",
+            organization_id: "organization-id",
+            plan_code: "free",
+            status: "TRIAL",
+            trial_ends_at: new Date("2026-10-01T00:00:00.000Z"),
+          },
+        ],
+      });
+
+    await expect(
+      repository.setSubscription("organization-id", {
+        planCode: "free",
+        status: "TRIAL",
+        trialEndsAt: "2026-10-01T00:00:00.000Z",
+      }),
+    ).resolves.toMatchObject({ status: "TRIAL" });
+
+    expect(clientMock.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("SET trial_ends_at"),
+      ["2026-10-01T00:00:00.000Z", null, "subscription-id"],
+    );
+    expect(clientMock.query.mock.calls).toHaveLength(2);
+  });
+
   it("scopes business listings and their employee count to one organization", async () => {
     databaseServiceMock.query
       .mockResolvedValueOnce({ rows: [] })

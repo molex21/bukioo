@@ -11,6 +11,7 @@ import { TwoFactorRepository } from "./two-factor.repository";
 import { AuthorizationRepository } from "./authorization.repository";
 import { UsersRepository } from "./users.repository";
 import { LoginProtectionRepository } from "./login-protection.repository";
+import { SecurityEventsRepository } from "./security-events.repository";
 
 describe("AuthModule", () => {
   it("configures JWT access tokens with the environment secret", async () => {
@@ -44,6 +45,8 @@ describe("AuthModule", () => {
       .overrideProvider(AuthorizationRepository)
       .useValue({})
       .overrideProvider(LoginProtectionRepository)
+      .useValue({})
+      .overrideProvider(SecurityEventsRepository)
       .useValue({})
       .overrideProvider(EmailProvider)
       .useValue({})

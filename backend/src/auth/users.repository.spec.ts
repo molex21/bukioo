@@ -9,7 +9,7 @@ describe("UsersRepository", () => {
     databaseServiceMock.transaction.mockReset();
   });
 
-  it("returns businesses assigned directly to the user or allowed by an administrative role", async () => {
+  it("returns only active businesses available through an active membership", async () => {
     databaseServiceMock.query.mockResolvedValue({ rows: [] });
 
     await expect(
@@ -26,6 +26,23 @@ describe("UsersRepository", () => {
       ),
       ["user-id"],
     );
+    const [query] = databaseServiceMock.query.mock.calls[0] as [string];
+    expect(query).toContain("organization_memberships.status = 'ACTIVE'");
+    expect(query).toContain("businesses.status = 'ACTIVE'");
+    expect(query).toContain(
+      "organization_memberships.role IN ('OWNER', 'ADMIN')",
+    );
+    expect(query).toContain("OR business_memberships.user_id IS NOT NULL");
+  });
+
+  it("returns organizations only when their membership and organization are active", async () => {
+    databaseServiceMock.query.mockResolvedValue({ rows: [] });
+
+    await repository.findActiveOrganizationsByUserId("user-id");
+
+    const [query] = databaseServiceMock.query.mock.calls[0] as [string];
+    expect(query).toContain("organization_memberships.status = 'ACTIVE'");
+    expect(query).toContain("organizations.status = 'ACTIVE'");
   });
 
   it("updates the account and active employee profiles in one transaction", async () => {

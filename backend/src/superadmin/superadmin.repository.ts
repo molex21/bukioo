@@ -6,6 +6,8 @@ import type { ListSuperadminEmployeesDto } from "./dto/list-superadmin-employees
 import type { ListSuperadminOrganizationsDto } from "./dto/list-superadmin-organizations.dto";
 import type { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscription.dto";
 import type { UpdatePlanDto } from "./dto/update-plan.dto";
+import type { UpdateSuperadminBusinessDto } from "./dto/update-superadmin-business.dto";
+import type { ListPlatformAuditLogsDto } from "./dto/list-platform-audit-logs.dto";
 
 export interface PlanRecord {
   code: string;
@@ -65,12 +67,25 @@ interface SuperadminBusinessRecord {
 
 interface SuperadminEmployeeRecord {
   id: string;
+  user_id: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
   phone: string | null;
   color: string | null;
   is_active: boolean;
+  created_at: Date;
+}
+
+export interface PlatformAuditLogRecord {
+  id: string;
+  actor_user_id: string | null;
+  actor_email: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  old_values: Record<string, unknown> | null;
+  new_values: Record<string, unknown> | null;
   created_at: Date;
 }
 
@@ -252,6 +267,36 @@ export class SuperadminRepository {
     return result.rows[0] ?? null;
   }
 
+  async updateOrganizationBusiness(
+    organizationId: string,
+    businessId: string,
+    input: UpdateSuperadminBusinessDto,
+  ): Promise<boolean> {
+    const result = await this.databaseService.query(
+      `UPDATE businesses
+      SET name = COALESCE($1, name), slug = COALESCE($2, slug),
+          email = COALESCE($3, email), phone = COALESCE($4, phone),
+          timezone = COALESCE($5, timezone), status = COALESCE($6, status),
+          logo_url = CASE WHEN $7 THEN $8 ELSE logo_url END, updated_at = NOW()
+      WHERE id = $9 AND organization_id = $10`,
+      [
+        input.name?.trim(),
+        input.slug?.trim().toLowerCase(),
+        input.email?.trim().toLowerCase(),
+        input.phone?.trim(),
+        input.timezone?.trim(),
+        input.status,
+        Object.prototype.hasOwnProperty.call(input, "logoUrl"),
+        typeof input.logoUrl === "string"
+          ? input.logoUrl.trim()
+          : (input.logoUrl ?? null),
+        businessId,
+        organizationId,
+      ],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
   async listBusinessEmployees(
     organizationId: string,
     businessId: string,
@@ -265,7 +310,7 @@ export class SuperadminRepository {
     ];
     const [items, total] = await Promise.all([
       this.databaseService.query<SuperadminEmployeeRecord>(
-        `SELECT id, first_name, last_name, email, phone, color, is_active, created_at
+        `SELECT id, user_id, first_name, last_name, email, phone, color, is_active, created_at
         FROM employees
         WHERE organization_id = $1 AND business_id = $2
           AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%'
@@ -399,6 +444,35 @@ export class SuperadminRepository {
     input: SetOrganizationSubscriptionDto,
   ): Promise<OrganizationSubscriptionRecord> {
     return this.databaseService.transaction(async (client) => {
+      if (input.status === "TRIAL") {
+        const current = await client.query<OrganizationSubscriptionRecord>(
+          `SELECT id, organization_id, plan_code, status, trial_started_at,
+            trial_ends_at, starts_at, expires_at, created_at, updated_at
+          FROM organization_subscriptions
+          WHERE organization_id = $1 AND status = 'TRIAL'
+          ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+          [organizationId],
+        );
+        const subscription = current.rows[0];
+        if (subscription && subscription.plan_code === input.planCode) {
+          const updated = await client.query<OrganizationSubscriptionRecord>(
+            `UPDATE organization_subscriptions
+            SET trial_ends_at = COALESCE($1::timestamptz, trial_ends_at),
+              expires_at = COALESCE($2::timestamptz, expires_at), updated_at = NOW()
+            WHERE id = $3
+            RETURNING id, organization_id, plan_code, status, trial_started_at,
+              trial_ends_at, starts_at, expires_at, created_at, updated_at`,
+            [
+              input.trialEndsAt ?? null,
+              input.expiresAt ?? null,
+              subscription.id,
+            ],
+          );
+          const result = updated.rows[0];
+          if (!result) throw new Error("No se pudo ampliar la prueba");
+          return result;
+        }
+      }
       await client.query(
         `UPDATE organization_subscriptions SET status = 'EXPIRED', updated_at = NOW()
         WHERE organization_id = $1 AND status IN ('TRIAL', 'ACTIVE', 'SUSPENDED')`,
@@ -426,6 +500,61 @@ export class SuperadminRepository {
       }
       return subscription;
     });
+  }
+
+  async listSubscriptions(
+    organizationId: string,
+  ): Promise<OrganizationSubscriptionRecord[]> {
+    const result =
+      await this.databaseService.query<OrganizationSubscriptionRecord>(
+        `SELECT id, organization_id, plan_code, status, trial_started_at, trial_ends_at,
+        starts_at, expires_at, created_at, updated_at
+      FROM organization_subscriptions WHERE organization_id = $1
+      ORDER BY created_at DESC, id DESC`,
+        [organizationId],
+      );
+    return result.rows;
+  }
+
+  async listAuditLogs(filters: ListPlatformAuditLogsDto) {
+    const params = [
+      filters.organizationId ?? null,
+      filters.actorUserId ?? null,
+      filters.action?.trim() || null,
+      filters.from ?? null,
+      filters.to ?? null,
+    ];
+    const condition = `WHERE ($1::uuid IS NULL OR logs.entity_id = $1::text
+        OR logs.new_values->>'organizationId' = $1::text OR logs.new_values->>'organization_id' = $1::text
+        OR logs.old_values->>'organizationId' = $1::text OR logs.old_values->>'organization_id' = $1::text)
+      AND ($2::uuid IS NULL OR logs.actor_user_id = $2::uuid)
+      AND ($3::varchar IS NULL OR logs.action = $3::varchar)
+      AND ($4::timestamptz IS NULL OR logs.created_at >= $4::timestamptz)
+      AND ($5::timestamptz IS NULL OR logs.created_at < $5::timestamptz)`;
+    const source = `WITH all_logs AS (
+      SELECT id, actor_user_id, action, entity_type, entity_id, old_values, new_values, created_at
+      FROM platform_audit_logs
+      UNION ALL
+      SELECT id, user_id AS actor_user_id, event_type AS action, 'SECURITY_EVENT' AS entity_type,
+        user_id::text AS entity_id, NULL::jsonb AS old_values,
+        jsonb_build_object('outcome', outcome, 'ipAddress', host(ip_address),
+          'userAgent', user_agent, 'metadata', metadata) AS new_values, created_at
+      FROM security_event_logs
+    )`;
+    const [items, total] = await Promise.all([
+      this.databaseService.query<PlatformAuditLogRecord>(
+        `${source} SELECT logs.id, logs.actor_user_id, users.email AS actor_email, logs.action,
+          logs.entity_type, logs.entity_id, logs.old_values, logs.new_values, logs.created_at
+        FROM all_logs logs LEFT JOIN users ON users.id = logs.actor_user_id
+        ${condition} ORDER BY logs.created_at DESC, logs.id DESC LIMIT $6 OFFSET $7`,
+        [...params, filters.limit ?? 50, filters.offset ?? 0],
+      ),
+      this.databaseService.query<{ total: string }>(
+        `${source} SELECT COUNT(*)::text AS total FROM all_logs logs ${condition}`,
+        params,
+      ),
+    ]);
+    return { items: items.rows, total: total.rows[0]?.total ?? "0" };
   }
 
   async recordAudit(

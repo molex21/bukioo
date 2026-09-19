@@ -37,6 +37,8 @@ import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
+import { RequestEmailChangeDto } from "./dto/request-email-change.dto";
+import { ConfirmEmailChangeDto } from "./dto/confirm-email-change.dto";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import type { AuthenticatedRequest } from "./jwt-auth.guard";
 
@@ -130,10 +132,15 @@ export class AuthController {
   async refresh(
     @Headers("cookie") cookieHeader: string | undefined,
     @Res({ passthrough: true }) response: Response,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
   ) {
-    const { refreshToken, ...refreshResponse } = await this.authService.refresh(
-      this.getRefreshToken(cookieHeader),
-    );
+    const token = this.getRefreshToken(cookieHeader);
+    const refreshResult =
+      userAgent || ipAddress
+        ? await this.authService.refresh(token, { userAgent, ipAddress })
+        : await this.authService.refresh(token);
+    const { refreshToken, ...refreshResponse } = refreshResult;
 
     this.setRefreshTokenCookie(response, refreshToken);
 
@@ -145,8 +152,15 @@ export class AuthController {
   async logout(
     @Headers("cookie") cookieHeader: string | undefined,
     @Res({ passthrough: true }) response: Response,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
   ): Promise<void> {
-    await this.authService.logout(this.getRefreshToken(cookieHeader));
+    const token = this.getRefreshToken(cookieHeader);
+    if (userAgent || ipAddress) {
+      await this.authService.logout(token, { userAgent, ipAddress });
+    } else {
+      await this.authService.logout(token);
+    }
     this.clearRefreshTokenCookie(response);
   }
 
@@ -167,6 +181,42 @@ export class AuthController {
       request.userId!,
       updateMyProfileDto,
     );
+  }
+
+  @Post("email/change/request")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  async requestEmailChange(
+    @Body() input: RequestEmailChangeDto,
+    @Req() request: AuthenticatedRequest,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
+  ) {
+    await this.authService.requestEmailChange(request.userId!, input, {
+      userAgent,
+      ipAddress,
+    });
+    return { status: "accepted" };
+  }
+
+  @Post("email/change/confirm")
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async confirmEmailChange(
+    @Body() input: ConfirmEmailChangeDto,
+    @Req() request: AuthenticatedRequest,
+    @Headers("user-agent") userAgent: string | undefined,
+    @Ip() ipAddress: string,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.confirmEmailChange(
+      request.userId!,
+      input,
+      { userAgent, ipAddress },
+    );
+    this.clearRefreshTokenCookie(response);
+    return result;
   }
 
   @Post("email/verification/request")

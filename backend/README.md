@@ -167,6 +167,25 @@ continuaran sin error, pero los destinatarios no recibiran codigos,
 contrasenas temporales ni recordatorios. En produccion, las variables de
 Resend solo son obligatorias si el envio esta activado.
 
+Si Resend rechaza un envio, buscar `email_delivery_failed` en los logs del
+backend. Incluye `providerStatus` (HTTP de Resend), `providerCode` (codigo
+reconocido o `unknown`) y `reason` con una etiqueta segura. Por ejemplo:
+`testing_recipient_restriction` indica una restriccion del destinatario de
+pruebas; `sender_domain_not_verified`, dominio remitente sin verificar;
+`invalid_api_key`/`restricted_api_key`, problema con la clave; y
+`daily_quota_exceeded`/`rate_limit_exceeded`, limite del proveedor.
+Los codigos se basan en la [referencia de errores de Resend](https://resend.com/docs/api-reference/errors).
+No se registra el mensaje externo, destinatario, remitente, contenido del
+correo ni credenciales. Un rechazo desconocido o una respuesta no JSON conserva
+el estado HTTP y usa `unknown_provider_error`. La API sigue devolviendo `503`
+con `No se pudo enviar el email`, sin detalles internos. Si falta configuracion,
+el log usa `missing_configuration` y no se llama al proveedor.
+
+En el provisionamiento actual la organizacion se guarda antes de enviar el
+correo: un `503` de email no revierte su creacion. Consultar el listado antes
+de repetir el alta para evitar un `409` por datos ya existentes. Este diagnostico
+no reenvia correos ni recupera automaticamente altas anteriores.
+
 `TRUST_PROXY_HOPS` debe quedarse en `0` durante desarrollo y cuando la API se
 expone directamente. Configura `1` para un proxy inverso directo, como Nginx
 Proxy Manager, y aumenta el valor solo cuando exista otro salto de proxy real.
@@ -1076,10 +1095,17 @@ Estas rutas requieren un access token de un usuario activo con
 ```text
 GET    /api/v1/superadmin/dashboard
 GET    /api/v1/superadmin/organizations?search=<text>&status=<ACTIVE|SUSPENDED>&planCode=<code>&limit=<1-100>&offset=<number>
+POST   /api/v1/superadmin/organizations
 GET    /api/v1/superadmin/organizations/<organizationId>
+GET    /api/v1/superadmin/organizations/<organizationId>/members?search=<text>&role=<role>&status=<status>&businessId=<uuid>&limit=<1-100>&offset=<number>
+PATCH  /api/v1/superadmin/organizations/<organizationId>/members/<membershipId>/role
+PATCH  /api/v1/superadmin/organizations/<organizationId>/members/<membershipId>/status
+PATCH  /api/v1/superadmin/organizations/<organizationId>/members/<membershipId>/businesses
 GET    /api/v1/superadmin/organizations/<organizationId>/businesses?search=<text>&status=<ACTIVE|SUSPENDED>&limit=<1-100>&offset=<number>
+POST   /api/v1/superadmin/organizations/<organizationId>/businesses
 GET    /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>
 GET    /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>/employees?search=<text>&status=<ACTIVE|ARCHIVED>&limit=<1-100>&offset=<number>
+POST   /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>/employees
 PATCH  /api/v1/superadmin/organizations/<organizationId>/status
 PATCH  /api/v1/superadmin/organizations/<organizationId>/security
 PUT    /api/v1/superadmin/organizations/<organizationId>/subscription
@@ -1094,9 +1120,105 @@ sin cobro integrado; recibe `planCode`, `status` (`TRIAL`, `ACTIVE` o
 `SUSPENDED`) y opcionalmente `trialEndsAt` y `expiresAt`. Los cambios quedan en
 `platform_audit_logs`.
 
+El listado de miembros permite distinguir cuenta, rol organizativo, empresas
+asignadas y ficha de agenda. `PATCH .../members/:membershipId/status` suspende o
+restablece el acceso a la organizacion sin borrar la ficha de empleado ni sus
+empresas. `PATCH .../businesses` reemplaza las empresas de un `MANAGER` o
+`EMPLOYEE` y admite una lista vacia; el rol se cambia exclusivamente con
+`PATCH .../role`. Los tres PATCH usan valores esperados del listado para evitar
+que una pantalla desactualizada sobrescriba cambios concurrentes.
+
 La navegacion de plataforma es jerarquica: organizacion, sus negocios y los
 empleados de cada negocio. Estas rutas solo son para superadmin; no sustituyen
 ni relajan los endpoints tenant `/businesses` y `/businesses/:businessId/employees`.
+El superadmin puede provisionar una organizacion con owner y negocio inicial,
+crear negocios adicionales e invitar `MANAGER` o `EMPLOYEE`. Las contrasenas
+temporales se entregan solo por correo y las tres acciones quedan auditadas en
+`platform_audit_logs`.
+
+## Edición de empleados desde plataforma
+
+La interfaz llama «Empresa» al recurso técnico `businesses`. Se mantienen los
+endpoints tenant y sus permisos OWNER/ADMIN sin cambios. Superadmin dispone de:
+
+- `GET /api/v1/superadmin/organizations/:organizationId/businesses/:businessId/employees/:employeeId`.
+- `PATCH` sobre la misma ruta para datos y estado del empleado.
+
+El detalle incluye `userId`, `notes`, `updatedAt` y `archivedAt`; el listado
+también incluye `userId` nullable. PATCH requiere `expectedUpdatedAt` ISO-8601
+(el `updatedAt` del GET) y admite `firstName`, `lastName`, `email`, `phone`,
+`color`, `notes`, `isActive`. Email, teléfono, color y notas admiten `null` para
+vaciarse. No admite campos de cuenta, roles ni contraseñas. El correo se cambia
+solo en el empleado, nunca en el usuario asociado.
+
+Las lecturas incluyen empleados archivados. Las mutaciones requieren organización
+y empresa activas y comprueban su ámbito completo. Una versión desactualizada
+devuelve 409. La reactivación usa el mismo registro, conserva sus asociaciones y
+comprueba el máximo de empleados activos del plan bajo bloqueo de organización.
+Revocar el permiso de agenda conserva citas e historial: no cancela citas ni
+cambia accesos de usuario.
+La actualización y ambas auditorías (`audit_logs`, `platform_audit_logs`) se
+guardan en una transacción. No necesita migraciones adicionales.
+
+## Equipo, roles y accesos
+
+El listado de cuentas de una organizacion incluye OWNER y ADMIN aunque no
+tengan ficha de empleado. Las rutas de empleados siguen sirviendo a la agenda:
+no se eliminan ni se convierten en listados de usuarios.
+
+```text
+GET   /api/v1/organizations/:organizationId/members
+PATCH /api/v1/organizations/:organizationId/members/:membershipId/role
+PATCH /api/v1/organizations/:organizationId/members/:membershipId/status
+PATCH /api/v1/organizations/:organizationId/members/:membershipId/businesses
+```
+
+Superadmin dispone de las mismas cuatro rutas con `/superadmin` delante de
+`/organizations`. OWNER/ADMIN gestionan su entorno; ADMIN solo puede modificar
+otros MANAGER/EMPLOYEE. OWNER no se transfiere por estas rutas. Los cambios de
+estado y asignacion requieren los campos `expected*` del contrato y rechazan
+ediciones desactualizadas con 409. Roles/accesos y auditoria son transaccionales.
+
+Un superadmin también puede cambiar el correo de acceso de una cuenta activa
+desde su menú de usuario. Primero solicita
+`POST .../members/:membershipId/email-change/request` con `{newEmail}`; el
+código de seis dígitos llega solo al correo nuevo y caduca a los 10 minutos.
+Después confirma con `POST .../members/:membershipId/email-change/confirm` y
+`{token}`. La confirmación actualiza el correo, marca la dirección verificada,
+revoca sus sesiones y deja auditoría de la solicitud y del cambio, sin guardar
+el código en los registros.
+
+Los POST de empleados tenant/superadmin admiten `{userId,color?}` para vincular
+una cuenta existente, sin duplicarla, enviar correo o cambiar su rol. El tenant
+admite tambien `notes`. No mezclar esta alternativa con los datos de invitacion.
+Una ficha activa o archivada ya existente devuelve 409.
+
+Antes de vincular usuarios a varios negocios aplicar, desde `backend`,
+`npx.cmd dbmate up`. La migracion `20260912120000_scope_employee_user_to_business`
+cambia la unicidad de `(organization_id,user_id)` a `(business_id,user_id)`:
+conserva todos los registros. Su rollback rechaza usuarios con varias fichas
+en una misma organizacion para no borrar datos automaticamente.
+
+Contratos, permisos, ejemplos y errores: [API Reference](docs/API_REFERENCE.md#equipo-roles-y-accesos).
+Postman: carpeta **Team and access** en `postman/BUKIOO.postman_collection.json`.
+Se mantienen por separado `membershipId`, `memberUserId` y `employeeId`.
+
+### Transferencia de propietario
+
+Solo superadmin activo puede ejecutar
+`POST /api/v1/superadmin/organizations/:organizationId/transfer-ownership`.
+Body: `{currentOwnerMembershipId,newOwnerMembershipId}` (UUID de membresias).
+Devuelve `200` con `{organizationId,previousOwner,newOwner}`: el anterior pasa
+a ADMIN y el nuevo a OWNER. El destinatario debe ser personal activo del mismo
+entorno, con cuenta activa. No se transfieren datos ni se envia correo.
+
+La comprobacion del propietario esperado, ambos roles y ambas auditorias se
+guardan bajo bloqueo de organizacion en una transaccion. Repeticiones o cambios
+concurrentes obsoletos dan `409`; frontend debe recargar y volver a confirmar.
+El PATCH normal de roles sigue sin permitir OWNER. No requiere una migracion
+nueva. Postman incluye **Platform transfer ownership** en **Team and access**.
+El flujo de seleccion/confirmacion para frontend se detalla en
+[API Reference](docs/API_REFERENCE.md#transferir-propiedad-solo-superadmin).
 
 ## Pruebas E2E
 
@@ -1112,6 +1234,13 @@ npm.cmd run test:e2e
 Los tests E2E desactivan pg-boss y los correos, y limpian exclusivamente la
 base de pruebas entre casos.
 
+La suite `test/organization-members.e2e-spec.ts` prueba HTTP, permisos, SQL,
+aislamiento, limites del plan y concurrencia de equipo. Solo elimina sus propios
+fixtures y se puede ejecutar con `npm.cmd run test:e2e -- --runInBand organization-members`.
+Necesita `DATABASE_URL_TEST` y las migraciones aplicadas; se omite si no se configura
+una base cuyo nombre termine en `_test`. `npm run check` no ejecuta estas pruebas
+con PostgreSQL: deben ejecutarse adicionalmente.
+
 ## Revision de dependencias
 
 La revision de produccion se realiza con `npm audit --omit=dev` en raiz,
@@ -1121,3 +1250,29 @@ backend conserva una vulnerabilidad moderada transitiva de `uuid` incluida por
 usa la API vulnerable de UUID con buffers controlados por usuarios. Revisar esta
 dependencia antes de cada despliegue y sustituirla cuando el proveedor publique
 una correccion compatible.
+
+## Cambio de correo y eventos de seguridad
+
+Un usuario autenticado puede solicitar el cambio de su correo con
+`POST /api/v1/auth/email/change/request` y confirmar el código de seis dígitos
+con `POST /api/v1/auth/email/change/confirm`. El correo se normaliza, el código
+se guarda hasheado, caduca en 10 minutos y se invalida tras cinco intentos
+fallidos. La confirmación revoca las sesiones activas; el cliente debe volver a
+iniciar sesión con el correo nuevo.
+
+La migración `20260919100000_add_email_change_tokens` añade los datos temporales
+del cambio. `20260919110000_add_security_event_logs` registra inicios/cierres
+de sesión, refresh, cambio de correo y eventos 2FA sin códigos, tokens ni
+contraseñas. La retención es de 12 meses, aplicada al registrar nuevos eventos.
+
+## Administración de plataforma
+
+Además de crear y consultar empresas, superadmin puede actualizarlas con
+`PATCH /api/v1/superadmin/organizations/:organizationId/businesses/:businessId`.
+La API valida slug, formato y duplicados, y deja `BUSINESS_UPDATED` en
+`platform_audit_logs`.
+
+`GET /api/v1/superadmin/organizations/:organizationId/subscriptions` devuelve
+el historial de suscripciones. `GET /api/v1/superadmin/audit-logs` admite los
+filtros `organizationId`, `actorUserId`, `action`, `from`, `to`, `limit` y
+`offset`, e incluye eventos administrativos y de seguridad.

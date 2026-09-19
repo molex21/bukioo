@@ -8,5 +8,6 @@ import { BusinessesService } from "./businesses.service";
   imports: [AuthModule],
   controllers: [BusinessesController],
   providers: [BusinessesService, BusinessesRepository],
+  exports: [BusinessesRepository],
 })
 export class BusinessesModule {}

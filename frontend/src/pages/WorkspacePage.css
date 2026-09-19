@@ -1,0 +1,239 @@
+.workspace-layout {
+  background: var(--color-background);
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  min-height: 100dvh;
+  transition: grid-template-columns var(--transition-base);
+}
+
+.workspace-layout--collapsed {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.workspace-sidebar {
+  background: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: var(--space-5) var(--space-2);
+}
+
+.workspace-sidebar__top {
+  min-height: 34px;
+}
+
+.workspace-collapse-control {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: #cbd5e1;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  gap: var(--space-2);
+  min-height: 34px;
+  padding: 0 var(--space-2);
+}
+
+.workspace-collapse-control:hover {
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
+}
+
+.workspace-nav {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.workspace-nav__link {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: #cbd5e1;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  gap: var(--space-3);
+  justify-content: flex-start;
+  min-height: 42px;
+  padding: 0 var(--space-3);
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.workspace-nav__link span {
+  align-items: center;
+  display: flex;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.workspace-nav__link:hover {
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
+}
+
+.workspace-nav__link--active {
+  background: rgb(108 92 231 / 32%);
+  color: #fff;
+}
+
+.workspace-layout--collapsed .workspace-nav__link {
+  justify-content: center;
+  padding: 0;
+}
+
+.workspace-layout--collapsed .workspace-nav__link span {
+  display: none;
+}
+
+.workspace-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.workspace-header {
+  align-items: center;
+  background: rgb(255 255 255 / 92%);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  min-height: 68px;
+  padding: 0 var(--space-8);
+}
+
+.workspace-business-switcher,
+.workspace-account {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+}
+
+.workspace-business-switcher:hover,
+.workspace-account:hover {
+  background: var(--color-surface-subtle);
+}
+
+.workspace-business-switcher > span {
+  min-width: 0;
+  text-align: left;
+}
+
+.workspace-business-switcher > span > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-account {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.workspace-menu-toggle {
+  display: none;
+}
+
+.workspace-content {
+  margin: 0 auto;
+  max-width: 96rem;
+  padding: var(--space-8);
+  width: 100%;
+}
+
+.workspace-content h1 {
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  letter-spacing: -.025em;
+}
+
+.workspace-module {
+  background: var(--color-surface);
+  min-height: 320px;
+}
+
+.workspace-empty {
+  align-items: center;
+  background: var(--color-background);
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--space-6);
+}
+
+.workspace-empty > .mantine-Paper-root {
+  max-width: 560px;
+  width: 100%;
+}
+
+.workspace-mobile-drawer,
+.workspace-mobile-drawer__header,
+.workspace-mobile-drawer__body {
+  background: var(--color-text);
+}
+
+.workspace-mobile-drawer__header {
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+  color: #fff;
+}
+
+.workspace-mobile-drawer__body {
+  padding-top: var(--space-4);
+}
+
+.workspace-mobile-drawer__close {
+  color: #cbd5e1;
+}
+
+.workspace-mobile-drawer__close:hover {
+  background: rgb(255 255 255 / 9%);
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  .workspace-layout,
+  .workspace-layout--collapsed {
+    display: block;
+  }
+
+  .workspace-sidebar {
+    display: none;
+  }
+
+  .workspace-header {
+    padding: 0 var(--space-4);
+  }
+
+  .workspace-menu-toggle {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  .workspace-content {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .workspace-account span {
+    display: none;
+  }
+
+  .workspace-business-switcher {
+    max-width: min(62vw, 320px);
+  }
+}

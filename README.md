@@ -12,6 +12,13 @@ Frontend (React + Vite) -> API REST (NestJS) -> PostgreSQL
 
 El backend integra PostgreSQL mediante `DatabaseModule` y SQL directo con `pg`.
 
+La administración de plataforma permite navegar por organizaciones y empresas.
+Dentro de cada empresa, «Equipo y accesos» separa «Usuarios y permisos» de la
+organización y «Empleados» de la empresa, con invitación de usuarios, incorporación
+como empleados de usuarios existentes, cambios de rol y edición auditada de datos
+y estado del empleado. El alcance y las limitaciones de esta vista se
+describen en [frontend/README.md](frontend/README.md).
+
 ## Estructura
 
 * `frontend/`: aplicación web React con Vite y TypeScript.
@@ -350,23 +357,9 @@ npm run compile:frontend
 npm run check:frontend
 ```
 
-El script:
-
-```bash
-npm run check
-```
-
-está definido para ejecutar las comprobaciones y la compilación, pero actualmente no es operativo.
-
-`check:backend` llama a:
-
-```bash
-npm run lint:check
-```
-
-dentro de `backend`, pero ese script no existe actualmente en `backend/package.json`.
-
-Consulta el README del backend para ejecutar sus comprobaciones disponibles por separado.
+El script `npm run check` ejecuta el lint y las pruebas unitarias del backend,
+el lint del frontend y las compilaciones de ambos paquetes. Las pruebas E2E,
+que requieren `DATABASE_URL_TEST` y PostgreSQL, se ejecutan por separado.
 
 ## Docker y variables de entorno
 

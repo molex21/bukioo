@@ -41,5 +41,16 @@ describe("AuthorizationRepository", () => {
     await expect(
       repository.findBusinessRole("user-id", "other-business-id"),
     ).resolves.toBeNull();
+    for (const clause of [
+      "organization_memberships.status = 'ACTIVE'",
+      "business_memberships.business_id = businesses.id",
+      "business_memberships.user_id = $2",
+      "organization_memberships.role IN ('OWNER', 'ADMIN')",
+    ]) {
+      expect(databaseServiceMock.query).toHaveBeenCalledWith(
+        expect.stringContaining(clause),
+        ["other-business-id", "user-id"],
+      );
+    }
   });
 });

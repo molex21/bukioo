@@ -59,12 +59,12 @@ describe("BusinessesRepository", () => {
 
     expect(databaseServiceMock.transaction).toHaveBeenCalledTimes(1);
     expect(clientMock.query).toHaveBeenNthCalledWith(
-      2,
+      4,
       expect.stringContaining("business_memberships"),
       ["business-id", "creator-id", "organization-id"],
     );
     expect(clientMock.query).toHaveBeenNthCalledWith(
-      4,
+      3,
       expect.stringContaining("business_notification_settings"),
       ["business-id", "organization-id"],
     );

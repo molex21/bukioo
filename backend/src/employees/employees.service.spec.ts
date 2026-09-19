@@ -4,6 +4,7 @@ import { AuditService } from "../audit/audit.service";
 import { TwoFactorRepository } from "../auth/two-factor.repository";
 import { EmployeesRepository } from "./employees.repository";
 import { EmployeesService } from "./employees.service";
+import { OrganizationMembersService } from "../organizations/organization-members.service";
 
 describe("EmployeesService", () => {
   let service: EmployeesService;
@@ -54,6 +55,10 @@ describe("EmployeesService", () => {
         { provide: AuthService, useValue: authServiceMock },
         { provide: TwoFactorRepository, useValue: twoFactorRepositoryMock },
         { provide: AuditService, useValue: auditServiceMock },
+        {
+          provide: OrganizationMembersService,
+          useValue: { linkEmployee: jest.fn() },
+        },
       ],
     }).compile();
 

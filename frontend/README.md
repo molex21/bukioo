@@ -37,10 +37,102 @@ y plan, paginación y suscripciones. La ficha de cada organización usa
 `/superadmin/organizations/:organizationId` para consultar detalle y permite
 actualizar el estado de la organización y su suscripción. También consulta
 `/superadmin/plans` para ofrecer y asignar planes. Desde la organización se
-accede a sus negocios y, desde cada negocio, a sus empleados mediante rutas
-anidadas. Esas pantallas consumen los endpoints superadmin anidados de negocios
+accede a sus empresas y, desde cada empresa, a «Equipo y accesos» mediante rutas
+anidadas. Esas pantallas consumen los endpoints superadmin anidados de empresas
 y empleados, con búsqueda, filtros de estado y paginación. No hay un punto de
-menú global para Planes, Negocios o Empleados.
+menú global para Planes, Empresas o Empleados.
+
+El botón «Nueva organización» crea el entorno, propietario y empresa inicial
+mediante `POST /superadmin/organizations` y abre su ficha. «Nueva empresa», dentro
+de la lista de empresas de una organización, usa
+`POST /superadmin/organizations/:organizationId/businesses`. «Invitar usuario»,
+en la ficha de empresa, usa
+`POST /superadmin/organizations/:organizationId/businesses/:businessId/employees`
+y actualiza la lista y contadores. Los roles de invitación son Empleado
+(`EMPLOYEE`) y Responsable (`MANAGER`). Estos formularios usan Bearer staff;
+no necesitan la clave privada de onboarding. El alta de organización no admite
+logo en su contrato actual; el alta de empresa admite `logoUrl` opcional.
+Ambas altas permiten elegir una zona horaria IANA. Los mensajes de error
+conservan los valores introducidos y los avisos de éxito duran 15 segundos.
+
+### Equipo y accesos (plataforma)
+
+En `/platform/organizations/:organizationId/businesses/:businessId`,
+`PlatformTeamAccess` separa dos pestañas:
+
+- **Usuarios y permisos**: todos los miembros de la organización mediante
+  `GET /superadmin/organizations/:organizationId/members`. Incluye nombre,
+  correo, rol, estado de membresía y de cuenta por separado, empresas accesibles
+  y fichas de agenda. Búsqueda con espera de 350 ms, filtros por rol, membresía
+  y empresa dentro de «Filtros», y paginación de 10/25/50/100 elementos.
+- **Empleados**: mantiene el endpoint de empleados de la empresa, sin
+  interpretar un permiso de agenda revocado como revocación de acceso al panel.
+
+En la fila del propietario, el menú permite **Transferir propiedad**. Solo se
+ofrecen miembros de la organización con membresía y cuenta activas y rol de
+administrador, responsable o empleado. La confirmación explica que el nuevo
+miembro pasa a `OWNER` y el propietario actual a `ADMIN`; la API ejecuta la
+transferencia y su auditoría en una transacción y rechaza cualquier situación
+que no permita garantizar que exista exactamente un propietario.
+
+La acción principal es **Ver**. Las acciones secundarias se agrupan en un botón
+de tres puntos: cambiar el rol, añadirlo a la agenda, gestionar las empresas
+asignadas y suspender o restablecer el acceso cuando el permiso lo permita.
+
+Para superadmin, ese menú también ofrece **Cambiar correo de acceso**. Envía un
+código al correo nuevo y solo lo sustituye cuando se confirma el código; al
+terminar, las sesiones de esa persona se cierran y deberá iniciar sesión otra vez.
+
+«Cambiar rol» utiliza el PATCH de miembros y confirma su alcance organizativo.
+No permite cambiar al propietario ni gestionar cuentas/membresías inactivas.
+Al quitar ADMIN se envía una selección explícita de `businessIds`, incluso `[]`;
+al asignar ADMIN no se envían empresas porque el acceso es global.
+
+«Añadir usuario como empleado» selecciona un miembro y una empresa con
+acceso y sin ficha previa. Envía únicamente `userId` y `color` al POST de empleados:
+conserva perfil, contraseña y rol. Los empleados con permiso de agenda activo o
+revocado se consultan sin ofrecer duplicarlos.
+«Invitar usuario» sigue creando
+cuenta y ficha en la empresa abierta con EMPLOYEE o MANAGER.
+
+Se actualizan miembros, fichas y contador tras las operaciones, y `/auth/me` si
+afectan a la sesión actual o hay un 403. Los errores 404/409 recargan sin repetir
+la mutación; los errores inciertos de invitación (incluido 503) bloquean otro
+envío en el formulario y piden comprobar el listado antes de reintentar.
+
+El listado superadmin de empleados devuelve `userId`: cuando es `null`, muestra
+«Sin acceso al panel». Un usuario vinculado no implica que tenga permisos activos;
+estos se consultan en «Usuarios y permisos».
+
+«Ver empleado» abre `PlatformEmployeeModal`, con GET y PATCH sobre
+`/superadmin/organizations/:organizationId/businesses/:businessId/employees/:employeeId`.
+Permite editar nombre, apellidos, correo de contacto, teléfono, color y notas,
+y revocar/restablecer el permiso de agenda con confirmación. Estos campos editan
+la ficha de agenda, no la cuenta de acceso; el correo de contacto no cambia el
+email de login. En sentido inverso, los cambios de nombre, apellidos y teléfono
+hechos desde «Mis datos» de la cuenta se sincronizan con las fichas activas.
+Los campos opcionales se pueden vaciar con `null`. Se envía `expectedUpdatedAt`
+para detectar ediciones concurrentes; un 409 obliga a recargar antes de guardar.
+Revocar el permiso de agenda conserva historial y citas existentes, sin
+cancelarlas ni revocar accesos. En cambio, **Suspender acceso** conserva el rol,
+las empresas asignadas y la ficha de empleado, pero bloquea el acceso a esta
+organización; las otras organizaciones no cambian. **Gestionar empresas** solo
+modifica las empresas accesibles para responsables y empleados.
+Restablecer el permiso conserva el mismo empleado y comprueba la capacidad del plan.
+
+En «Añadir usuario como empleado», la selección del usuario queda fija; para
+elegir otro se cierra el formulario y se vuelve a abrir. Los textos de producto
+usan «Empresa»; las rutas, identificadores y contratos `businesses` no cambian.
+La pantalla de equipo de `/app` continúa pendiente de integración; el login no cambia.
+
+Las reglas puras de permisos/vinculación tienen pruebas sin dependencias extra.
+Desde la raíz, con Node compatible con borrado de tipos:
+
+```bash
+node --experimental-strip-types --test frontend/tests/team-access.test.mjs
+```
+
+Estas pruebas se ejecutan aparte de `npm run check`, que mantiene sus scripts actuales.
 
 La sesión staff conserva el access token únicamente en memoria. Al cargar la
 aplicación intenta restaurarla con la cookie HttpOnly mediante `/auth/refresh`.
@@ -51,6 +143,12 @@ la segunda también exige una cuenta superadmin.
 Desde el menú de cuenta de plataforma se pueden editar el nombre, los apellidos
 y el teléfono propio con `PATCH /auth/me`. El correo electrónico se muestra como
 dato de consulta y no puede cambiarse desde ese formulario.
+
+El área interna `/app` carga el perfil mediante `/auth/me` y utiliza sus
+organizaciones y empresas accesibles para establecer el contexto de trabajo. Su
+selector permite cambiar de empresa y deja preparadas las rutas de resumen,
+agenda, citas, clientes, equipo y configuración; cada módulo se conectará a sus
+datos específicos en los bloques posteriores.
 
 ## Instalación
 
@@ -85,6 +183,17 @@ npm run lint
 `build` ejecuta primero la comprobación de TypeScript (`tsc -b`) y después genera la compilación de Vite en `dist/`.
 
 El script `lint:check` también está definido, pero usa un patrón pensado para fuentes TypeScript sin incluir archivos `.tsx`; para comprobar el frontend completo utiliza `npm run lint`.
+
+## Perfil y administración de plataforma
+
+Desde **Mi perfil**, un usuario puede cambiar su correo de acceso en dos pasos:
+solicita el envío del código al correo nuevo y lo confirma. Al completarlo se
+cierra la sesión y se debe acceder con la dirección nueva.
+
+La plataforma incluye detalle y edición de empresas, fechas e historial de
+suscripciones, y la ruta `/platform/audit` para consultar operaciones
+administrativas y eventos de seguridad. En «Gestionar empresas», los diálogos
+de permisos se mantienen abiertos al cerrarse el menú de acciones.
 
 ## Variables de entorno
 

@@ -233,15 +233,311 @@ logo.
 | --- | --- | --- |
 | GET `/superadmin/dashboard` | Superadmin | Metricas globales. |
 | GET `/superadmin/organizations?search&status&planCode&limit&offset` | Superadmin | Lista paginada de tenants. |
+| POST `/superadmin/organizations` | Superadmin; mismo body que onboarding `{email,firstName,lastName,organizationName,organizationSlug,timezone?}` | Provisiona owner, organizacion, negocio inicial, ajustes, locale `es`, membresias y suscripcion `free` activa. Envia la contrasena temporal por email y nunca la devuelve. `201`; `400` body invalido, `403` sin superadmin, `409` email o slug duplicado. |
 | GET `/superadmin/organizations/:organizationId` | Superadmin | Detalle y suscripcion. |
+| GET `/superadmin/organizations/:organizationId/members?search&role&status&businessId&limit&offset` | Superadmin | Miembros de la organizacion, con estado de cuenta y membresia por separado, empresas accesibles y fichas de agenda. |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/role` | Superadmin; `{role,businessIds?}` | Cambia el rol organizativo. Al quitar `ADMIN`, `businessIds` decide el acceso explicito de MANAGER/EMPLOYEE. |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/status` | Superadmin; `{status,expectedStatus,expectedRole}` | Suspende o restablece el acceso a la organizacion sin eliminar asignaciones de empresa ni fichas de empleado. |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/businesses` | Superadmin; `{businessIds,expectedBusinessIds,expectedRole}` | Reemplaza las empresas accesibles de un MANAGER o EMPLOYEE; `[]` retira su acceso a todas las empresas del tenant. |
+| POST `/superadmin/organizations/:organizationId/members/:membershipId/email-change/request` | Superadmin; `{newEmail}` | Envía un código de verificación al correo nuevo. Responde `202`; no sustituye todavía el correo de acceso. |
+| POST `/superadmin/organizations/:organizationId/members/:membershipId/email-change/confirm` | Superadmin; `{token}` | Confirma el código de seis dígitos, cambia el correo y revoca todas las sesiones activas de la persona. |
 | GET `/superadmin/organizations/:organizationId/businesses?search&status&limit&offset` | Superadmin | Negocios de la organizacion. `search` consulta nombre, slug o email; `status` es `ACTIVE` o `SUSPENDED`; paginacion 50 por defecto, maximo 100. Devuelve `items` con `employeeCount` y `pagination`. `400` para UUID/filtros invalidos; `403` sin superadmin; `404` si la organizacion no existe. |
+| POST `/superadmin/organizations/:organizationId/businesses` | Superadmin; `{name,slug,email?,phone?,timezone?,logoUrl?}` | Crea un negocio en esa organizacion con ajustes de fidelizacion y notificaciones. `201`; `400` body/UUID invalido, `403` sin superadmin, `404` organizacion inexistente, `409` slug repetido. |
 | GET `/superadmin/organizations/:organizationId/businesses/:businessId` | Superadmin | Detalle del negocio dentro de esa organizacion, incluido `employeeCount`. `404` cuando el negocio no existe o pertenece a otra organizacion. |
 | GET `/superadmin/organizations/:organizationId/businesses/:businessId/employees?search&status&limit&offset` | Superadmin | Empleados del negocio. `search` consulta nombre, apellidos, email o telefono; `status` es `ACTIVE` o `ARCHIVED`; paginacion 50 por defecto, maximo 100. No expone notas, usuario, secretos ni 2FA. `400` para UUID/filtros invalidos; `403` sin superadmin; `404` fuera del contexto. |
+| POST `/superadmin/organizations/:organizationId/businesses/:businessId/employees` | Superadmin; `{email,firstName,lastName,phone?,color?,role}` | Invita empleado y crea cuenta, membresia de organizacion, membresia de negocio y ficha operativa en una transaccion. `role` solo admite `MANAGER` o `EMPLOYEE`. `201`; `400` body/UUID/rol invalido, `403` sin superadmin, `404` fuera del contexto, `409` email existente. |
 | PATCH `/superadmin/organizations/:organizationId/status` | `{status:"ACTIVE"|"SUSPENDED"}` | Activa/suspende tenant. |
 | PATCH `/superadmin/organizations/:organizationId/security` | `{require2faForAdmins:boolean}` | Obliga 2FA a OWNER/ADMIN del tenant. |
 | PUT `/superadmin/organizations/:organizationId/subscription` | `{planCode,status:"TRIAL"|"ACTIVE"|"SUSPENDED",trialEndsAt?,expiresAt?}` | Asigna suscripcion manual e historica. |
 | GET/POST `/superadmin/plans` | POST Plan | Lista/crea planes. Se inicializan `free`, `essential`, `professional`, `business` y `unlimited`; los limites `null` son ilimitados. |
 | PATCH/DELETE `/superadmin/plans/:planCode` | PATCH Plan | Edita/elimina. DELETE `409` si tiene suscripciones. |
+
+### Detalle y edición de empleados por superadmin
+
+`GET/PATCH /superadmin/organizations/:organizationId/businesses/:businessId/employees/:employeeId`
+requiere Bearer superadmin y devuelve 200. Todos los IDs son UUID; se comprueba
+que el empleado pertenezca a la empresa y organización indicadas. La interfaz
+denomina «Empresa» al recurso `businesses` sin cambiar las rutas.
+
+GET incluye `id,organizationId,businessId,userId,firstName,lastName,email,phone,
+color,notes,isActive,createdAt,updatedAt,archivedAt`, también para archivados.
+El listado superadmin de empleados incluye ahora `userId` nullable.
+
+Ejemplo PATCH:
+
+```json
+{"expectedUpdatedAt":"2026-09-13T10:00:00.000Z","firstName":"Ana","phone":null,"notes":"Turno de mañana","color":"#6C5CE7","isActive":true}
+```
+
+`expectedUpdatedAt` es obligatorio y debe coincidir con `updatedAt` del GET.
+Campos opcionales: `firstName` (1–100), `lastName` (1–150), `email` (máximo 320),
+`phone` (32), `color` (#RRGGBB), `notes` (2000), `isActive` (boolean).
+Email, teléfono, color y notas aceptan null para vaciarse. No modifica cuenta,
+correo de login, contraseña ni rol. Archivar conserva historial y citas existentes,
+sin cancelarlas; reactivar mantiene el mismo registro y comprueba el límite del plan.
+
+Errores: 400 validación, 403 permiso, 404 recurso fuera del ámbito o inexistente,
+409 versión obsoleta, organización/empresa suspendida o capacidad insuficiente.
+En 409 recargar y pedir revisión, sin repetir automáticamente el PATCH.
+Cambios de datos y estado quedan auditados atómicamente en tenant y plataforma.
+
+## Equipo, roles y accesos
+
+Una **cuenta** (`userId`) inicia sesion; una **membresia** (`membershipId`)
+define su rol en una organizacion; una **ficha de empleado** (`employeeId`)
+permite asignarle citas en un negocio. Son identificadores distintos.
+El owner aparece en el equipo aunque no atienda citas. Un empleado sin cuenta
+aparece solo en el listado de empleados. No eliminar las rutas `/employees`.
+
+Todas las rutas siguientes llevan `/api/v1` y Bearer staff. Para superadmin,
+anteponer `/superadmin` a las rutas `/organizations/...`.
+
+| Metodo y ruta | Respuesta | Permiso |
+| --- | --- | --- |
+| GET `/organizations/:organizationId/members` | `200`, `{pagination,items}` | OWNER/ADMIN del entorno |
+| PATCH `/organizations/:organizationId/members/:membershipId/role` | `200`, rol/accesos finales | OWNER; ADMIN con restricciones |
+| PATCH `/organizations/:organizationId/members/:membershipId/status` | `200`, estado final | OWNER; ADMIN con restricciones |
+| PATCH `/organizations/:organizationId/members/:membershipId/businesses` | `200`, negocios asignados | OWNER/ADMIN, solo MANAGER/EMPLOYEE |
+| GET `/superadmin/organizations/:organizationId/members` | Mismo listado | Superadmin activo |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/role` | Mismo contrato | Superadmin activo |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/status` | Mismo contrato | Superadmin activo |
+| PATCH `/superadmin/organizations/:organizationId/members/:membershipId/businesses` | Mismo contrato | Superadmin activo |
+| POST `/superadmin/organizations/:organizationId/members/:membershipId/email-change/request` | `202`, `{status:"accepted"}` | Superadmin activo |
+| POST `/superadmin/organizations/:organizationId/members/:membershipId/email-change/confirm` | `200`, `{email,sessionRevoked:true}` | Superadmin activo |
+
+### Listado de equipo
+
+```http
+GET /api/v1/organizations/:organizationId/members?search=ana&role=EMPLOYEE&status=ACTIVE&businessId=:businessId&limit=50&offset=0
+```
+
+Todos los filtros son opcionales: `search` busca nombre, apellidos o email sin
+distinguir mayusculas (maximo 150 caracteres; `%` y `_` se buscan literalmente).
+`role`: OWNER/ADMIN/MANAGER/EMPLOYEE/CLIENT. `status`: ACTIVE/INVITED/SUSPENDED
+de la membresia, no del empleado. `limit`: entero 1-100, defecto 50;
+`offset`: entero >=0, defecto 0. Orden fijo por nombre, apellidos e ID de membresia.
+`businessId` filtra quienes tienen **acceso efectivo** al negocio activo:
+incluye OWNER/ADMIN por su rol, no solo asignaciones explicitas.
+
+```json
+{
+  "pagination": { "limit": 50, "offset": 0, "total": 1 },
+  "items": [{
+    "membershipId": "11111111-1111-4111-8111-111111111111",
+    "userId": "22222222-2222-4222-8222-222222222222",
+    "firstName": "Ana", "lastName": "Diaz", "email": "ana@example.com",
+    "role": "OWNER", "status": "ACTIVE", "userStatus": "ACTIVE",
+    "businesses": [{
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Centro", "slug": "centro", "status": "ACTIVE",
+      "hasAccess": true, "explicitlyAssigned": false,
+      "employeeId": null, "employeeIsActive": null, "attendsAppointments": false
+    }]
+  }]
+}
+```
+
+`businesses` conserva tambien negocios suspendidos o fichas sin acceso actual.
+Usar `hasAccess` para mostrar permisos; `employeeIsActive`/`attendsAppointments`
+solo describen la ficha de agenda y no conceden acceso. Sin negocios devuelve
+`businesses: []`. `firstName` y `lastName` pueden ser null en cuentas antiguas.
+Superadmin puede consultar entornos suspendidos, pero no mutarlos; al filtrar
+por negocio en un entorno suspendido no hay miembros con acceso efectivo.
+
+### Cambiar rol
+
+```json
+{ "role": "MANAGER", "businessIds": ["33333333-3333-4333-8333-333333333333"] }
+```
+
+- Solo ADMIN/MANAGER/EMPLOYEE como rol destino. El rol es de toda la organizacion.
+- OWNER puede gestionar esos tres roles. ADMIN solo otros MANAGER/EMPLOYEE:
+  no puede editarse a si mismo, editar a otro ADMIN ni conceder ADMIN.
+- Ni siquiera superadmin puede modificar OWNER por esta ruta. Para transferir
+  la propiedad usar el endpoint especifico descrito abajo. CLIENT tampoco es un rol gestionable.
+- Al quitar ADMIN, `businessIds` es obligatorio, incluso `[]` para retirar todos.
+  Para MANAGER/EMPLOYEE se conserva la asignacion si se omite. Maximo 100 UUID unicos.
+- Para conceder ADMIN enviar solo `{"role":"ADMIN"}`: tiene acceso a todos los
+  negocios activos, se borran asignaciones explicitas y no admite `businessIds`.
+- Cuenta, membresia, organizacion y nuevos negocios asignados deben estar activos.
+
+Respuesta: `{membershipId,userId,role,status,accessMode,businessIds}`.
+`accessMode` es `ALL_ACTIVE_BUSINESSES` o `ASSIGNED_BUSINESSES`.
+No cambia la ficha del empleado, sus citas ni su contrasena.
+
+### Transferir propiedad (solo superadmin)
+
+```http
+POST /api/v1/superadmin/organizations/:organizationId/transfer-ownership
+Authorization: Bearer <superadminAccessToken>
+Content-Type: application/json
+```
+
+```json
+{
+  "currentOwnerMembershipId": "11111111-1111-4111-8111-111111111111",
+  "newOwnerMembershipId": "22222222-2222-4222-8222-222222222222"
+}
+```
+
+Usar **membershipId**, no userId ni employeeId. Ambos deben pertenecer a esa
+organizacion y ser distintos. El propietario actual debe ser el unico OWNER
+del entorno. El nuevo debe tener membresia y cuenta ACTIVE y rol ADMIN,
+MANAGER o EMPLOYEE. No necesita ficha de empleado ni acceso previo a todos
+los negocios. La organizacion debe estar ACTIVE.
+
+Solo superadmin activo puede ejecutar esta accion; no necesita pertenecer al
+entorno. No existe una ruta equivalente para OWNER/ADMIN tenant. La validacion
+se hace en el guard y de nuevo dentro de la transaccion.
+
+Respuesta `200`:
+
+```json
+{
+  "organizationId": "33333333-3333-4333-8333-333333333333",
+  "previousOwner": {
+    "membershipId": "11111111-1111-4111-8111-111111111111",
+    "userId": "44444444-4444-4444-8444-444444444444",
+    "role": "ADMIN"
+  },
+  "newOwner": {
+    "membershipId": "22222222-2222-4222-8222-222222222222",
+    "userId": "55555555-5555-4555-8555-555555555555",
+    "role": "OWNER"
+  }
+}
+```
+
+El anterior queda ADMIN y el nuevo OWNER. Ambos roles dan acceso a todos los
+negocios activos, sujeto al estado de cuenta/membresia: no se reactiva una cuenta
+ni membresia del propietario anterior que estuviese bloqueada/suspendida.
+Se limpian las asignaciones explicitas de ambos porque el acceso es por rol.
+No modifica contrasenas, sesiones, fichas de empleados, citas, suscripciones ni
+el correo de contacto de la organizacion. No envia email.
+
+Los dos roles y la auditoria `ORGANIZATION_OWNERSHIP_TRANSFERRED` en
+`audit_logs` y `platform_audit_logs` se guardan en una transaccion. Un fallo
+revierte todo. Dos transferencias simultaneas basadas en el mismo propietario
+producen un `200` y un `409`. Repetir una transferencia ya aplicada devuelve
+`409`; no se debe reintentar automaticamente tras un timeout. Consultar de nuevo
+el equipo para saber el estado final.
+
+| Codigo | Comportamiento frontend |
+| --- | --- |
+| 200 | Cerrar confirmacion, avisar del cambio y recargar equipo/detalle del entorno. |
+| 400 | IDs invalidos, campos extra o mismo propietario; corregir seleccion. |
+| 401 | Recuperar sesion; no repetir la transferencia sin comprobar el estado. |
+| 403 | No es superadmin activo; ocultar la accion. |
+| 404 | Organizacion o membresia inexistente/fuera del entorno; recargar listado. |
+| 409 | Propietario cambiado/no unico, entorno suspendido o candidato inactivo; recargar y confirmar de nuevo. |
+| 429 | Esperar el limite indicado por la API. |
+| 500 | Error inesperado; comprobar el estado antes de un nuevo intento. |
+
+Flujo recomendado para frontend:
+
+1. Mostrar **Cambiar propietario** solo en plataforma si `/auth/me` indica
+   `isSuperadmin: true` y la organizacion esta activa. No anadir OWNER al selector
+   generico de roles.
+2. Al abrir, consultar `GET /superadmin/organizations/:organizationId/members?role=OWNER&limit=100&offset=0`
+   (sin `businessId`, `search` ni filtro de estado) y comprobar `pagination.total === 1`.
+3. Cargar candidatos con `GET /superadmin/organizations/:organizationId/members?status=ACTIVE&limit=100&offset=0`.
+   Filtrar `userStatus === 'ACTIVE'` y roles ADMIN/MANAGER/EMPLOYEE. Paginar segun
+   `pagination.total`; no asumir que los primeros 100 son todos. Se puede usar `search`.
+4. Guardar el `membershipId` del owner mostrado al abrir; no sustituirlo
+   silenciosamente si cambia durante la confirmacion. Mostrar nombre/email de
+   ambos y advertir que el anterior seguira como ADMIN con acceso a todos los negocios.
+5. Confirmar explicitamente y enviar el POST. Deshabilitar el boton mientras
+   se procesa. No usar actualizacion optimista ni el PATCH normal de roles.
+6. Tras `200`, invalidar las consultas de miembros, organizacion y accesos
+   afectadas. Refrescar `/auth/me` si la cuenta actual es una de las implicadas.
+   No es necesario volver a iniciar sesion: los permisos se consultan en BD.
+7. Ante `409`, conservar el aviso, recargar datos y exigir otra confirmacion;
+   nunca cambiar el owner esperado y reenviar automaticamente.
+
+### Suspender/restablecer y asignar negocios
+
+Body PATCH `.../status`:
+
+```json
+{ "status": "SUSPENDED", "expectedStatus": "ACTIVE", "expectedRole": "EMPLOYEE" }
+```
+
+Para restaurar, `status: ACTIVE` y `expectedStatus: SUSPENDED`. Devuelve
+`{membershipId,userId,status,role}`. No suspende la cuenta global ni borra sus
+sesiones, fichas o citas; solo corta el acceso a ese entorno. No se puede cambiar
+el propio estado, el OWNER ni una invitacion pendiente. Restaurar requiere cuenta
+global activa. ADMIN no puede gestionar a otro ADMIN; OWNER y superadmin si.
+
+Body PATCH `.../businesses`:
+
+```json
+{
+  "businessIds": ["33333333-3333-4333-8333-333333333333"],
+  "expectedBusinessIds": [], "expectedRole": "EMPLOYEE"
+}
+```
+
+Reemplaza la lista completa para MANAGER/EMPLOYEE; `[]` retira todo acceso
+explicito. `expectedBusinessIds` son los negocios con `explicitlyAssigned: true`
+del ultimo GET, no solo los activos. Se pueden conservar asignaciones existentes
+a negocios suspendidos, pero no anadir otras nuevas. Devuelve
+`{membershipId,userId,role,status,businessIds}`. No mueve ni elimina fichas de agenda.
+
+Los campos `expected*` son obligatorios: si los datos actuales difieren, `409`.
+El frontend debe recargar el listado y pedir confirmar el cambio de nuevo.
+El PATCH de rol no usa version esperada: si llegan dos cambios autorizados,
+se serializan y prevalece el ultimo, salvo que su precondicion ya no se cumpla.
+
+### Vincular una cuenta existente como empleado
+
+Se conservan los POST actuales, con un body alternativo:
+
+```http
+POST /api/v1/businesses/:businessId/employees
+POST /api/v1/superadmin/organizations/:organizationId/businesses/:businessId/employees
+```
+
+```json
+{ "userId": "22222222-2222-4222-8222-222222222222", "color": "#228B22" }
+```
+
+OWNER/ADMIN usan el primero; superadmin el segundo. `userId` se obtiene del
+listado de equipo. Solo admite `color` opcional y, en la ruta tenant, `notes`
+(maximo 2000). No mezclar con nombre, email, telefono, role o inviteUser: `400`.
+Se copian nombre/apellidos/email/telefono del perfil del usuario. Debe pertenecer
+al entorno, estar activo y tener acceso al negocio; requiere nombre y apellidos.
+No crea otra cuenta, no envia correo ni cambia rol/password. Respuesta `201`
+con la ficha existente en formato API de empleados: `id,organization_id,
+business_id,user_id,first_name,last_name,email,phone,color,notes,is_active,
+created_at,updated_at,archived_at` (los nombres snake_case se conservan).
+
+Cada usuario puede tener una ficha por negocio, tambien si es owner/admin.
+Dos solicitudes simultaneas para la misma ficha dejan una creacion `201` y
+un conflicto `409`. Una ficha archivada tambien impide duplicarla: reactivar
+esa ficha mediante la edicion de plataforma. Se aplica el limite del plan.
+El POST de invitacion con datos nuevos sigue funcionando como antes; enviar de
+nuevo un email de cuenta existente no la vincula automaticamente, devuelve `409`.
+
+### Errores y frontend
+
+- `400`: UUID, filtros, rol/body invalidos o falta seleccion explicita al quitar ADMIN.
+- `401`: falta Bearer o token invalido/caducado.
+- `403`: sin permisos; el superadmin no obtiene acceso tenant implicitamente.
+- `404`: miembro/negocio fuera del entorno o inexistente; entorno inexistente
+  consultado por superadmin. Nunca buscar por ID sin comprobar el entorno.
+- `409`: entorno/cuenta/membresia incompatibles, owner protegido, ficha duplicada,
+  limite del plan o estado `expected*` desactualizado.
+- `429`: limite global, respetar tiempo de espera. Errores inesperados: `500`.
+
+Ejemplo: `{"statusCode":409,"message":"Los accesos han cambiado. Actualiza el listado antes de continuar","error":"Conflict"}`.
+Tras mutar, recargar equipo y las vistas afectadas. No reintentar mutaciones a
+ciegas tras un timeout. Repetir un rol ya aplicado no duplica auditoria;
+repetir `status/businesses` con expectativas antiguas puede devolver `409`.
+Las mutaciones bloquean la organizacion, revalidan permisos y guardan cambios
+y auditoria en la misma transaccion. Una peticion ya autorizada/en curso no se
+cancela retroactivamente; las siguientes comprueban los nuevos accesos.
+Se registran `MEMBER_ROLE_CHANGED`, `MEMBER_ACCESS_SUSPENDED`,
+`MEMBER_ACCESS_RESTORED`, `MEMBER_BUSINESSES_CHANGED` y `EMPLOYEE_LINKED`.
 
 ## Procesos asincronos y limites
 
@@ -261,6 +557,38 @@ El listado de clientes usa un indice parcial por negocio/nombre y `pg_trgm`
 para la busqueda parcial sobre nombre, apellidos, email y telefono. Antes de
 anadir nuevos indices de ordenacion, medir las consultas reales con `EXPLAIN
 ANALYZE`.
+
+## Cambio de correo de acceso
+
+Estas rutas requieren Bearer staff. El correo no se sustituye hasta confirmar el
+código recibido en la dirección nueva:
+
+```text
+POST /api/v1/auth/email/change/request  { "newEmail": "nuevo@ejemplo.com" }
+POST /api/v1/auth/email/change/confirm  { "token": "123456" }
+```
+
+La solicitud responde `202`, normaliza el correo y devuelve `409` si está en
+uso. El código se guarda hasheado, vence en 10 minutos y admite cinco intentos.
+La confirmación devuelve `200`, revoca todas las sesiones y borra la cookie de
+refresh; el cliente debe iniciar sesión de nuevo. Puede responder `400`, `401`,
+`409` o `429` según el código, sesión, conflicto o límite.
+
+## Administración y auditoría de plataforma
+
+```text
+PATCH /api/v1/superadmin/organizations/<organizationId>/businesses/<businessId>
+GET   /api/v1/superadmin/organizations/<organizationId>/subscriptions
+GET   /api/v1/superadmin/audit-logs?organizationId=<uuid>&actorUserId=<uuid>&action=<action>&from=<iso>&to=<iso>&limit=<1-100>&offset=<number>
+```
+
+El PATCH de empresa admite `name`, `slug`, `email`, `phone`, `timezone`,
+`logoUrl` y `status`; registra la operación en la auditoría. El historial de
+suscripciones incluye las entradas vigentes y caducadas. Si una organización
+sigue en `TRIAL` con el mismo plan, un nuevo `trialEndsAt` amplía la prueba en
+el mismo registro; cambiar el plan o estado crea una suscripción nueva y caduca
+la anterior. La auditoría combina acciones superadmin y eventos de seguridad,
+sin exponer códigos, tokens o contraseñas.
 
 ## Tecnologias aplicadas
 

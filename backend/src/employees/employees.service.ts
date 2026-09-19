@@ -14,6 +14,7 @@ import {
 } from "./employees.repository";
 import { CreateEmployeeDto } from "./dto/create-employee.dto";
 import { UpdateEmployeeDto } from "./dto/update-employee.dto";
+import { OrganizationMembersService } from "../organizations/organization-members.service";
 
 @Injectable()
 export class EmployeesService {
@@ -22,6 +23,7 @@ export class EmployeesService {
     private readonly authService: AuthService,
     private readonly twoFactorRepository: TwoFactorRepository,
     private readonly auditService: AuditService,
+    private readonly members: OrganizationMembersService,
   ) {}
 
   async create(
@@ -30,8 +32,24 @@ export class EmployeesService {
     userId: string,
   ): Promise<EmployeeRecord> {
     await this.assertCanManageBusiness(userId, businessId);
+    if (createEmployeeDto.userId !== undefined) {
+      const organizationId =
+        await this.employeesRepository.findActiveBusinessOrganizationId(
+          businessId,
+        );
+      if (!organizationId) throw new NotFoundException("Negocio no encontrado");
+      return this.members.linkEmployee(
+        organizationId,
+        businessId,
+        { ...createEmployeeDto, userId: createEmployeeDto.userId },
+        userId,
+      );
+    }
     await this.assertEmployeeCapacity(businessId);
     const employeeDto = this.normalize(createEmployeeDto);
+
+    if (!employeeDto.firstName || !employeeDto.lastName)
+      throw new BadRequestException("Nombre y apellidos son obligatorios");
 
     if (!employeeDto.inviteUser) {
       return this.employeesRepository.create(businessId, employeeDto);

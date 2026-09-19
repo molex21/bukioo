@@ -13,6 +13,16 @@ export class LoginProtectionRepository {
     return this.isLocked("user_login_attempts", "user_id", userId);
   }
 
+  async getUserLockRemainingSeconds(userId: string): Promise<number> {
+    const result = await this.databaseService.query<{ seconds: number }>(
+      `SELECT GREATEST(0, CEIL(EXTRACT(EPOCH FROM locked_until - NOW())))::int AS seconds
+      FROM user_login_attempts
+      WHERE user_id = $1 AND locked_until > NOW()`,
+      [userId],
+    );
+    return Number(result.rows[0]?.seconds ?? 0);
+  }
+
   async isCustomerAccountLocked(customerAccountId: string): Promise<boolean> {
     return this.isLocked(
       "customer_account_login_attempts",

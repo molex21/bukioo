@@ -15,6 +15,7 @@ import { TwoFactorRepository } from "./two-factor.repository";
 import { AuthorizationRepository } from "./authorization.repository";
 import { RolesGuard } from "./roles.guard";
 import { LoginProtectionRepository } from "./login-protection.repository";
+import { SecurityEventsRepository } from "./security-events.repository";
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { LoginProtectionRepository } from "./login-protection.repository";
     TwoFactorRepository,
     AuthorizationRepository,
     LoginProtectionRepository,
+    SecurityEventsRepository,
     RolesGuard,
     {
       provide: EmailProvider,

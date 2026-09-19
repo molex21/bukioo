@@ -107,7 +107,7 @@ describe("UserTokensRepository", () => {
         tokenHash: "token-hash",
         passwordHash: "new-password-hash",
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe("user-id");
 
     expect(clientMock.query).toHaveBeenNthCalledWith(
       1,
@@ -134,7 +134,7 @@ describe("UserTokensRepository", () => {
         tokenHash: "token-hash",
         passwordHash: "new-password-hash",
       }),
-    ).resolves.toBe(false);
+    ).resolves.toBeNull();
 
     expect(clientMock.query).toHaveBeenCalledTimes(1);
   });

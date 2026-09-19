@@ -6,22 +6,36 @@ import {
   Matches,
   MaxLength,
   MinLength,
+  IsUUID,
+  ValidateIf,
 } from "class-validator";
 
 export class CreateEmployeeDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsUUID()
+  userId?: string;
+
   @IsOptional()
   @IsBoolean()
   inviteUser?: boolean;
 
+  @ValidateIf(
+    (object: CreateEmployeeDto) =>
+      object.userId === undefined || object.firstName !== undefined,
+  )
   @IsString()
   @MinLength(1)
   @MaxLength(100)
-  firstName!: string;
+  firstName?: string;
 
+  @ValidateIf(
+    (object: CreateEmployeeDto) =>
+      object.userId === undefined || object.lastName !== undefined,
+  )
   @IsString()
   @MinLength(1)
   @MaxLength(150)
-  lastName!: string;
+  lastName?: string;
 
   @IsOptional()
   @IsEmail()

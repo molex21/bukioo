@@ -191,7 +191,7 @@ export function DesignSystemPage() {
   const tabTimer = useRef<number | undefined>(undefined);
   const tabOrder = ["general", "agenda", "avisos"];
   const tabContent: Record<string, string> = {
-    general: "Ajustes generales del negocio: nombre, contacto y zona horaria.",
+    general: "Ajustes generales de la empresa: nombre, contacto y zona horaria.",
     agenda: "Reglas de disponibilidad, confirmación y reprogramación.",
     avisos: "Preferencias de recordatorios y notificaciones.",
   };
@@ -221,7 +221,7 @@ export function DesignSystemPage() {
       Configuración: () => settingsIconRef.current?.startAnimation(),
       Informes: () => reportsIconRef.current?.startAnimation(),
       Inicio: () => homeIconRef.current?.startAnimation(),
-      Negocio: () => businessIconRef.current?.startAnimation(),
+      Empresa: () => businessIconRef.current?.startAnimation(),
       Servicios: () => servicesIconRef.current?.startAnimation(),
       Superadmin: () => superadminIconRef.current?.startAnimation(),
     };
@@ -363,7 +363,7 @@ export function DesignSystemPage() {
             </nav>
             <div className="navigation-preview__bottom">
               {!isSidebarCollapsed && <Text c="dimmed" fw={700} size="xs" tt="uppercase">Administración</Text>}
-              <button className={selectedNavigation === "Negocio" ? "navigation-preview__link--active" : ""} onClick={() => handleNavigationChange("Negocio")} title={isSidebarCollapsed ? "Negocio" : undefined} type="button"><BriefcaseBusinessIcon animateOnHover={false} ref={businessIconRef} size={18} />{!isSidebarCollapsed && <span>Negocio</span>}</button>
+              <button className={selectedNavigation === "Empresa" ? "navigation-preview__link--active" : ""} onClick={() => handleNavigationChange("Empresa")} title={isSidebarCollapsed ? "Empresa" : undefined} type="button"><BriefcaseBusinessIcon animateOnHover={false} ref={businessIconRef} size={18} />{!isSidebarCollapsed && <span>Empresa</span>}</button>
               <button className={selectedNavigation === "Configuración" ? "navigation-preview__link--active" : ""} onClick={() => handleNavigationChange("Configuración")} title={isSidebarCollapsed ? "Configuración" : undefined} type="button"><SettingsIcon animateOnHover={false} ref={settingsIconRef} size={18} />{!isSidebarCollapsed && <span>Configuración</span>}</button>
               <button className="navigation-preview__superadmin" onClick={() => handleNavigationChange("Superadmin")} title={isSidebarCollapsed ? "Superadmin" : undefined} type="button"><ShieldCheckIcon animateOnHover={false} ref={superadminIconRef} size={18} />{!isSidebarCollapsed && <span>Superadmin</span>}</button>
             </div>
@@ -373,7 +373,7 @@ export function DesignSystemPage() {
               <Group gap="xs">
                 <Menu shadow="md" width={220} withinPortal>
                   <Menu.Target><Button leftSection={<Building2 size={16} />} rightSection={<ArrowDown size={14} />} size="sm" variant="default">Studio Ana</Button></Menu.Target>
-                  <Menu.Dropdown><Menu.Label>Negocios disponibles</Menu.Label><Menu.Item>Studio Ana</Menu.Item><Menu.Item>Studio Norte</Menu.Item></Menu.Dropdown>
+                  <Menu.Dropdown><Menu.Label>Empresas disponibles</Menu.Label><Menu.Item>Studio Ana</Menu.Item><Menu.Item>Studio Norte</Menu.Item></Menu.Dropdown>
                 </Menu>
               </Group>
               <Group gap="xs"><Tooltip label="Notificaciones"><ActionIcon aria-label="Notificaciones" size="lg" variant="default"><Bell size={18} /></ActionIcon></Tooltip><Menu shadow="md" width={180} withinPortal><Menu.Target><button aria-label="Abrir menú de perfil" className="navigation-preview__profile" type="button"><Avatar color="bukioo" name="Ana Díaz" radius="xl" size="sm" /><span>AD</span></button></Menu.Target><Menu.Dropdown><Menu.Label>Ana Díaz</Menu.Label><Menu.Item>Mi perfil</Menu.Item><Menu.Item>Cerrar sesión</Menu.Item></Menu.Dropdown></Menu></Group>
@@ -381,8 +381,8 @@ export function DesignSystemPage() {
             <main>
               <Text c="bukioo.6" fw={700} size="xs" tt="uppercase">Vista seleccionada</Text>
               <Title order={3}>{selectedNavigation}</Title>
-              <Text c="dimmed" mt="xs" size="sm">La navegación conserva el contexto de negocio y muestra únicamente las opciones que permite el rol.</Text>
-              <SimpleGrid cols={{ base: 1, sm: 3 }} mt="xl" spacing="sm"><Card padding="md" withBorder><Text c="dimmed" size="xs">Rol empleado</Text><Text fw={600} size="sm">Agenda y clientes asignados</Text></Card><Card padding="md" withBorder><Text c="dimmed" size="xs">Rol manager</Text><Text fw={600} size="sm">Operación e informes</Text></Card><Card padding="md" withBorder><Text c="dimmed" size="xs">Owner / admin</Text><Text fw={600} size="sm">Configuración y negocio</Text></Card></SimpleGrid>
+              <Text c="dimmed" mt="xs" size="sm">La navegación conserva el contexto de empresa y muestra únicamente las opciones que permite el rol.</Text>
+              <SimpleGrid cols={{ base: 1, sm: 3 }} mt="xl" spacing="sm"><Card padding="md" withBorder><Text c="dimmed" size="xs">Rol empleado</Text><Text fw={600} size="sm">Agenda y clientes asignados</Text></Card><Card padding="md" withBorder><Text c="dimmed" size="xs">Rol manager</Text><Text fw={600} size="sm">Operación e informes</Text></Card><Card padding="md" withBorder><Text c="dimmed" size="xs">Owner / admin</Text><Text fw={600} size="sm">Configuración y empresa</Text></Card></SimpleGrid>
             </main>
             <nav aria-label="Navegación móvil" className="navigation-preview__mobile-nav">
               {[ ["Inicio", <LayoutGridIcon size={18} />], ["Agenda", <CalendarDaysIcon size={18} />], ["Clientes", <UsersIcon size={18} />], ["Más", <BriefcaseBusinessIcon size={18} />] ].map(([label, icon]) => <button className={selectedNavigation === label ? "navigation-preview__mobile-link--active" : ""} key={String(label)} onClick={() => handleNavigationChange(String(label))} type="button">{icon}<span>{label}</span></button>)}
@@ -424,7 +424,7 @@ export function DesignSystemPage() {
           Agenda
         </Text>
         <Title order={2}>Citas y estados operativos</Title>
-        <Text c="dimmed" mt="xs" size="sm">Horario del negocio · {businessTimezone}</Text>
+        <Text c="dimmed" mt="xs" size="sm">Horario de la empresa · {businessTimezone}</Text>
         <Card className="design-card" padding="lg" shadow="xs" withBorder>
           <Stack gap="md">
             <div>
@@ -478,14 +478,14 @@ export function DesignSystemPage() {
         <Title order={2}>Autenticación, verificación y recuperación</Title>
         <Tabs defaultValue="staff" mt="lg">
           <Tabs.List><Tabs.Tab value="staff">Equipo</Tabs.Tab><Tabs.Tab value="customer">Cliente</Tabs.Tab></Tabs.List>
-          <Tabs.Panel pt="md" value="staff"><Text c="dimmed" size="sm">Acceso para propietarios, administración y personal del negocio.</Text></Tabs.Panel>
+          <Tabs.Panel pt="md" value="staff"><Text c="dimmed" size="sm">Acceso para propietarios, administración y personal de la empresa.</Text></Tabs.Panel>
           <Tabs.Panel pt="md" value="customer"><Text c="dimmed" size="sm">El acceso de cliente siempre pertenece a la organización del enlace público.</Text></Tabs.Panel>
         </Tabs>
         <SimpleGrid className="design-form" cols={{ base: 1, md: 2 }} spacing="lg">
           <Card padding="lg" shadow="xs" withBorder>
             <Stack gap="md">
               <div><Text fw={700}>Iniciar sesión</Text><Text c="dimmed" size="sm">La contraseña nunca se guarda en el navegador.</Text></div>
-              <TextInput error={authStep === "invalid" ? "Comprueba tu correo y contraseña." : undefined} label="Correo electrónico" onChange={(event) => { setAuthEmail(event.currentTarget.value); setAuthStep("idle"); }} placeholder="nombre@negocio.com" type="email" value={authEmail} withAsterisk />
+              <TextInput error={authStep === "invalid" ? "Comprueba tu correo y contraseña." : undefined} label="Correo electrónico" onChange={(event) => { setAuthEmail(event.currentTarget.value); setAuthStep("idle"); }} placeholder="nombre@empresa.com" type="email" value={authEmail} withAsterisk />
               <PasswordInput error={authStep === "invalid" ? "Credenciales no válidas." : undefined} label="Contraseña" onChange={(event) => { setAuthPassword(event.currentTarget.value); setAuthStep("idle"); }} placeholder="Tu contraseña" value={authPassword} withAsterisk />
               <Group justify="space-between"><Button size="compact-sm" variant="subtle">He olvidado mi contraseña</Button><Button onClick={() => setAuthStep(authEmail.includes("@") && authPassword.length >= 12 ? "two-factor" : "invalid")}>Iniciar sesión</Button></Group>
               {authStep === "two-factor" && <Alert color="blue" icon={<LockKeyhole size={18} />} title="Verificación requerida">El siguiente paso solicita el código de seguridad.</Alert>}
@@ -502,13 +502,13 @@ export function DesignSystemPage() {
             </Stack>
           </Card>
           <Card padding="lg" shadow="xs" withBorder>
-            <Stack gap="md"><div><Text fw={700}>Restablecer contraseña</Text><Text c="dimmed" size="sm">El correo de recuperación no revela si la cuenta existe.</Text></div><TextInput label="Correo electrónico" placeholder="nombre@negocio.com" type="email" withAsterisk /><Button variant="light">Enviar código</Button><Text c="dimmed" size="xs">El código caduca en 10 minutos.</Text></Stack>
+            <Stack gap="md"><div><Text fw={700}>Restablecer contraseña</Text><Text c="dimmed" size="sm">El correo de recuperación no revela si la cuenta existe.</Text></div><TextInput label="Correo electrónico" placeholder="nombre@empresa.com" type="email" withAsterisk /><Button variant="light">Enviar código</Button><Text c="dimmed" size="xs">El código caduca en 10 minutos.</Text></Stack>
           </Card>
           <Card padding="lg" shadow="xs" withBorder>
             <Stack gap="md"><div><Text fw={700}>Nueva contraseña</Text><Text c="dimmed" size="sm">Se solicitará después de validar el código recibido por correo.</Text></div><PasswordInput label="Nueva contraseña" placeholder="Crea una contraseña segura" withAsterisk /><PasswordInput label="Repetir contraseña" placeholder="Repite la contraseña" withAsterisk /><Button>Guardar nueva contraseña</Button></Stack>
           </Card>
           <Card padding="lg" shadow="xs" withBorder>
-            <Stack gap="md"><div><Text fw={700}>Recuperar acceso de empleado</Text><Text c="dimmed" size="sm">Acciones disponibles para propietarios y administración del negocio.</Text></div><Select data={["Ana Díaz", "Carlos Vega", "Marta Ruiz"]} defaultValue="Ana Díaz" label="Empleado" /><Group gap="xs"><Button onClick={() => setAdminAccessAction("password")} size="xs" variant="light">Enviar recuperación de contraseña</Button><Button color="red" onClick={() => setAdminAccessAction("two-factor")} size="xs" variant="subtle">Restablecer 2FA</Button></Group>{adminAccessAction === "password" && <Alert color="green" icon={<CheckCircle2 size={18} />} title="Solicitud enviada">Se ha enviado un correo para establecer una contraseña nueva.</Alert>}{adminAccessAction === "two-factor" && <Alert color="blue" icon={<LockKeyhole size={18} />} title="2FA restablecido">Se han cerrado las sesiones activas. El empleado deberá acceder con su contraseña y configurar un autenticador nuevo.</Alert>}</Stack>
+            <Stack gap="md"><div><Text fw={700}>Recuperar acceso de empleado</Text><Text c="dimmed" size="sm">Acciones disponibles para propietarios y administración de la empresa.</Text></div><Select data={["Ana Díaz", "Carlos Vega", "Marta Ruiz"]} defaultValue="Ana Díaz" label="Empleado" /><Group gap="xs"><Button onClick={() => setAdminAccessAction("password")} size="xs" variant="light">Enviar recuperación de contraseña</Button><Button color="red" onClick={() => setAdminAccessAction("two-factor")} size="xs" variant="subtle">Restablecer 2FA</Button></Group>{adminAccessAction === "password" && <Alert color="green" icon={<CheckCircle2 size={18} />} title="Solicitud enviada">Se ha enviado un correo para establecer una contraseña nueva.</Alert>}{adminAccessAction === "two-factor" && <Alert color="blue" icon={<LockKeyhole size={18} />} title="2FA restablecido">Se han cerrado las sesiones activas. El empleado deberá acceder con su contraseña y configurar un autenticador nuevo.</Alert>}</Stack>
           </Card>
         </SimpleGrid>
       </section>
@@ -530,7 +530,7 @@ export function DesignSystemPage() {
             <div>
               {bookingStep === 0 && <Stack gap="sm"><Text fw={700}>Elige un servicio</Text>{[["Corte y peinado", "60 min · 25 €"], ["Coloración", "90 min · 48 €"], ["Manicura", "45 min · 22 €"]].map(([name, detail]) => <button className={`booking-choice ${bookingService === name ? "booking-choice--selected" : ""}`} key={name} onClick={() => setBookingService(name)} type="button"><Text fw={600} size="sm">{name}</Text><Text c="dimmed" size="xs">{detail}</Text></button>)}</Stack>}
               {bookingStep === 1 && <Stack gap="sm"><Text fw={700}>Elige un profesional</Text>{[["Ana Díaz", "Especialista en corte y color"], ["Carlos Vega", "Especialista en estilismo"], ["Marta Ruiz", "Especialista en manicura"]].map(([name, detail]) => <button className={`booking-choice ${bookingEmployee === name ? "booking-choice--selected" : ""}`} key={name} onClick={() => setBookingEmployee(name)} type="button"><Group gap="sm"><Avatar color="bukioo" name={name} radius="xl" /><div><Text fw={600} size="sm">{name}</Text><Text c="dimmed" size="xs">{detail}</Text></div></Group></button>)}</Stack>}
-              {bookingStep === 2 && <Stack gap="md"><div><Text fw={700}>Martes, 8 de septiembre</Text><Text c="dimmed" size="sm">Horario del negocio · {businessTimezone}</Text></div><Group gap="xs">{["09:00", "10:00", "11:30", "16:00"].map((slot) => <Button key={slot} onClick={() => setBookingSlot(slot)} variant={bookingSlot === slot ? "filled" : "default"}>{slot}</Button>)}<Button disabled variant="default">12:00 · Ocupada</Button></Group><Checkbox checked={bookingConflict} label="Simular conflicto de agenda al confirmar" onChange={(event) => setBookingConflict(event.currentTarget.checked)} /></Stack>}
+              {bookingStep === 2 && <Stack gap="md"><div><Text fw={700}>Martes, 8 de septiembre</Text><Text c="dimmed" size="sm">Horario de la empresa · {businessTimezone}</Text></div><Group gap="xs">{["09:00", "10:00", "11:30", "16:00"].map((slot) => <Button key={slot} onClick={() => setBookingSlot(slot)} variant={bookingSlot === slot ? "filled" : "default"}>{slot}</Button>)}<Button disabled variant="default">12:00 · Ocupada</Button></Group><Checkbox checked={bookingConflict} label="Simular conflicto de agenda al confirmar" onChange={(event) => setBookingConflict(event.currentTarget.checked)} /></Stack>}
               {bookingStep === 3 && <Stack gap="md"><Text fw={700}>Tus datos</Text><TextInput label="Nombre" placeholder="Tu nombre" withAsterisk /><TextInput label="Apellidos" placeholder="Tus apellidos" withAsterisk /><TextInput label="Correo electrónico" placeholder="tu@email.com" type="email" withAsterisk /><TextInput label="Teléfono" placeholder="600 000 000" withAsterisk /><Text c="dimmed" size="xs">También podrás crear una cuenta para consultar tus citas.</Text></Stack>}
               {bookingStep === 4 && <Stack gap="md">{bookingOutcome === "conflict" ? <Alert color="red" icon={<CircleAlert size={18} />} title="Esta franja ya no está disponible">Otra persona ha reservado este horario. Elige otra franja para continuar.</Alert> : bookingOutcome === "success" ? <Alert color="green" icon={<CheckCircle2 size={18} />} title="Reserva confirmada">Te enviaremos los detalles y un enlace para gestionar tu cita.</Alert> : <><Text fw={700}>Confirma tu reserva</Text><Text c="dimmed" size="sm">Al confirmar, comprobaremos la disponibilidad final antes de crear la cita.</Text></>}</Stack>}
               <Group justify="space-between" mt="xl"><Button disabled={bookingStep === 0 || bookingOutcome === "success"} onClick={() => { setBookingOutcome("idle"); setBookingStep((current) => Math.max(0, current - 1)); }} variant="default">Volver</Button>{bookingStep < 4 ? <Button onClick={() => setBookingStep((current) => current + 1)}>Continuar</Button> : bookingOutcome === "conflict" ? <Button onClick={() => { setBookingOutcome("idle"); setBookingStep(2); }}>Elegir otra hora</Button> : bookingOutcome === "success" ? <Button variant="light">Ver mi cita</Button> : <Button onClick={() => setBookingOutcome(bookingConflict ? "conflict" : "success")}>Confirmar reserva</Button>}</Group>
@@ -548,9 +548,9 @@ export function DesignSystemPage() {
         <SimpleGrid className="design-form" cols={{ base: 1, md: 2 }} spacing="lg">
           <Card padding="lg" shadow="xs" withBorder>
             <Stack gap="md">
-              <TextInput description="Aparece en la agenda y en las comunicaciones." error={businessName.length > 0 && businessName.trim().length < 3 ? "Escribe al menos 3 caracteres." : undefined} label="Nombre del negocio" onChange={(event) => { setBusinessName(event.currentTarget.value); setFormDirty(true); setFormSaveState("idle"); }} placeholder="Ej. Studio Ana" value={businessName} withAsterisk />
+              <TextInput description="Aparece en la agenda y en las comunicaciones." error={businessName.length > 0 && businessName.trim().length < 3 ? "Escribe al menos 3 caracteres." : undefined} label="Nombre de la empresa" onChange={(event) => { setBusinessName(event.currentTarget.value); setFormDirty(true); setFormSaveState("idle"); }} placeholder="Ej. Studio Ana" value={businessName} withAsterisk />
               <MultiSelect data={["Ana Díaz", "Carlos Vega", "Marta Ruiz"]} description="Solo quienes estén asignados podrán prestar este servicio." label="Empleados asignados" onChange={(value) => { setSelectedEmployees(value); setFormDirty(true); setFormSaveState("idle"); }} placeholder="Selecciona empleados" value={selectedEmployees} withAsterisk />
-              <Select data={ianaTimezones} description="La agenda, reservas, informes y horarios se mostrarán en esta zona." label="Zona horaria del negocio" limit={12} nothingFoundMessage="No encontramos esa zona horaria." onChange={(value) => { if (value) { setBusinessTimezone(value); setFormDirty(true); setFormSaveState("idle"); } }} searchable value={businessTimezone} withAsterisk />
+              <Select data={ianaTimezones} description="La agenda, reservas, informes y horarios se mostrarán en esta zona." label="Zona horaria de la empresa" limit={12} nothingFoundMessage="No encontramos esa zona horaria." onChange={(value) => { if (value) { setBusinessTimezone(value); setFormDirty(true); setFormSaveState("idle"); } }} searchable value={businessTimezone} withAsterisk />
               {businessTimezone !== "Atlantic/Canary" && <Alert color="yellow" icon={<TriangleAlert size={18} />} title="Revisa los horarios existentes">Al guardar, las horas de agenda y disponibilidad se interpretarán en la nueva zona horaria.</Alert>}
               <Switch defaultChecked description="Las nuevas reservas pasarán directamente a confirmadas." label="Confirmar citas automáticamente" onChange={() => { setFormDirty(true); setFormSaveState("idle"); }} />
               {formSaveState === "saved" && <Alert color="green" icon={<CheckCircle2 size={18} />} title="Cambios guardados">Los cambios se han guardado correctamente.</Alert>}
@@ -576,7 +576,7 @@ export function DesignSystemPage() {
             <Stack gap="md">
               <div>
                 <Text fw={600} size="sm">Nueva cita</Text>
-                <Text c="dimmed" size="sm">Horario del negocio · {businessTimezone}</Text>
+                <Text c="dimmed" size="sm">Horario de la empresa · {businessTimezone}</Text>
               </div>
               <DatePickerInput
                 clearable
@@ -744,7 +744,7 @@ export function DesignSystemPage() {
               <Table.Tbody>{visibleAppointments.map((appointment) => <Table.Tr key={appointment.id}><Table.Td>{appointment.customer}</Table.Td><Table.Td>{appointment.service}</Table.Td><Table.Td>{appointment.time}</Table.Td><Table.Td><Badge color={appointmentStatus[appointment.status].color} variant="light">{getAppointmentStatusLabel(appointment.status)}</Badge></Table.Td></Table.Tr>)}</Table.Tbody>
             </Table>
           </Table.ScrollContainer>
-          {visibleAppointments.length === 0 ? <Stack align="center" gap="xs" py="xl"><ThemeIcon color="gray" radius="xl" size={48} variant="light"><Inbox size={24} /></ThemeIcon><Text fw={600}>No encontramos citas con esos criterios</Text><Text c="dimmed" size="sm">Prueba con otra búsqueda o restablece la tabla.</Text><Button onClick={clearTableFilters} size="xs" variant="light">Restablecer tabla</Button></Stack> : <Group className="design-pagination" justify="space-between"><Group gap="xs"><Text c="dimmed" size="xs">Elementos por página</Text><Select aria-label="Elementos por página" data={["10", "25", "50"]} onChange={(value) => { setPageSize(Number(value ?? 10)); setPage(1); }} size="xs" value={String(pageSize)} w={72} /></Group><Text c="dimmed" size="sm">Mostrando {firstItem}–{lastItem} de {sortedAppointments.length} citas</Text><Group gap="xs"><Tooltip label="Primera página"><ActionIcon aria-label="Primera página" disabled={currentPage === 1} onClick={() => setPage(1)} size="sm" variant="default"><ChevronsLeft size={16} /></ActionIcon></Tooltip><Pagination onChange={setPage} size="sm" total={totalPages} value={currentPage} /><Tooltip label="Última página"><ActionIcon aria-label="Última página" disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} size="sm" variant="default"><ChevronsRight size={16} /></ActionIcon></Tooltip></Group></Group>}
+          {visibleAppointments.length === 0 ? <Stack align="center" gap="xs" py="xl"><ThemeIcon color="gray" radius="xl" size={48} variant="light"><Inbox size={24} /></ThemeIcon><Text fw={600}>No encontramos citas con esos criterios</Text><Text c="dimmed" size="sm">Prueba con otra búsqueda o restablece la tabla.</Text><Button onClick={clearTableFilters} size="xs" variant="light">Restablecer tabla</Button></Stack> : <Group className="design-pagination" justify="space-between"><Group gap="xs"><Text c="dimmed" size="xs">Elementos por página</Text><Select aria-label="Elementos por página" checkIconPosition="right" miw={88} data={["10", "25", "50"]} onChange={(value) => { setPageSize(Number(value ?? 10)); setPage(1); }} size="xs" value={String(pageSize)} w={88} /></Group><Text c="dimmed" size="sm">Mostrando {firstItem}–{lastItem} de {sortedAppointments.length} citas</Text><Group gap="xs"><Tooltip label="Primera página"><ActionIcon aria-label="Primera página" disabled={currentPage === 1} onClick={() => setPage(1)} size="sm" variant="default"><ChevronsLeft size={16} /></ActionIcon></Tooltip><Pagination onChange={setPage} size="sm" total={totalPages} value={currentPage} /><Tooltip label="Última página"><ActionIcon aria-label="Última página" disabled={currentPage === totalPages} onClick={() => setPage(totalPages)} size="sm" variant="default"><ChevronsRight size={16} /></ActionIcon></Tooltip></Group></Group>}
           </Stack>
         </Card>
         <SimpleGrid className="design-form" cols={{ base: 1, sm: 2 }} spacing="lg">

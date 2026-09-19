@@ -269,18 +269,62 @@ el estado real del repositorio y de la API.
 
 ### 9.1 Dashboard y organizaciones
 
-- [ ] Crear dashboard global de plataforma.
-- [ ] Crear listado paginado de organizaciones con busqueda y filtros.
-- [ ] Crear ficha de organizacion y suscripcion.
-- [ ] Permitir activar/suspender una organizacion.
-- [ ] Permitir exigir 2FA a administradores de una organizacion.
-- [ ] Permitir actualizar plan, estado y fechas de suscripcion.
+- [x] Añadir creación de organización con propietario y negocio inicial desde superadmin.
+- [x] Añadir creación de negocio dentro de una organización, con zona horaria y logo opcional.
+- [x] Añadir invitación de empleado dentro de un negocio, con rol Empleado o Responsable.
+- [x] Crear dashboard global de plataforma y listado de organizaciones con búsqueda, filtros y paginación.
+- [x] Crear ficha de organización con datos, contadores, estado y suscripción.
+- [x] Permitir activar/suspender una organización.
+- [x] Permitir cambiar manualmente el plan y estado de suscripción.
+- [x] Transferir la propiedad a un miembro activo; el propietario anterior pasa a ADMIN y el backend garantiza una única propiedad.
+- [ ] Permitir exigir 2FA a administradores desde la ficha de la organización.
 
 ### 9.2 Planes
 
-- [ ] Crear listado de planes.
-- [ ] Crear formularios de alta y edicion de plan.
-- [ ] Permitir eliminar con manejo de suscripciones asociadas.
+- [ ] Crear sección de planes con listado, búsqueda y estado.
+- [ ] Crear formularios de alta y edición con límites (empleados, empresas, citas), funciones y días de prueba.
+- [ ] Permitir activar/desactivar o eliminar planes, mostrando conflictos por suscripciones asociadas.
+
+### 9.3 Equipo y accesos dentro del negocio
+
+- [x] Separar «Usuarios y permisos» de la organización y «Empleados» del negocio en plataforma.
+- [x] Conectar miembros, búsqueda, filtros por rol/membresía/negocio y paginación.
+- [x] Ofrecer «Invitar usuario» y «Añadir usuario como empleado» por userId como acciones distintas.
+- [x] Cambiar rol con confirmación organizativa y selección de negocios al quitar ADMIN.
+- [x] Mostrar empleados existentes sin duplicarlos, incluso con el permiso de agenda revocado.
+- [x] Gestionar recargas y bloquear reenvíos de invitaciones con resultado incierto.
+- [x] Añadir pruebas de las reglas de permisos y vinculación.
+- [x] Mostrar «Sin acceso al panel» con el userId nulo confirmado por el listado de empleados.
+- [x] Editar datos, contacto, color y notas del empleado desde plataforma.
+- [x] Revocar/restablecer permiso de agenda con confirmación, historial preservado, auditoría y control de concurrencia/capacidad.
+- [x] Unificar textos de producto con «Empresa» y fijar el usuario seleccionado al añadirlo como empleado.
+- [x] Añadir transferencia de propiedad desde el usuario OWNER, con selección de miembro apto, confirmación explícita y recarga tras la operación.
+- [ ] Conectar la vista equivalente de `/app` con los endpoints de organización y sus permisos.
+- [ ] Validar visualmente estos flujos con datos reales, en escritorio y móvil.
+
+### 9.4 Gestión completa de suscripciones
+
+- [x] Asignar manualmente plan y estado desde la ficha de la organización.
+- [ ] Editar fecha de fin de prueba y vencimiento (el backend ya acepta ambas; falta completar el formulario y el contrato frontend).
+- [ ] Mostrar uso actual frente a límites del plan y avisar antes de excederlos.
+- [ ] Consultar historial de suscripciones y cambios; requiere endpoint de lectura de historial.
+- [ ] Aclarar visualmente que la gestión es manual y no procesa cobros.
+
+### 9.5 Edición de empresas desde plataforma
+
+- [x] Listar empresas y consultar sus datos básicos desde una organización.
+- [ ] Añadir detalle editable de nombre, contacto, zona horaria y logo.
+- [ ] Gestionar estado activo/suspendido y mostrar impacto antes de guardar.
+- [ ] Confirmar/añadir endpoints superadmin para lectura y edición; los contratos actuales cubren principalmente consulta y creación.
+
+### 9.6 Auditoría, accesos y seguridad
+
+- [x] Gestionar roles, empresas asignadas y suspensión/restablecimiento de acceso de miembros.
+- [x] Registrar la transferencia de propiedad y otras mutaciones de plataforma en auditoría.
+- [x] Permitir a superadmin cambiar el correo de acceso de un miembro tras confirmar un código enviado al correo nuevo.
+- [ ] Añadir ajuste de seguridad para exigir 2FA a OWNER/ADMIN (endpoint existente, falta UI).
+- [ ] Crear visor global de auditoría de plataforma, con filtros por organización, actor, acción y fecha; requiere endpoint de consulta de `platform_audit_logs`.
+- [ ] Añadir vista de sesiones y controles de revocación/reinicio de acceso; verificar o definir endpoints superadmin antes de integrarla.
 
 ## Orden de entrega recomendado
 
@@ -297,3 +341,18 @@ el estado real del repositorio y de la API.
 La primera version operativa se alcanza al completar los bloques 0 a 4: un
 negocio puede configurar equipo y servicios, definir horarios, crear citas y
 gestionar la agenda diaria.
+
+## Bloque 10 — Sistema interno de ticketing
+
+### 10.1 Solicitudes y seguimiento
+
+- [ ] Crear un área interna para que las organizaciones abran solicitudes a soporte.
+- [ ] Permitir clasificar tickets por categoría, prioridad, estado, organización y persona responsable.
+- [ ] Añadir conversación, adjuntos y cronología de cambios por ticket.
+- [ ] Mostrar al solicitante el estado y las respuestas de sus tickets.
+
+### 10.2 Operación de soporte
+
+- [ ] Crear una bandeja para superadmin con búsqueda, filtros, asignación y cambios masivos de estado.
+- [ ] Registrar en auditoría las asignaciones, cambios de prioridad/estado y respuestas del equipo interno.
+- [ ] Añadir avisos de nuevos mensajes, vencimientos y SLA cuando se definan las reglas de soporte.

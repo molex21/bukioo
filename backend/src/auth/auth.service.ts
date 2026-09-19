@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ForbiddenException,
   UnauthorizedException,
+  HttpException,
+  HttpStatus,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
@@ -35,6 +37,8 @@ import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyPasswordResetDto } from "./dto/verify-password-reset.dto";
 import { VerifyTwoFactorDto } from "./dto/verify-two-factor.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
+import { RequestEmailChangeDto } from "./dto/request-email-change.dto";
+import { ConfirmEmailChangeDto } from "./dto/confirm-email-change.dto";
 import { EmailProvider } from "./email.provider";
 import { EmployeeRegistrationRepository } from "./employee-registration.repository";
 import { OnboardingRepository } from "./onboarding.repository";
@@ -43,6 +47,7 @@ import { UserTokensRepository } from "./user-tokens.repository";
 import { TwoFactorRepository } from "./two-factor.repository";
 import { LoginProtectionRepository } from "./login-protection.repository";
 import { UserRecord, UsersRepository } from "./users.repository";
+import { SecurityEventsRepository } from "./security-events.repository";
 
 export interface LoginSessionMetadata {
   userAgent?: string;
@@ -82,6 +87,7 @@ export interface InviteEmployeeInput {
   phone?: string;
   color?: string;
   notes?: string;
+  role?: "MANAGER" | "EMPLOYEE";
 }
 
 export interface InviteExistingEmployeeInput {
@@ -106,6 +112,7 @@ export class AuthService {
     private readonly userTokensRepository: UserTokensRepository,
     private readonly twoFactorRepository: TwoFactorRepository,
     private readonly loginProtectionRepository: LoginProtectionRepository,
+    private readonly securityEventsRepository: SecurityEventsRepository,
     private readonly emailProvider: EmailProvider,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -190,7 +197,7 @@ export class AuthService {
           passwordHash,
           organizationId: input.organizationId,
           businessIds: [input.businessId],
-          role: "EMPLOYEE",
+          role: input.role ?? "EMPLOYEE",
           employee: {
             businessId: input.businessId,
             firstName: input.firstName,
@@ -257,16 +264,40 @@ export class AuthService {
     }
   }
 
-  async validateCredentials(loginDto: LoginDto): Promise<UserRecord> {
+  async validateCredentials(
+    loginDto: LoginDto,
+    metadata: LoginSessionMetadata = {},
+  ): Promise<UserRecord> {
     const email = loginDto.email.trim().toLowerCase();
     const user = await this.usersRepository.findByEmail(email);
 
     if (!user) {
+      await this.securityEventsRepository.record({
+        eventType: "LOGIN",
+        outcome: "FAILURE",
+        ...metadata,
+      });
       throw new UnauthorizedException("Email o contraseña incorrectos");
     }
 
     if (await this.loginProtectionRepository.isUserLocked(user.id)) {
-      throw new UnauthorizedException("Email o contraseña incorrectos");
+      const seconds =
+        await this.loginProtectionRepository.getUserLockRemainingSeconds(
+          user.id,
+        );
+      await this.securityEventsRepository.record({
+        eventType: "LOGIN_LOCKED",
+        outcome: "FAILURE",
+        userId: user.id,
+        ...metadata,
+      });
+      throw new HttpException(
+        {
+          message: `Demasiados intentos. Inténtalo de nuevo en ${this.formatLockRemaining(seconds)}.`,
+          retryAfterSeconds: seconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     const passwordMatches = await argon2.verify(
@@ -278,6 +309,12 @@ export class AuthService {
       if (user.status === "ACTIVE") {
         await this.loginProtectionRepository.recordUserFailure(user.id);
       }
+      await this.securityEventsRepository.record({
+        eventType: "LOGIN",
+        outcome: "FAILURE",
+        userId: user.id,
+        ...metadata,
+      });
       throw new UnauthorizedException("Email o contraseña incorrectos");
     }
 
@@ -287,8 +324,12 @@ export class AuthService {
   }
 
   async onboard(onboardDto: OnboardDto, onboardingSecret: string | undefined) {
-    const email = onboardDto.email.trim().toLowerCase();
     this.assertInitialOnboardingCredentials(onboardingSecret);
+    return this.provisionOrganization(onboardDto);
+  }
+
+  async provisionOrganization(onboardDto: OnboardDto) {
+    const email = onboardDto.email.trim().toLowerCase();
     const existingUser = await this.usersRepository.findByEmail(email);
 
     if (existingUser) {
@@ -353,7 +394,7 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto, sessionMetadata: LoginSessionMetadata = {}) {
-    const user = await this.validateCredentials(loginDto);
+    const user = await this.validateCredentials(loginDto, sessionMetadata);
 
     if (user.password_change_required) {
       if (user.email_verified_at !== null) {
@@ -403,6 +444,11 @@ export class AuthService {
       userId,
       this.encryptTwoFactorSecret(secret),
     );
+    await this.securityEventsRepository.record({
+      eventType: "TWO_FACTOR_SETUP_REQUESTED",
+      outcome: "SUCCESS",
+      userId,
+    });
 
     return {
       secret,
@@ -419,6 +465,11 @@ export class AuthService {
     verifyTwoFactorDto: VerifyTwoFactorDto,
   ) {
     await this.enableTwoFactorForUser(userId, verifyTwoFactorDto.code);
+    await this.securityEventsRepository.record({
+      eventType: "TWO_FACTOR_ENABLED",
+      outcome: "SUCCESS",
+      userId,
+    });
 
     return { twoFactorEnabled: true };
   }
@@ -443,6 +494,12 @@ export class AuthService {
     });
 
     if (!verification.valid) {
+      await this.securityEventsRepository.record({
+        eventType: "TWO_FACTOR_VERIFICATION",
+        outcome: "FAILURE",
+        userId,
+        ...sessionMetadata,
+      });
       throw new UnauthorizedException("Segundo factor invalido");
     }
 
@@ -472,6 +529,12 @@ export class AuthService {
         "Token de verificacion invalido o caducado",
       );
     }
+
+    await this.securityEventsRepository.record({
+      eventType: "EMAIL_VERIFIED",
+      outcome: "SUCCESS",
+      userId,
+    });
 
     return this.createPasswordActivationAttemptToken(userId);
   }
@@ -529,6 +592,12 @@ export class AuthService {
       ipAddress: sessionMetadata.ipAddress,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_IN_SECONDS * 1000),
     });
+    await this.securityEventsRepository.record({
+      eventType: "LOGIN",
+      outcome: "SUCCESS",
+      userId: user.id,
+      ...sessionMetadata,
+    });
 
     return {
       accessToken,
@@ -538,7 +607,10 @@ export class AuthService {
     };
   }
 
-  async refresh(refreshToken: string | undefined) {
+  async refresh(
+    refreshToken: string | undefined,
+    metadata: LoginSessionMetadata = {},
+  ) {
     if (!refreshToken) {
       throw new UnauthorizedException("Refresh token invalido");
     }
@@ -587,6 +659,12 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync({
       sub: session.user_id,
     });
+    await this.securityEventsRepository.record({
+      eventType: "SESSION_REFRESH",
+      outcome: "SUCCESS",
+      userId: session.user_id,
+      ...metadata,
+    });
 
     return {
       accessToken,
@@ -596,7 +674,10 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string | undefined): Promise<void> {
+  async logout(
+    refreshToken: string | undefined,
+    metadata: LoginSessionMetadata = {},
+  ): Promise<void> {
     if (!refreshToken) {
       return;
     }
@@ -604,6 +685,12 @@ export class AuthService {
     try {
       const payload = await this.verifyRefreshToken(refreshToken);
       await this.userSessionsRepository.revoke(payload.sid, payload.sub);
+      await this.securityEventsRepository.record({
+        eventType: "LOGOUT",
+        outcome: "SUCCESS",
+        userId: payload.sub,
+        ...metadata,
+      });
     } catch (error: unknown) {
       if (!(error instanceof UnauthorizedException)) {
         throw error;
@@ -718,6 +805,86 @@ export class AuthService {
     return { emailVerified: true };
   }
 
+  async requestEmailChange(
+    userId: string,
+    input: RequestEmailChangeDto,
+    metadata: LoginSessionMetadata = {},
+  ): Promise<void> {
+    const user = await this.usersRepository.findById(userId);
+    if (
+      !user ||
+      user.status !== "ACTIVE" ||
+      user.email_verified_at === null ||
+      user.password_change_required
+    ) {
+      throw new UnauthorizedException("Access token invalido");
+    }
+    const newEmail = input.newEmail.trim().toLowerCase();
+    if (newEmail === user.email.toLowerCase()) {
+      throw new BadRequestException(
+        "El nuevo correo debe ser diferente del actual",
+      );
+    }
+    const existing = await this.usersRepository.findByEmail(newEmail);
+    if (existing && existing.id !== user.id) {
+      throw new ConflictException("Ya existe una cuenta con este email");
+    }
+    const token = randomInt(0, 1_000_000).toString().padStart(6, "0");
+    await this.userTokensRepository.replaceEmailChangeToken({
+      userId: user.id,
+      newEmail,
+      tokenHash: this.hashToken(token),
+      expiresAt: new Date(
+        Date.now() + EMAIL_VERIFICATION_TOKEN_EXPIRES_IN_SECONDS * 1000,
+      ),
+    });
+    await this.emailProvider.sendEmailChange({ email: newEmail, token });
+    await this.securityEventsRepository.record({
+      eventType: "EMAIL_CHANGE_REQUESTED",
+      outcome: "SUCCESS",
+      userId,
+      ...metadata,
+    });
+  }
+
+  async confirmEmailChange(
+    userId: string,
+    input: ConfirmEmailChangeDto,
+    metadata: LoginSessionMetadata = {},
+  ) {
+    const result = await this.userTokensRepository.consumeEmailChangeToken(
+      userId,
+      this.hashToken(input.token),
+    );
+    if (result.status === "too_many_attempts") {
+      throw new HttpException(
+        "Demasiados intentos. Solicita un código nuevo",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    if (result.status === "conflict") {
+      throw new ConflictException("Ya existe una cuenta con este email");
+    }
+    if (result.status !== "changed") {
+      await this.securityEventsRepository.record({
+        eventType: "EMAIL_CHANGE_CONFIRMED",
+        outcome: "FAILURE",
+        userId,
+        ...metadata,
+      });
+      throw new BadRequestException(
+        "Código de cambio de correo inválido o caducado",
+      );
+    }
+    await this.securityEventsRepository.record({
+      eventType: "EMAIL_CHANGE_CONFIRMED",
+      outcome: "SUCCESS",
+      userId,
+      ...metadata,
+    });
+    return { email: result.email, sessionRevoked: true };
+  }
+
   async requestPasswordReset(
     forgotPasswordDto: ForgotPasswordDto,
   ): Promise<void> {
@@ -753,16 +920,17 @@ export class AuthService {
     const passwordHash = await argon2.hash(resetPasswordDto.password, {
       type: argon2.argon2id,
     });
-    const reset = await this.userTokensRepository.consumePasswordResetToken({
+    const userId = await this.userTokensRepository.consumePasswordResetToken({
       tokenHash: this.hashToken(resetPasswordDto.token),
       passwordHash,
     });
 
-    if (!reset) {
+    if (!userId) {
       throw new BadRequestException(
         "Codigo de recuperacion invalido o caducado",
       );
     }
+    await this.loginProtectionRepository.clearUserFailures(userId);
   }
 
   async verifyPasswordResetCode(
@@ -777,6 +945,16 @@ export class AuthService {
         "Código de recuperación inválido o caducado",
       );
     }
+  }
+
+  private formatLockRemaining(seconds: number): string {
+    const safeSeconds = Math.max(1, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainder = safeSeconds % 60;
+    if (minutes === 0) return `${remainder} segundos`;
+    if (remainder === 0)
+      return `${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+    return `${minutes} ${minutes === 1 ? "minuto" : "minutos"} y ${remainder} segundos`;
   }
 
   private async verifyRefreshToken(

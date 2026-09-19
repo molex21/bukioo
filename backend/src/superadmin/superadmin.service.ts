@@ -1,19 +1,37 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { AuthService } from "../auth/auth.service";
+import type { LoginSessionMetadata } from "../auth/auth.service";
+import { BusinessesRepository } from "../businesses/businesses.repository";
+import { CreateBusinessDto } from "../businesses/dto/create-business.dto";
+import { CreateSuperadminBusinessDto } from "./dto/create-superadmin-business.dto";
+import { CreateSuperadminEmployeeDto } from "./dto/create-superadmin-employee.dto";
+import { CreateSuperadminOrganizationDto } from "./dto/create-superadmin-organization.dto";
 import { CreatePlanDto } from "./dto/create-plan.dto";
 import { ListSuperadminBusinessesDto } from "./dto/list-superadmin-businesses.dto";
 import { ListSuperadminEmployeesDto } from "./dto/list-superadmin-employees.dto";
 import { ListSuperadminOrganizationsDto } from "./dto/list-superadmin-organizations.dto";
 import { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscription.dto";
 import { UpdatePlanDto } from "./dto/update-plan.dto";
+import { UpdateSuperadminBusinessDto } from "./dto/update-superadmin-business.dto";
+import { ListPlatformAuditLogsDto } from "./dto/list-platform-audit-logs.dto";
 import { SuperadminRepository, type PlanRecord } from "./superadmin.repository";
+import { OrganizationMembersService } from "../organizations/organization-members.service";
+import { RequestEmailChangeDto } from "../auth/dto/request-email-change.dto";
+import { ConfirmEmailChangeDto } from "../auth/dto/confirm-email-change.dto";
 
 @Injectable()
 export class SuperadminService {
-  constructor(private readonly repository: SuperadminRepository) {}
+  constructor(
+    private readonly repository: SuperadminRepository,
+    private readonly authService: AuthService,
+    private readonly businessesRepository: BusinessesRepository,
+    private readonly members: OrganizationMembersService,
+  ) {}
 
   async dashboard() {
     const dashboard = await this.repository.getDashboard();
@@ -51,6 +69,162 @@ export class SuperadminService {
     );
   }
 
+  async requestMemberEmailChange(
+    organizationId: string,
+    membershipId: string,
+    input: RequestEmailChangeDto,
+    actorUserId: string,
+    metadata: LoginSessionMetadata = {},
+  ) {
+    const member = await this.members.getMemberForPlatform(
+      organizationId,
+      membershipId,
+      actorUserId,
+    );
+    const newEmail = input.newEmail.trim().toLowerCase();
+    await this.authService.requestEmailChange(
+      member.user_id,
+      { newEmail },
+      metadata,
+    );
+    await this.repository.recordAudit(
+      actorUserId,
+      "USER_EMAIL_CHANGE_REQUESTED",
+      "user",
+      member.user_id,
+      { email: member.email },
+      { email: newEmail, organizationId, membershipId },
+    );
+    return { status: "accepted" as const };
+  }
+
+  async confirmMemberEmailChange(
+    organizationId: string,
+    membershipId: string,
+    input: ConfirmEmailChangeDto,
+    actorUserId: string,
+    metadata: LoginSessionMetadata = {},
+  ) {
+    const member = await this.members.getMemberForPlatform(
+      organizationId,
+      membershipId,
+      actorUserId,
+    );
+    const result = await this.authService.confirmEmailChange(
+      member.user_id,
+      input,
+      metadata,
+    );
+    await this.repository.recordAudit(
+      actorUserId,
+      "USER_EMAIL_CHANGED",
+      "user",
+      member.user_id,
+      { email: member.email },
+      { email: result.email, organizationId, membershipId },
+    );
+    return result;
+  }
+
+  async createOrganization(
+    input: CreateSuperadminOrganizationDto,
+    actorUserId: string,
+  ) {
+    const onboarding = await this.authService.provisionOrganization(input);
+    await this.repository.recordAudit(
+      actorUserId,
+      "ORGANIZATION_CREATED",
+      "organization",
+      onboarding.organization.id,
+      null,
+      onboarding.organization,
+    );
+    return onboarding;
+  }
+
+  async createOrganizationBusiness(
+    organizationId: string,
+    input: CreateSuperadminBusinessDto,
+    actorUserId: string,
+  ) {
+    await this.getOrganizationOrFail(organizationId);
+    try {
+      const business = await this.businessesRepository.createForOrganization({
+        organizationId,
+        name: input.name.trim(),
+        slug: input.slug.trim().toLowerCase(),
+        email: input.email?.trim().toLowerCase(),
+        phone: input.phone?.trim(),
+        timezone: input.timezone?.trim(),
+        logoUrl: input.logoUrl?.trim(),
+      } satisfies CreateBusinessDto);
+      await this.repository.recordAudit(
+        actorUserId,
+        "BUSINESS_CREATED",
+        "business",
+        business.id,
+        null,
+        business,
+      );
+      return business;
+    } catch (error: unknown) {
+      if (this.isDuplicateError(error)) {
+        throw new ConflictException(
+          "Ya existe un negocio con ese slug en la organizacion",
+        );
+      }
+      throw error;
+    }
+  }
+
+  async createBusinessEmployee(
+    organizationId: string,
+    businessId: string,
+    input: CreateSuperadminEmployeeDto,
+    actorUserId: string,
+  ) {
+    await this.getOrganizationOrFail(organizationId);
+    await this.getOrganizationBusinessOrFail(organizationId, businessId);
+    if (input.userId !== undefined) {
+      return this.members.linkEmployee(
+        organizationId,
+        businessId,
+        { ...input, userId: input.userId },
+        actorUserId,
+        true,
+      );
+    }
+    if (
+      !input.email ||
+      !input.firstName?.trim() ||
+      !input.lastName?.trim() ||
+      !input.role
+    ) {
+      throw new BadRequestException(
+        "Email, nombre, apellidos y rol son obligatorios para invitar",
+      );
+    }
+    const employee = await this.authService.inviteEmployee({
+      organizationId,
+      businessId,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      phone: input.phone,
+      color: input.color,
+      role: input.role,
+    });
+    await this.repository.recordAudit(
+      actorUserId,
+      "EMPLOYEE_INVITED",
+      "employee",
+      employee.id,
+      null,
+      { organizationId, businessId, role: input.role, employee },
+    );
+    return employee;
+  }
+
   async listOrganizationBusinesses(
     organizationId: string,
     filters: ListSuperadminBusinessesDto,
@@ -77,6 +251,45 @@ export class SuperadminService {
     );
   }
 
+  async updateOrganizationBusiness(
+    organizationId: string,
+    businessId: string,
+    input: UpdateSuperadminBusinessDto,
+    actorUserId: string,
+  ) {
+    const previous = await this.getOrganizationBusinessOrFail(
+      organizationId,
+      businessId,
+    );
+    try {
+      await this.repository.updateOrganizationBusiness(
+        organizationId,
+        businessId,
+        input,
+      );
+    } catch (error: unknown) {
+      if (this.isDuplicateError(error)) {
+        throw new ConflictException(
+          "Ya existe un negocio con ese slug en la organizacion",
+        );
+      }
+      throw error;
+    }
+    const updated = await this.getOrganizationBusinessOrFail(
+      organizationId,
+      businessId,
+    );
+    await this.repository.recordAudit(
+      actorUserId,
+      "BUSINESS_UPDATED",
+      "business",
+      businessId,
+      this.businessResponse(previous),
+      this.businessResponse(updated),
+    );
+    return this.businessResponse(updated);
+  }
+
   async listBusinessEmployees(
     organizationId: string,
     businessId: string,
@@ -97,6 +310,7 @@ export class SuperadminService {
       },
       items: result.items.map((item) => ({
         id: item.id,
+        userId: item.user_id,
         firstName: item.first_name,
         lastName: item.last_name,
         email: item.email,
@@ -243,6 +457,45 @@ export class SuperadminService {
       subscription,
     );
     return subscription;
+  }
+
+  async listSubscriptions(organizationId: string) {
+    await this.getOrganizationOrFail(organizationId);
+    return (await this.repository.listSubscriptions(organizationId)).map(
+      (item) => ({
+        id: item.id,
+        planCode: item.plan_code,
+        status: item.status,
+        trialStartedAt: item.trial_started_at,
+        trialEndsAt: item.trial_ends_at,
+        startsAt: item.starts_at,
+        expiresAt: item.expires_at,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+      }),
+    );
+  }
+
+  async listAuditLogs(filters: ListPlatformAuditLogsDto) {
+    const result = await this.repository.listAuditLogs(filters);
+    return {
+      pagination: {
+        limit: filters.limit ?? 50,
+        offset: filters.offset ?? 0,
+        total: Number(result.total),
+      },
+      items: result.items.map((item) => ({
+        id: item.id,
+        actorUserId: item.actor_user_id,
+        actorEmail: item.actor_email,
+        action: item.action,
+        entityType: item.entity_type,
+        entityId: item.entity_id,
+        oldValues: item.old_values,
+        newValues: item.new_values,
+        createdAt: item.created_at,
+      })),
+    };
   }
 
   private async getOrganizationOrFail(organizationId: string) {

@@ -44,6 +44,15 @@ export class AuthorizationRepository {
         AND organization_memberships.user_id = $2
         AND organization_memberships.status = 'ACTIVE'
         AND users.status = 'ACTIVE'
+        AND (
+          organization_memberships.role IN ('OWNER', 'ADMIN')
+          OR EXISTS (
+            SELECT 1 FROM business_memberships
+            WHERE business_memberships.organization_id = businesses.organization_id
+              AND business_memberships.business_id = businesses.id
+              AND business_memberships.user_id = $2
+          )
+        )
       LIMIT 1`,
       [businessId, userId],
     );

@@ -5,6 +5,7 @@ describe("OrganizationsController", () => {
   const organizationsService = { updateBranding: jest.fn() };
   const controller = new OrganizationsController(
     organizationsService as unknown as OrganizationsService,
+    { list: jest.fn(), updateRole: jest.fn() } as never,
   );
 
   afterEach(() => organizationsService.updateBranding.mockReset());

@@ -19,8 +19,19 @@ describe("SuperadminService", () => {
     setSubscription: jest.fn(),
     recordAudit: jest.fn(),
   };
+  const authService = {
+    provisionOrganization: jest.fn(),
+    inviteEmployee: jest.fn(),
+    requestEmailChange: jest.fn(),
+    confirmEmailChange: jest.fn(),
+  };
+  const businessesRepository = { createForOrganization: jest.fn() };
+  const members = { linkEmployee: jest.fn(), getMemberForPlatform: jest.fn() };
   const service = new SuperadminService(
     repository as unknown as SuperadminRepository,
+    authService as never,
+    businessesRepository as never,
+    members as never,
   );
   const organization = {
     id: "organization-id",
@@ -64,7 +75,12 @@ describe("SuperadminService", () => {
   };
 
   beforeEach(() =>
-    Object.values(repository).forEach((mock) => mock.mockReset()),
+    [
+      ...Object.values(repository),
+      ...Object.values(authService),
+      ...Object.values(businessesRepository),
+      ...Object.values(members),
+    ].forEach((mock) => mock.mockReset()),
   );
 
   it("maps global dashboard metrics to numbers", async () => {
@@ -86,6 +102,46 @@ describe("SuperadminService", () => {
       appointments: 7,
       subscriptions: { active: 1, trial: 1 },
     });
+  });
+
+  it("requires a verified code before a superadmin changes a member login email", async () => {
+    const member = {
+      id: "membership-id",
+      user_id: "user-id",
+      email: "old@example.com",
+    };
+    members.getMemberForPlatform.mockResolvedValue(member);
+    authService.confirmEmailChange.mockResolvedValue({
+      email: "new@example.com",
+      sessionRevoked: true,
+    });
+
+    await expect(
+      service.confirmMemberEmailChange(
+        "organization-id",
+        member.id,
+        { token: "123456" },
+        "superadmin-id",
+      ),
+    ).resolves.toEqual({ email: "new@example.com", sessionRevoked: true });
+
+    expect(authService.confirmEmailChange).toHaveBeenCalledWith(
+      member.user_id,
+      { token: "123456" },
+      {},
+    );
+    expect(repository.recordAudit).toHaveBeenCalledWith(
+      "superadmin-id",
+      "USER_EMAIL_CHANGED",
+      "user",
+      member.user_id,
+      { email: member.email },
+      {
+        email: "new@example.com",
+        organizationId: "organization-id",
+        membershipId: member.id,
+      },
+    );
   });
 
   it("records an organization suspension", async () => {
@@ -193,6 +249,109 @@ describe("SuperadminService", () => {
       organization.id,
       business.id,
       { status: "ARCHIVED" },
+    );
+  });
+
+  it("provisions an organization through Auth and audits the superadmin action", async () => {
+    const onboarding = {
+      organization: { id: organization.id, name: organization.name },
+    };
+    authService.provisionOrganization.mockResolvedValue(onboarding);
+    const input = {
+      email: "owner@example.com",
+      firstName: "Ana",
+      lastName: "Garcia",
+      organizationName: "Peluqueria Ana",
+      organizationSlug: "peluqueria-ana",
+    };
+
+    await expect(
+      service.createOrganization(input, "superadmin-id"),
+    ).resolves.toBe(onboarding);
+
+    expect(authService.provisionOrganization).toHaveBeenCalledWith(input);
+    expect(repository.recordAudit).toHaveBeenCalledWith(
+      "superadmin-id",
+      "ORGANIZATION_CREATED",
+      "organization",
+      organization.id,
+      null,
+      onboarding.organization,
+    );
+  });
+
+  it("creates a business only after finding its organization and audits it", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    businessesRepository.createForOrganization.mockResolvedValue(business);
+
+    await expect(
+      service.createOrganizationBusiness(
+        organization.id,
+        { name: "Centro", slug: "centro" },
+        "superadmin-id",
+      ),
+    ).resolves.toBe(business);
+
+    expect(businessesRepository.createForOrganization).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: organization.id }),
+    );
+    expect(repository.recordAudit).toHaveBeenCalledWith(
+      "superadmin-id",
+      "BUSINESS_CREATED",
+      "business",
+      business.id,
+      null,
+      business,
+    );
+  });
+
+  it("rejects an employee invitation when the business is outside its organization", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    repository.findOrganizationBusiness.mockResolvedValue(null);
+
+    await expect(
+      service.createBusinessEmployee(
+        organization.id,
+        "other-business-id",
+        {
+          email: "employee@example.com",
+          firstName: "Lucia",
+          lastName: "Perez",
+          role: "EMPLOYEE",
+        },
+        "superadmin-id",
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(authService.inviteEmployee).not.toHaveBeenCalled();
+  });
+
+  it("invites an employee with the requested manager role and audits it", async () => {
+    repository.findOrganization.mockResolvedValue(organization);
+    repository.findOrganizationBusiness.mockResolvedValue(business);
+    authService.inviteEmployee.mockResolvedValue({ id: "employee-id" });
+
+    await service.createBusinessEmployee(
+      organization.id,
+      business.id,
+      {
+        email: "manager@example.com",
+        firstName: "Lucia",
+        lastName: "Perez",
+        role: "MANAGER",
+      },
+      "superadmin-id",
+    );
+
+    expect(authService.inviteEmployee).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "MANAGER", businessId: business.id }),
+    );
+    expect(repository.recordAudit).toHaveBeenCalledWith(
+      "superadmin-id",
+      "EMPLOYEE_INVITED",
+      "employee",
+      "employee-id",
+      null,
+      expect.objectContaining({ role: "MANAGER" }),
     );
   });
 });

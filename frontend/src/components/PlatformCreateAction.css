@@ -1,0 +1,13 @@
+.platform-create-notification {
+  border-left: 3px solid var(--color-success);
+  animation: platform-create-notification-enter 420ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes platform-create-notification-enter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .platform-create-notification { animation: none; }
+}

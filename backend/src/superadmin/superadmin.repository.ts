@@ -8,6 +8,7 @@ import type { SetOrganizationSubscriptionDto } from "./dto/set-organization-subs
 import type { UpdatePlanDto } from "./dto/update-plan.dto";
 import type { UpdateSuperadminBusinessDto } from "./dto/update-superadmin-business.dto";
 import type { ListPlatformAuditLogsDto } from "./dto/list-platform-audit-logs.dto";
+import type { ListOrganizationSubscriptionsDto } from "./dto/list-organization-subscriptions.dto";
 
 export interface PlanRecord {
   code: string;
@@ -504,16 +505,24 @@ export class SuperadminRepository {
 
   async listSubscriptions(
     organizationId: string,
-  ): Promise<OrganizationSubscriptionRecord[]> {
-    const result =
-      await this.databaseService.query<OrganizationSubscriptionRecord>(
+    filters: ListOrganizationSubscriptionsDto,
+  ): Promise<{ items: OrganizationSubscriptionRecord[]; total: number }> {
+    const [items, total] = await Promise.all([
+      this.databaseService.query<OrganizationSubscriptionRecord>(
         `SELECT id, organization_id, plan_code, status, trial_started_at, trial_ends_at,
-        starts_at, expires_at, created_at, updated_at
-      FROM organization_subscriptions WHERE organization_id = $1
-      ORDER BY created_at DESC, id DESC`,
+          starts_at, expires_at, created_at, updated_at
+        FROM organization_subscriptions WHERE organization_id = $1
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2 OFFSET $3`,
+        [organizationId, filters.limit ?? 10, filters.offset ?? 0],
+      ),
+      this.databaseService.query<{ total: string }>(
+        `SELECT COUNT(*)::text AS total FROM organization_subscriptions
+        WHERE organization_id = $1`,
         [organizationId],
-      );
-    return result.rows;
+      ),
+    ]);
+    return { items: items.rows, total: Number(total.rows[0]?.total ?? 0) };
   }
 
   async listAuditLogs(filters: ListPlatformAuditLogsDto) {

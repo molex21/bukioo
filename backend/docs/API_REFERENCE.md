@@ -249,6 +249,7 @@ logo.
 | PATCH `/superadmin/organizations/:organizationId/status` | `{status:"ACTIVE"|"SUSPENDED"}` | Activa/suspende tenant. |
 | PATCH `/superadmin/organizations/:organizationId/security` | `{require2faForAdmins:boolean}` | Obliga 2FA a OWNER/ADMIN del tenant. |
 | PUT `/superadmin/organizations/:organizationId/subscription` | `{planCode,status:"TRIAL"|"ACTIVE"|"SUSPENDED",trialEndsAt?,expiresAt?}` | Asigna suscripcion manual e historica. |
+| GET `/superadmin/organizations/:organizationId/subscriptions?limit&offset` | Superadmin | Historial paginado, ordenado de la suscripción más reciente a la más antigua. Devuelve `{pagination,items}`; límite por defecto `10`, máximo `100`. |
 | GET/POST `/superadmin/plans` | POST Plan | Lista/crea planes. Se inicializan `free`, `essential`, `professional`, `business` y `unlimited`; los limites `null` son ilimitados. |
 | PATCH/DELETE `/superadmin/plans/:planCode` | PATCH Plan | Edita/elimina. DELETE `409` si tiene suscripciones. |
 

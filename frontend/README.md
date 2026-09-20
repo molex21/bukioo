@@ -190,9 +190,10 @@ Desde **Mi perfil**, un usuario puede cambiar su correo de acceso en dos pasos:
 solicita el envío del código al correo nuevo y lo confirma. Al completarlo se
 cierra la sesión y se debe acceder con la dirección nueva.
 
-La plataforma incluye detalle y edición de empresas, fechas e historial de
-suscripciones, y la ruta `/platform/audit` para consultar operaciones
-administrativas y eventos de seguridad. En «Gestionar empresas», los diálogos
+La plataforma incluye detalle y edición de empresas, fechas e historial paginado
+de suscripciones, y la ruta `/platform/audit` para consultar operaciones
+administrativas y eventos de seguridad. El historial se muestra de más reciente
+a más antiguo, en páginas de cinco registros. En «Gestionar empresas», los diálogos
 de permisos se mantienen abiertos al cerrarse el menú de acciones.
 
 ## Variables de entorno

@@ -19,6 +19,7 @@ import { SetOrganizationSubscriptionDto } from "./dto/set-organization-subscript
 import { UpdatePlanDto } from "./dto/update-plan.dto";
 import { UpdateSuperadminBusinessDto } from "./dto/update-superadmin-business.dto";
 import { ListPlatformAuditLogsDto } from "./dto/list-platform-audit-logs.dto";
+import { ListOrganizationSubscriptionsDto } from "./dto/list-organization-subscriptions.dto";
 import { SuperadminRepository, type PlanRecord } from "./superadmin.repository";
 import { OrganizationMembersService } from "../organizations/organization-members.service";
 import { RequestEmailChangeDto } from "../auth/dto/request-email-change.dto";
@@ -459,10 +460,22 @@ export class SuperadminService {
     return subscription;
   }
 
-  async listSubscriptions(organizationId: string) {
+  async listSubscriptions(
+    organizationId: string,
+    filters: ListOrganizationSubscriptionsDto,
+  ) {
     await this.getOrganizationOrFail(organizationId);
-    return (await this.repository.listSubscriptions(organizationId)).map(
-      (item) => ({
+    const result = await this.repository.listSubscriptions(
+      organizationId,
+      filters,
+    );
+    return {
+      pagination: {
+        limit: filters.limit ?? 10,
+        offset: filters.offset ?? 0,
+        total: result.total,
+      },
+      items: result.items.map((item) => ({
         id: item.id,
         planCode: item.plan_code,
         status: item.status,
@@ -472,8 +485,8 @@ export class SuperadminService {
         expiresAt: item.expires_at,
         createdAt: item.created_at,
         updatedAt: item.updated_at,
-      }),
-    );
+      })),
+    };
   }
 
   async listAuditLogs(filters: ListPlatformAuditLogsDto) {

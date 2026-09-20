@@ -1273,6 +1273,8 @@ La API valida slug, formato y duplicados, y deja `BUSINESS_UPDATED` en
 `platform_audit_logs`.
 
 `GET /api/v1/superadmin/organizations/:organizationId/subscriptions` devuelve
-el historial de suscripciones. `GET /api/v1/superadmin/audit-logs` admite los
+el historial paginado, de la suscripción más reciente a la más antigua. Admite
+`limit` (10 por defecto, máximo 100) y `offset`, y responde `{pagination,items}`.
+`GET /api/v1/superadmin/audit-logs` admite los
 filtros `organizationId`, `actorUserId`, `action`, `from`, `to`, `limit` y
 `offset`, e incluye eventos administrativos y de seguridad.

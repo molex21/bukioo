@@ -30,6 +30,7 @@ import { UpdateOrganizationStatusDto } from "./dto/update-organization-status.dt
 import { UpdatePlanDto } from "./dto/update-plan.dto";
 import { UpdateSuperadminBusinessDto } from "./dto/update-superadmin-business.dto";
 import { ListPlatformAuditLogsDto } from "./dto/list-platform-audit-logs.dto";
+import { ListOrganizationSubscriptionsDto } from "./dto/list-organization-subscriptions.dto";
 import { SuperadminGuard } from "./superadmin.guard";
 import { SuperadminService } from "./superadmin.service";
 import { TransferOwnershipDto } from "./dto/transfer-ownership.dto";
@@ -275,8 +276,9 @@ export class SuperadminController {
   @Get("organizations/:organizationId/subscriptions")
   listSubscriptions(
     @Param("organizationId", ParseUUIDPipe) organizationId: string,
+    @Query() filters: ListOrganizationSubscriptionsDto,
   ) {
-    return this.service.listSubscriptions(organizationId);
+    return this.service.listSubscriptions(organizationId, filters);
   }
   @Get("audit-logs")
   listAuditLogs(@Query() filters: ListPlatformAuditLogsDto) {

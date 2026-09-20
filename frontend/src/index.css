@@ -119,6 +119,12 @@ textarea {
   box-shadow: var(--focus-ring);
 }
 
+[data-combobox-selected] {
+  background-color: var(--color-primary) !important;
+  box-shadow: inset 3px 0 0 var(--color-accent-soft);
+  font-weight: var(--font-weight-bold);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

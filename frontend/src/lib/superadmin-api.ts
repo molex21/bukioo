@@ -142,6 +142,11 @@ export type OrganizationSubscription = {
   updatedAt: string;
 };
 
+export type OrganizationSubscriptionFilters = {
+  limit?: number;
+  offset?: number;
+};
+
 export type UpdateSuperadminBusinessInput = {
   name?: string;
   slug?: string;
@@ -294,7 +299,7 @@ export const superadminApi = {
   listBusinessEmployees: (organizationId: string, businessId: string, filters: SuperadminEmployeeFilters) => authenticatedApiRequest<SuperadminPaginatedResponse<SuperadminEmployee>>(`/superadmin/organizations/${organizationId}/businesses/${businessId}/employees${toSearchParams(filters)}`),
   getOrganization: (organizationId: string) => authenticatedApiRequest<SuperadminOrganization>(`/superadmin/organizations/${organizationId}`),
   setOrganizationSubscription: (organizationId: string, input: SetOrganizationSubscriptionInput) => authenticatedApiRequest<void>(`/superadmin/organizations/${organizationId}/subscription`, { body: JSON.stringify(input), method: "PUT" }),
-  listOrganizationSubscriptions: (organizationId: string) => authenticatedApiRequest<OrganizationSubscription[]>(`/superadmin/organizations/${organizationId}/subscriptions`),
+  listOrganizationSubscriptions: (organizationId: string, filters: OrganizationSubscriptionFilters = {}) => authenticatedApiRequest<SuperadminPaginatedResponse<OrganizationSubscription>>(`/superadmin/organizations/${organizationId}/subscriptions${toSearchParams(filters)}`),
   listAuditLogs: (filters: PlatformAuditLogFilters) => authenticatedApiRequest<SuperadminPaginatedResponse<PlatformAuditLog>>(`/superadmin/audit-logs${toSearchParams(filters)}`),
   updateOrganizationStatus: (organizationId: string, status: SuperadminOrganization["status"]) => authenticatedApiRequest<SuperadminOrganization>(`/superadmin/organizations/${organizationId}/status`, { body: JSON.stringify({ status }), method: "PATCH" }),
 };

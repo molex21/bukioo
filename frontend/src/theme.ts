@@ -1,8 +1,15 @@
-import { createTheme } from "@mantine/core";
+import { createTheme, Select } from "@mantine/core";
 
 export const bukiooTheme = createTheme({
   primaryColor: "bukioo",
   defaultRadius: "md",
+  components: {
+    Select: Select.extend({
+      defaultProps: {
+        checkIconPosition: "right",
+      },
+    }),
+  },
   fontFamily: "Inter, sans-serif",
   headings: {
     fontFamily: "Nunito, sans-serif",

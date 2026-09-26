@@ -65,9 +65,11 @@ DELETE salvo que primero consultes el estado final.
 
 1. `POST /auth/login` con email/password.
 2. Si `201`, guardar solo `accessToken` en memoria y usar cookie refresh.
-3. Si `202` con `emailVerificationRequired`, mostrar codigo y llamar
-   `/auth/activate/verify`; despues establecer password con
-   `/auth/activate/password`. Si devuelve tokens, la sesion ya esta completada.
+3. Si `202` con `emailVerificationRequired`, mostrar código y llamar
+   `/auth/activate/verify`. Si devuelve `passwordChangeRequired:true`, después
+   establecer password con `/auth/activate/password`; si devuelve `false`, el
+   correo ya quedó verificado y se puede volver a iniciar sesión con la
+   contraseña existente.
 4. Si `202` con `passwordChangeRequired`, el email ya fue verificado: llamar
    directamente a `/auth/activate/password` con la cookie HttpOnly recibida.
 5. Si `202` con `twoFactorRequired`, pedir TOTP y llamar `/auth/2fa/verify`, o
@@ -104,7 +106,7 @@ son opcionales.
 | Employee | `{"firstName":"Ana","lastName":"Diaz","email":"ana@example.com","phone":"600000000","color":"#228B22","inviteUser":true}` |
 | Customer | `{"firstName":"Lucia","lastName":"Perez","email":"lucia@example.com","phone":"600000001","notes":""}` |
 | Service category | `{"name":"Cortes","sortOrder":0}` |
-| Service | `{"name":"Corte","categoryId":"{{categoryId}}","durationMinutes":60,"price":"25.00","bufferBeforeMinutes":0,"bufferAfterMinutes":0,"autoConfirmAppointments":true}` |
+| Service | `{"name":"Corte","categoryId":"{{categoryId}}","durationMinutes":60,"price":"25.00","bufferBeforeMinutes":0,"bufferAfterMinutes":0,"autoConfirmAppointments":true,"customFields":[{"id":"11111111-1111-4111-8111-111111111111","label":"Tipo de pelo","fieldType":"SELECT","required":true,"pricingMode":"OPTION","durationMode":"OPTION","options":[{"value":"largo","label":"Largo","priceModifier":8,"durationModifierMinutes":15}]}]}` |
 | Branding | `{"logoUrl":"https://cdn.example.com/logo.png"}`. Enviar `{"logoUrl":null}` elimina el logo. |
 | Working hours | `{"items":[{"dayOfWeek":1,"startTime":"09:00","endTime":"18:00"}]}` |
 | Calendar block | `{"employeeId":"{{employeeId}}","type":"BREAK","startAt":"2026-09-07T12:00:00.000Z","endAt":"2026-09-07T13:00:00.000Z","reason":"Comida"}` |
@@ -133,11 +135,11 @@ del slug; `Public` no requiere header. Todas las rutas protegidas pueden dar
 | POST `/auth/login` | Login | `201` tokens/cookie, o `202` con `emailVerificationRequired`, `passwordChangeRequired` o `twoFactorRequired`. `401` invalido/bloqueado. |
 | POST `/auth/refresh` | Cookie refresh | `201` nuevo access token y cookie rotada; `401` limpiar sesion. |
 | POST `/auth/logout` | Cookie refresh | `204`, elimina cookie/sesion; idempotente de cara al frontend. |
-| GET `/auth/me` | Auth; `Cache-Control: no-store` | Perfil, incluidos `firstName`, `lastName`, `phone`, organizaciones, businesses, rol, 2FA y `isSuperadmin`; `200`. Cargar al iniciar app. |
+| GET `/auth/me` | Auth; `Cache-Control: no-store` | Perfil, incluidos `firstName`, `lastName`, `phone`, organizaciones (`id`, `name`, `slug`, rol), businesses, 2FA e `isSuperadmin`; `200`. Cargar al iniciar app. |
 | PATCH `/auth/me` | Auth; `{firstName?,lastName?,phone?,preferredLocale?}` | Actualiza el perfil propio. Nombre y telefono se sincronizan con fichas activas de empleado vinculadas. No admite email, `color`, notas, rol, 2FA ni estado. `200`; `400` body invalido; `401` sesion no valida. |
 | POST `/auth/email/verification/request` | `{email}` | Solicita codigo; respuesta generica `202` para no enumerar email. |
 | POST `/auth/email/verify` | Cookie de intento; `{token:"123456"}` | Verifica email; `200`, `400/401` codigo/cookie expirado. |
-| POST `/auth/activate/verify` | Cookie email; `{token:"123456"}` | Valida email inicial y crea cookie de password; `200`. |
+| POST `/auth/activate/verify` | Cookie email; `{token:"123456"}` | Valida email. Solo crea cookie de password si la cuenta aún debe cambiar su contraseña temporal; `200`. |
 | POST `/auth/activate/password` | Cookie activacion; `{password}` | Cambia password temporal y completa login, `200` tokens/cookie. |
 | POST `/auth/password/forgot` | `{email}` | Solicita reset; `202` generico. |
 | POST `/auth/password/reset/verify` | `{token:"123456"}` | Comprueba el código de recuperación sin consumirlo, `200`; `400` token. |
@@ -160,7 +162,7 @@ del slug; `Public` no requiere header. Todas las rutas protegidas pueden dar
 | POST `/public/:organizationSlug/auth/appointments/:appointmentId/cancel` | Customer auth | Cancela su cita, `200/204` segun flujo; `409` si estado/plazo no permite. |
 | GET `/public/:organizationSlug/branding` | Public | Identidad de organizacion para pantallas sin sesion: `{organization:{name,slug,logoUrl}}`. `404` si esta suspendida o no existe. |
 | GET `/public/:organizationSlug/businesses/:businessSlug/branding` | Public | Identidad de un negocio activo de esa organizacion: `{organization:{name,slug,logoUrl},business:{name,slug,logoUrl}}`. `404` si no existe, esta suspendido o es de otro tenant. |
-| GET `/public/:organizationSlug/services?businessId` | Public | Servicios activos e identidad visual: `organization.logoUrl` y `service.business.logoUrl`. |
+| GET `/public/:organizationSlug/services?businessId` | Public | Servicios activos, `customFields` e identidad visual: `organization.logoUrl` y `service.business.logoUrl`. |
 | GET `/public/:organizationSlug/employees?businessId&serviceId` | Public | Empleados disponibles para servicio. |
 | GET `/public/:organizationSlug/availability?businessId&employeeId&serviceId&from&to` | Public | Franjas libres; rango maximo 31 dias. |
 | POST `/public/:organizationSlug/appointments` | Public appointment | Reserva invitado, `201` o `409`; puede quedar `PENDING`. |
@@ -179,7 +181,7 @@ logo.
 | --- | --- | --- |
 | PATCH `/organizations/:organizationId/branding` | OWNER/ADMIN; `{logoUrl}` | Guarda o elimina (`null`) el logo comun de la organizacion. `200`; `400` URL o body invalido, `403` fuera del tenant, `404` inexistente. |
 | POST `/businesses` | OWNER/ADMIN; `{organizationId,name,slug,email?,phone?,timezone?,logoUrl?}` | Crea empresa, `201`, `409` slug. |
-| GET `/businesses?organizationId` | Auth | Lista empresas gestionables, `200`. |
+| GET `/businesses?organizationId` | OWNER/ADMIN | Lista las empresas de su organización, `200`. |
 | GET/PATCH/DELETE `/businesses/:businessId` | Auth; PATCH Business incluye `logoUrl` | Lee/edita/suspende/elimina. `logoUrl:null` elimina el logo. DELETE `204`, `409` si es ultima o tiene datos. |
 | POST/GET `/businesses/:businessId/employees` | OWNER/ADMIN para POST; Employee | Crear/listar. `inviteUser:true` envia activacion. `409` si el total de empleados activos de la organizacion alcanza `maxEmployees` del plan. |
 | GET/PATCH/DELETE `/businesses/:businessId/employees/:employeeId` | Auth; PATCH Employee | Detalle/edicion/borrado `204`; DELETE solo sin referencias. |
@@ -190,10 +192,10 @@ logo.
 | GET/PATCH/DELETE `/businesses/:businessId/customers/:customerId` | Auth; PATCH Customer | Detalle, actualizar o anonimizar/eliminar segun referencias. |
 | POST/GET `/businesses/:businessId/service-categories` | OWNER/ADMIN para POST; category | Crear/listar categorias. |
 | PATCH/DELETE `/businesses/:businessId/service-categories/:categoryId` | OWNER/ADMIN | Editar/eliminar `204`; `409` si tiene servicios. |
-| POST/GET `/businesses/:businessId/services` | OWNER/ADMIN para POST; Service | Crear/listar servicios. |
+| POST/GET `/businesses/:businessId/services` | OWNER/ADMIN para POST; Service | Crear/listar servicios, incluidos `customFields` (hasta 20). |
 | GET `/businesses/:businessId/services/:serviceId/employees` | Auth | Empleados asignados. |
 | PUT `/businesses/:businessId/services/:serviceId/employees` | OWNER/ADMIN; `{employeeIds:[uuid]}` | Reemplaza asignacion, `204`; lista no vacia. |
-| PATCH/DELETE `/businesses/:businessId/services/:serviceId` | OWNER/ADMIN; PATCH Service | Editar/suspender/eliminar `204`. |
+| PATCH/DELETE `/businesses/:businessId/services/:serviceId` | OWNER/ADMIN; PATCH Service | Editar/suspender/eliminar `204`; PATCH puede sustituir `customFields`. |
 | GET/PUT `/businesses/:businessId/employees/:employeeId/working-hours` | Auth / OWNER-ADMIN; Working hours | Leer/reemplazar todo calendario, PUT `204`. `dayOfWeek` sigue JS: 0 domingo. |
 | POST/GET `/businesses/:businessId/calendar/blocks` | OWNER/ADMIN para POST; block / `from,to?` | Crear/listar bloqueos. |
 | GET `/businesses/:businessId/calendar/blocks/employees/:employeeId?from&to` | Auth | Bloqueos del empleado. |

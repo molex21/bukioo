@@ -43,6 +43,7 @@ describe("UsersRepository", () => {
     const [query] = databaseServiceMock.query.mock.calls[0] as [string];
     expect(query).toContain("organization_memberships.status = 'ACTIVE'");
     expect(query).toContain("organizations.status = 'ACTIVE'");
+    expect(query).toContain("organizations.slug");
   });
 
   it("updates the account and active employee profiles in one transaction", async () => {

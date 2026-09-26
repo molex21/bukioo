@@ -15,6 +15,9 @@ import {
   loyaltyEarningTypes,
   type LoyaltyEarningType,
 } from "../../loyalty/loyalty.types";
+import { Type } from "class-transformer";
+import { IsArray, ValidateNested } from "class-validator";
+import { ServiceCustomFieldDto } from "./service-custom-field.dto";
 
 export class CreateServiceDto {
   @IsOptional()
@@ -89,4 +92,10 @@ export class CreateServiceDto {
   @Min(0)
   @Max(1_000_000)
   loyaltyPointsPerCurrencyUnit?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ServiceCustomFieldDto)
+  customFields?: ServiceCustomFieldDto[];
 }

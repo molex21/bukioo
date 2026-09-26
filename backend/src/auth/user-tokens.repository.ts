@@ -300,7 +300,8 @@ export class UserTokensRepository {
           AND user_tokens.user_id = $3
           AND user_tokens.used_at IS NULL
           AND user_tokens.expires_at > NOW()
-          AND users.password_change_required = TRUE
+          AND users.status = 'ACTIVE'
+          AND users.email_verified_at IS NULL
         FOR UPDATE`,
         [EMAIL_VERIFICATION_TOKEN_TYPE, input.tokenHash, input.userId],
       );

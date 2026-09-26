@@ -162,7 +162,7 @@ describe("UserTokensRepository", () => {
     expect(clientMock.query).toHaveBeenCalledTimes(1);
   });
 
-  it("verifies a temporary-password account with a valid token", async () => {
+  it("verifies an active unverified account with a valid token", async () => {
     clientMock.query
       .mockResolvedValueOnce({ rows: [{ id: "token-id", user_id: "user-id" }] })
       .mockResolvedValue({});
@@ -176,7 +176,7 @@ describe("UserTokensRepository", () => {
 
     expect(clientMock.query).toHaveBeenNthCalledWith(
       1,
-      expect.stringContaining("password_change_required = TRUE"),
+      expect.stringContaining("users.email_verified_at IS NULL"),
       ["EMAIL_VERIFICATION", "token-hash", "user-id"],
     );
     expect(clientMock.query).toHaveBeenNthCalledWith(

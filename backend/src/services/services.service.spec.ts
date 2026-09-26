@@ -32,6 +32,11 @@ describe("ServicesService", () => {
     minimum_booking_notice_minutes: null,
     maximum_booking_advance_days: null,
     same_day_booking: null,
+    auto_confirm_appointments: null,
+    loyalty_earning_type: "INHERIT" as const,
+    loyalty_fixed_points: null,
+    loyalty_points_per_currency_unit: null,
+    custom_fields: [],
     is_active: true,
     created_at: new Date(),
     updated_at: new Date(),
@@ -109,6 +114,70 @@ describe("ServicesService", () => {
     ).rejects.toMatchObject({ status: 400 });
 
     expect(repositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("normalizes configurable fields before saving a service", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.create.mockResolvedValue(serviceRecord);
+
+    await service.create(
+      serviceRecord.business_id,
+      {
+        name: "Wheel change",
+        durationMinutes: 30,
+        customFields: [
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            label: " Number of wheels ",
+            fieldType: "NUMBER",
+            required: true,
+            unitLabel: " wheels ",
+            pricingMode: "PER_UNIT",
+            unitPrice: 15,
+            durationMode: "PER_UNIT",
+            unitDurationMinutes: 10,
+          },
+        ],
+      },
+      "actor-id",
+    );
+
+    expect(repositoryMock.create).toHaveBeenCalledWith(
+      serviceRecord.business_id,
+      expect.objectContaining({
+        customFields: [
+          expect.objectContaining({
+            label: "Number of wheels",
+            unitLabel: "wheels",
+            unitDurationMinutes: 10,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("rejects a price by option without a selector", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+
+    await expect(
+      service.create(
+        serviceRecord.business_id,
+        {
+          name: "Haircut",
+          durationMinutes: 30,
+          customFields: [
+            {
+              id: "44444444-4444-4444-8444-444444444444",
+              label: "Hair type",
+              fieldType: "TEXT",
+              required: true,
+              pricingMode: "OPTION",
+            },
+          ],
+        },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it("deletes a service when it has no associated data", async () => {

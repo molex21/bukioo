@@ -8,6 +8,7 @@ import { LoginFooter } from "../components/LoginFooter";
 import { useOrganizationBranding } from "../hooks/useOrganizationBranding";
 import { ApiError } from "../lib/api-client";
 import { staffAuth } from "../lib/staff-auth";
+import { saveStaffLoginOrganizationSlug } from "../lib/workspace-context";
 import "./LoginPage.css";
 
 type LoginMode = "activate-password" | "activate-verify" | "forgot" | "login" | "reset" | "reset-code" | "two-factor";
@@ -38,6 +39,7 @@ export function LoginPage({ area = "staff", organizationSlug }: LoginPageProps) 
   const [loading, setLoading] = useState(false);
 
   async function completeLogin(session: { accessToken: string; expiresIn: number; tokenType: "Bearer" }) {
+    if (area === "staff" && organizationSlug) saveStaffLoginOrganizationSlug(organizationSlug);
     setSession(session);
     if (area === "platform") {
       const profile = await staffAuth.me();
@@ -76,6 +78,23 @@ export function LoginPage({ area = "staff", organizationSlug }: LoginPageProps) 
     void runRequest(request);
   }
 
+  function submitLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const submittedEmail = String(formData.get("email") ?? "").trim();
+    const submittedPassword = String(formData.get("password") ?? "");
+
+    setEmail(submittedEmail);
+    setPassword(submittedPassword);
+    void runRequest(async () => {
+      const response = await staffAuth.login(submittedEmail, submittedPassword);
+      if ("accessToken" in response) await completeLogin(response);
+      else if ("twoFactorRequired" in response) setMode("two-factor");
+      else if ("passwordChangeRequired" in response) setMode("activate-password");
+      else setMode("activate-verify");
+    });
+  }
+
   const title = {
     "activate-password": "Crea tu contraseña",
     "activate-verify": "Verifica tu correo",
@@ -97,11 +116,11 @@ export function LoginPage({ area = "staff", organizationSlug }: LoginPageProps) 
           {brandingError && <Alert color="red" icon={<CircleAlert size={18} />} title="Enlace no disponible">{brandingError}</Alert>}
           {notice && <Alert color="green" onClose={() => setNotice(null)} title="Revisa tu correo" withCloseButton>{notice}</Alert>}
 
-          {mode === "login" && <form onSubmit={(event) => submitForm(event, async () => { const response = await staffAuth.login(email, password); if ("accessToken" in response) await completeLogin(response); else if ("twoFactorRequired" in response) setMode("two-factor"); else if ("passwordChangeRequired" in response) setMode("activate-password"); else setMode("activate-verify"); })}><Stack gap="md"><TextInput label="Correo electrónico" onChange={(event) => setEmail(event.currentTarget.value)} placeholder="nombre@empresa.com" type="email" value={email} withAsterisk /><PasswordInput label="Contraseña" onChange={(event) => setPassword(event.currentTarget.value)} placeholder="Tu contraseña" value={password} withAsterisk /><Group justify="space-between"><Button disabled={brandingLoading || Boolean(brandingError)} onClick={() => resetFields("forgot")} size="compact-sm" type="button" variant="subtle">He olvidado mi contraseña</Button><Button disabled={brandingLoading || Boolean(brandingError)} loading={loading} type="submit">Iniciar sesión</Button></Group></Stack></form>}
+          {mode === "login" && <form onSubmit={submitLogin}><Stack gap="md"><TextInput autoComplete="username" label="Correo electrónico" name="email" onChange={(event) => setEmail(event.currentTarget.value)} placeholder="nombre@empresa.com" required type="email" value={email} withAsterisk /><PasswordInput autoComplete="current-password" label="Contraseña" name="password" onChange={(event) => setPassword(event.currentTarget.value)} placeholder="Tu contraseña" required value={password} withAsterisk /><Group justify="space-between"><Button disabled={brandingLoading || Boolean(brandingError)} onClick={() => resetFields("forgot")} size="compact-sm" type="button" variant="subtle">He olvidado mi contraseña</Button><Button disabled={brandingLoading || Boolean(brandingError)} loading={loading} type="submit">Iniciar sesión</Button></Group></Stack></form>}
 
           {mode === "two-factor" && <form onSubmit={(event) => submitForm(event, async () => completeLogin(await staffAuth.verifyTwoFactor(code)))}><Stack gap="md"><Text c="dimmed" size="sm">Introduce el código de tu aplicación autenticadora.</Text><PinInput aria-label="Código de seguridad" className="login-pin-input" length={6} onChange={setCode} oneTimeCode placeholder="·" type="number" value={code} /><Text c="dimmed" size="xs">¿No puedes acceder? Contacta con un administrador.</Text><Group className="login-pin-actions" justify="space-between"><Button onClick={() => resetFields("login")} type="button" variant="default">Volver</Button><Button disabled={code.length !== 6} loading={loading} type="submit">Verificar</Button></Group></Stack></form>}
 
-          {mode === "activate-verify" && <form onSubmit={(event) => submitForm(event, async () => { await staffAuth.activateVerify(code); setCode(""); setPassword(""); setPasswordConfirmation(""); setMode("activate-password"); })}><Stack gap="md"><Text c="dimmed" size="sm">Introduce el código que hemos enviado a tu correo para activar la cuenta.</Text><PinInput aria-label="Código de activación" className="login-pin-input" length={6} onChange={setCode} oneTimeCode placeholder="·" type="number" value={code} /><Group className="login-pin-actions" justify="space-between"><Button onClick={() => resetFields("login")} type="button" variant="default">Volver</Button><Button disabled={code.length !== 6} loading={loading} type="submit">Continuar</Button></Group></Stack></form>}
+          {mode === "activate-verify" && <form onSubmit={(event) => submitForm(event, async () => { const result = await staffAuth.activateVerify(code); setCode(""); setPassword(""); setPasswordConfirmation(""); if (result.passwordChangeRequired) setMode("activate-password"); else { setNotice("Tu correo se ha verificado. Ya puedes iniciar sesión con tu contraseña nueva."); setMode("login"); } })}><Stack gap="md"><Text c="dimmed" size="sm">Introduce el código que hemos enviado a tu correo para verificar la cuenta.</Text><PinInput aria-label="Código de verificación" className="login-pin-input" length={6} onChange={setCode} oneTimeCode placeholder="·" type="number" value={code} /><Group className="login-pin-actions" justify="space-between"><Button onClick={() => resetFields("login")} type="button" variant="default">Volver</Button><Button disabled={code.length !== 6} loading={loading} type="submit">Continuar</Button></Group></Stack></form>}
 
           {mode === "activate-password" && <form onSubmit={(event) => submitForm(event, async () => completeLogin(await staffAuth.activatePassword(password)))}><Stack gap="md"><PasswordInput label="Nueva contraseña" onChange={(event) => setPassword(event.currentTarget.value)} placeholder="Crea una contraseña segura" value={password} withAsterisk /><PasswordInput error={passwordConfirmation && password !== passwordConfirmation ? "Las contraseñas no coinciden." : undefined} label="Repetir contraseña" onChange={(event) => setPasswordConfirmation(event.currentTarget.value)} placeholder="Repite la contraseña" value={passwordConfirmation} withAsterisk /><Group justify="space-between"><Button onClick={() => resetFields("login")} type="button" variant="default">Volver</Button><Button disabled={!password || password !== passwordConfirmation} loading={loading} type="submit">Guardar y acceder</Button></Group></Stack></form>}
 

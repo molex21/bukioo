@@ -311,19 +311,23 @@ export class AuthController {
     @Headers("cookie") cookieHeader: string | undefined,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const passwordActivationAttemptToken =
-      await this.authService.verifyInitialEmail(
-        verifyEmailDto,
-        this.getCookie(cookieHeader, EMAIL_VERIFICATION_ATTEMPT_COOKIE_NAME),
-      );
-
-    this.setPasswordActivationAttemptCookie(
-      response,
-      passwordActivationAttemptToken,
+    const verificationResult = await this.authService.verifyInitialEmail(
+      verifyEmailDto,
+      this.getCookie(cookieHeader, EMAIL_VERIFICATION_ATTEMPT_COOKIE_NAME),
     );
+
+    if (verificationResult.passwordChangeRequired) {
+      this.setPasswordActivationAttemptCookie(
+        response,
+        verificationResult.passwordActivationAttemptToken,
+      );
+    }
     this.clearEmailVerificationAttemptCookie(response);
 
-    return { emailVerified: true, passwordChangeRequired: true };
+    return {
+      emailVerified: true,
+      passwordChangeRequired: verificationResult.passwordChangeRequired,
+    };
   }
 
   @Post("activate/password")

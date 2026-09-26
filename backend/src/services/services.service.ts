@@ -8,6 +8,10 @@ import {
 import { CreateServiceDto } from "./dto/create-service.dto";
 import { ReplaceServiceEmployeesDto } from "./dto/replace-service-employees.dto";
 import { UpdateServiceDto } from "./dto/update-service.dto";
+import {
+  type ServiceCustomField,
+  type ServiceCustomFieldDto,
+} from "./dto/service-custom-field.dto";
 import { ServicesRepository, type ServiceRecord } from "./services.repository";
 
 @Injectable()
@@ -26,6 +30,7 @@ export class ServicesService {
       ...dto,
       name: dto.name.trim(),
       description: dto.description?.trim(),
+      customFields: this.normalizeCustomFields(dto.customFields ?? []),
     });
   }
 
@@ -44,11 +49,15 @@ export class ServicesService {
     const service = await this.getService(businessId, serviceId);
     await this.assertCategoryBelongsToBusiness(dto.categoryId, businessId);
     this.assertLoyaltyConfiguration(dto, service);
-    return this.servicesRepository.update(service, {
+    const update: UpdateServiceDto = {
       ...dto,
       name: dto.name?.trim(),
       description: dto.description?.trim(),
-    });
+    };
+    if (dto.customFields !== undefined) {
+      update.customFields = this.normalizeCustomFields(dto.customFields);
+    }
+    return this.servicesRepository.update(service, update);
   }
 
   async remove(
@@ -189,5 +198,137 @@ export class ServicesService {
         "Debes indicar puntos por unidad monetaria para esta regla de fidelizacion",
       );
     }
+  }
+
+  private normalizeCustomFields(
+    fields: ServiceCustomFieldDto[],
+  ): ServiceCustomField[] {
+    if (fields.length > 20) {
+      throw new BadRequestException("Un servicio puede tener hasta 20 campos");
+    }
+
+    const ids = new Set<string>();
+    return fields.map((field) => {
+      if (ids.has(field.id)) {
+        throw new BadRequestException(
+          "Los campos configurables no pueden repetirse",
+        );
+      }
+      ids.add(field.id);
+
+      const label = field.label.trim();
+      if (!label) {
+        throw new BadRequestException("Cada campo debe tener un nombre");
+      }
+
+      if (
+        field.minValue !== undefined &&
+        field.maxValue !== undefined &&
+        field.minValue > field.maxValue
+      ) {
+        throw new BadRequestException(
+          "El valor mínimo no puede superar al valor máximo",
+        );
+      }
+
+      const base: ServiceCustomField = {
+        id: field.id,
+        label,
+        fieldType: field.fieldType,
+        required: field.required,
+        pricingMode: field.pricingMode,
+        durationMode: field.durationMode ?? "NONE",
+      };
+
+      if (field.fieldType === "NUMBER") {
+        const unitLabel = field.unitLabel?.trim();
+        if (unitLabel) base.unitLabel = unitLabel;
+        if (field.minValue !== undefined) base.minValue = field.minValue;
+        if (field.maxValue !== undefined) base.maxValue = field.maxValue;
+      } else if (
+        field.unitLabel ||
+        field.minValue !== undefined ||
+        field.maxValue !== undefined
+      ) {
+        throw new BadRequestException(
+          "La unidad y los límites solo se permiten en campos numéricos",
+        );
+      }
+
+      if (field.pricingMode === "PER_UNIT") {
+        if (field.fieldType !== "NUMBER" || field.unitPrice === undefined) {
+          throw new BadRequestException(
+            "El precio por unidad requiere un campo numérico y un importe",
+          );
+        }
+        base.unitPrice = field.unitPrice;
+      } else if (field.pricingMode === "OPTION") {
+        if (field.fieldType !== "SELECT" || !field.options?.length) {
+          throw new BadRequestException(
+            "El precio por opción requiere un selector con opciones",
+          );
+        }
+      } else if (field.pricingMode !== "NONE") {
+        throw new BadRequestException("Regla de precio no válida");
+      }
+
+      const durationMode = field.durationMode ?? "NONE";
+      if (durationMode === "PER_UNIT") {
+        if (
+          field.fieldType !== "NUMBER" ||
+          field.unitDurationMinutes === undefined
+        ) {
+          throw new BadRequestException(
+            "El tiempo por unidad requiere un campo numérico y minutos",
+          );
+        }
+        base.unitDurationMinutes = field.unitDurationMinutes;
+      } else if (durationMode === "OPTION") {
+        if (field.fieldType !== "SELECT" || !field.options?.length) {
+          throw new BadRequestException(
+            "El tiempo por opción requiere un selector con opciones",
+          );
+        }
+      } else if (durationMode !== "NONE") {
+        throw new BadRequestException("Regla de tiempo no válida");
+      }
+
+      if (field.fieldType === "SELECT") {
+        if (!field.options?.length || field.options.length > 50) {
+          throw new BadRequestException(
+            "Un selector debe tener entre una y 50 opciones",
+          );
+        }
+        const optionValues = new Set<string>();
+        base.options = field.options.map((option) => {
+          const value = option.value.trim();
+          const optionLabel = option.label.trim();
+          if (!value || !optionLabel || optionValues.has(value)) {
+            throw new BadRequestException(
+              "Las opciones deben tener valores únicos y un nombre",
+            );
+          }
+          optionValues.add(value);
+          return {
+            value,
+            label: optionLabel,
+            ...(field.pricingMode === "OPTION" &&
+            option.priceModifier !== undefined
+              ? { priceModifier: option.priceModifier }
+              : {}),
+            ...(durationMode === "OPTION" &&
+            option.durationModifierMinutes !== undefined
+              ? { durationModifierMinutes: option.durationModifierMinutes }
+              : {}),
+          };
+        });
+      } else if (field.options?.length) {
+        throw new BadRequestException(
+          "Las opciones solo se permiten en campos de selección",
+        );
+      }
+
+      return base;
+    });
   }
 }

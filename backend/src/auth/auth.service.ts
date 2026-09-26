@@ -415,7 +415,11 @@ export class AuthService {
 
     if (user.email_verified_at === null) {
       await this.requestEmailVerification({ email: user.email });
-      throw new ForbiddenException("Debes verificar tu email antes de acceder");
+      return {
+        emailVerificationRequired: true,
+        verificationAttemptToken:
+          await this.createEmailVerificationAttemptToken(user.id),
+      };
     }
 
     const twoFactorState = await this.twoFactorRepository.findState(user.id);
@@ -515,7 +519,10 @@ export class AuthService {
   async verifyInitialEmail(
     verifyEmailDto: VerifyEmailDto,
     verificationAttemptToken: string | undefined,
-  ): Promise<string> {
+  ): Promise<
+    | { passwordChangeRequired: false }
+    | { passwordActivationAttemptToken: string; passwordChangeRequired: true }
+  > {
     const userId = await this.verifyEmailVerificationAttemptToken(
       verificationAttemptToken,
     );
@@ -536,7 +543,20 @@ export class AuthService {
       userId,
     });
 
-    return this.createPasswordActivationAttemptToken(userId);
+    const user = await this.usersRepository.findById(userId);
+    if (!user || user.status !== "ACTIVE" || user.email_verified_at === null) {
+      throw new UnauthorizedException("No se pudo completar la autenticacion");
+    }
+
+    if (!user.password_change_required) {
+      return { passwordChangeRequired: false };
+    }
+
+    return {
+      passwordActivationAttemptToken:
+        await this.createPasswordActivationAttemptToken(userId),
+      passwordChangeRequired: true,
+    };
   }
 
   async setInitialPassword(
@@ -729,6 +749,7 @@ export class AuthService {
       organizations: organizations.map((organization) => ({
         id: organization.id,
         name: organization.name,
+        slug: organization.slug,
         logoUrl: organization.logo_url,
         role: organization.role,
         businesses: businesses

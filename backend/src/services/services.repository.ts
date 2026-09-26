@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
 import type { CreateServiceDto } from "./dto/create-service.dto";
 import type { UpdateServiceDto } from "./dto/update-service.dto";
+import type { ServiceCustomField } from "./dto/service-custom-field.dto";
 
 export interface ServiceRecord {
   id: string;
@@ -26,6 +27,7 @@ export interface ServiceRecord {
     | "BOTH";
   loyalty_fixed_points: number | null;
   loyalty_points_per_currency_unit: string | null;
+  custom_fields: ServiceCustomField[];
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -112,14 +114,14 @@ export class ServicesRepository {
         (organization_id, business_id, category_id, name, description, price,
          duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
-         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit)
-       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields)
+       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb
        FROM businesses WHERE id = $1
        RETURNING id, organization_id, business_id, category_id, name, description,
          price, duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
          auto_confirm_appointments, loyalty_earning_type, loyalty_fixed_points,
-         loyalty_points_per_currency_unit,
+         loyalty_points_per_currency_unit, custom_fields,
          is_active, created_at, updated_at, archived_at`,
       [
         businessId,
@@ -137,6 +139,7 @@ export class ServicesRepository {
         dto.loyaltyEarningType ?? "INHERIT",
         dto.loyaltyFixedPoints ?? null,
         dto.loyaltyPointsPerCurrencyUnit ?? null,
+        JSON.stringify(dto.customFields ?? []),
       ],
     );
     return result.rows[0];
@@ -147,7 +150,7 @@ export class ServicesRepository {
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
-        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE business_id = $1 AND archived_at IS NULL
       ORDER BY name ASC`,
@@ -164,7 +167,7 @@ export class ServicesRepository {
       `SELECT id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
-        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
         is_active, created_at, updated_at, archived_at
       FROM services WHERE id = $1 AND business_id = $2 AND archived_at IS NULL LIMIT 1`,
       [serviceId, businessId],
@@ -189,13 +192,14 @@ export class ServicesRepository {
         loyalty_earning_type = COALESCE($13, loyalty_earning_type),
         loyalty_fixed_points = COALESCE($14, loyalty_fixed_points),
         loyalty_points_per_currency_unit = COALESCE($15, loyalty_points_per_currency_unit),
-        is_active = COALESCE($16, is_active),
+        custom_fields = CASE WHEN $17 THEN $16::jsonb ELSE custom_fields END,
+        is_active = COALESCE($18, is_active),
         updated_at = NOW()
-      WHERE id = $17 AND business_id = $18 AND organization_id = $19 AND archived_at IS NULL
+      WHERE id = $19 AND business_id = $20 AND organization_id = $21 AND archived_at IS NULL
       RETURNING id, organization_id, business_id, category_id, name, description, price,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
-        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit,
+        loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
         is_active, created_at, updated_at, archived_at`,
       [
         dto.categoryId,
@@ -213,6 +217,10 @@ export class ServicesRepository {
         dto.loyaltyEarningType,
         dto.loyaltyFixedPoints,
         dto.loyaltyPointsPerCurrencyUnit,
+        dto.customFields === undefined
+          ? null
+          : JSON.stringify(dto.customFields),
+        Object.prototype.hasOwnProperty.call(dto, "customFields"),
         dto.isActive,
         service.id,
         service.business_id,

@@ -36,6 +36,7 @@ export type StaffOrganization = {
   id: string;
   logoUrl: string | null;
   name: string;
+  slug: string;
   role: "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "CLIENT";
 };
 
@@ -52,7 +53,7 @@ export type ConfirmEmailChangeResponse = {
 
 export const staffAuth = {
   activatePassword: (password: string) => apiRequest<AuthSessionResponse>("/auth/activate/password", { body: JSON.stringify({ password }), method: "POST" }),
-  activateVerify: (token: string) => apiRequest<{ emailVerified: true; passwordChangeRequired: true }>("/auth/activate/verify", { body: JSON.stringify({ token }), method: "POST" }),
+  activateVerify: (token: string) => apiRequest<{ emailVerified: true; passwordChangeRequired: boolean }>("/auth/activate/verify", { body: JSON.stringify({ token }), method: "POST" }),
   login: (email: string, password: string) => apiRequest<LoginResponse>("/auth/login", { body: JSON.stringify({ email, password }), method: "POST" }),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
   me: () => authenticatedApiRequest<StaffProfile>("/auth/me", { cache: "no-store" }),

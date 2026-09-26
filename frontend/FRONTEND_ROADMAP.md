@@ -88,9 +88,9 @@ el estado real del repositorio y de la API.
 
 ### 2.1 Shell del panel
 
-- [ ] Crear barra lateral con navegacion por permisos.
-- [ ] Crear cabecera con negocio activo, perfil y logout.
-- [ ] Crear selector de organizacion/negocio cuando aplique.
+- [x] Crear barra lateral con navegación por permisos.
+- [x] Crear cabecera con empresa activa, perfil y cierre de sesión.
+- [x] Crear selector de organización/empresa cuando aplique y conservar el contexto durante la sesión.
 - [ ] Crear migas de pan y contenedor de contenido.
 - [ ] Crear avisos globales para exito, error y conflictos de agenda.
 
@@ -102,20 +102,25 @@ el estado real del repositorio y de la API.
 
 ### 2.3 Negocio
 
-- [ ] Crear listado y selector de negocios disponibles.
-- [ ] Crear formulario de alta de negocio para OWNER/ADMIN.
-- [ ] Crear ficha de negocio para editar datos, zona horaria y estado.
-- [ ] Añadir suspension/eliminacion con confirmacion y manejo de `409`.
+- [x] Crear listado y selector de empresas disponibles.
+- [x] Crear formulario de alta de empresa para OWNER/ADMIN.
+- [x] Crear ficha de empresa para editar datos, zona horaria, logo y estado.
+- [x] Añadir suspensión/reactivación desde la ficha de empresa.
+- [ ] Añadir eliminación con confirmación y manejo de `409`.
+- [ ] Sustituir la URL manual del logo por subida de archivo a almacenamiento de objetos, con previsualización, límites de tipo/tamaño y limpieza del archivo anterior.
+- [ ] Validar manualmente el flujo multiempresa y multiorganización: cambio de contexto, persistencia por pestaña, aislamiento de listados y permisos por organización.
 
 ## Bloque 3 — Catalogo, equipo y calendario laboral
 
 ### 3.1 Categorias y servicios
 
-- [ ] Crear listado y formulario de categorias.
-- [ ] Crear listado de servicios con filtros de estado y categoria.
-- [ ] Crear formulario de servicio: duracion, precio, buffers y confirmacion.
-- [ ] Permitir editar, suspender y eliminar servicios.
-- [ ] Mostrar explicacion ante conflictos de eliminacion.
+- [x] Crear listado y formulario de categorías.
+- [ ] Añadir filtros de estado y categoría al listado de servicios.
+- [x] Crear formulario de servicio: duración, precio, buffers y confirmación.
+- [x] Permitir editar y suspender servicios.
+- [x] Configurar datos adicionales por servicio: número, lista, texto o sí/no; suplementos de precio y tiempo por unidad u opción.
+- [ ] **Pendiente de pruebas manuales:** crear, editar y conservar datos adicionales, opciones, suplementos de precio y tiempo, y sus interruptores en varias empresas. Verificar después su cálculo, edición por empleado e instantánea al implementar las citas y la reserva pública.
+- [ ] Añadir eliminación de servicios y explicar los conflictos por datos asociados.
 
 ### 3.2 Empleados
 
@@ -225,8 +230,8 @@ el estado real del repositorio y de la API.
 
 ### 7.1 Descubrimiento y disponibilidad
 
-- [ ] Crear ruta publica basada en `organizationSlug`.
-- [ ] Permitir seleccionar negocio, servicio y empleado.
+- [ ] Resolver la ruta publica directa `/book/:organizationSlug/:businessSlug`, validar que ambos slugs pertenecen a una empresa activa y preseleccionarla.
+- [ ] Mantener `/book/:organizationSlug` como entrada general para elegir negocio, servicio y empleado.
 - [ ] Crear selector de fecha y franjas disponibles.
 - [ ] Mantener un resumen visible de la reserva seleccionada.
 
@@ -305,17 +310,17 @@ el estado real del repositorio y de la API.
 ### 9.4 Gestión completa de suscripciones
 
 - [x] Asignar manualmente plan y estado desde la ficha de la organización.
-- [ ] Editar fecha de fin de prueba y vencimiento (el backend ya acepta ambas; falta completar el formulario y el contrato frontend).
+- [x] Editar fecha de fin de prueba y vencimiento desde la ficha de la organización.
 - [ ] Mostrar uso actual frente a límites del plan y avisar antes de excederlos.
-- [ ] Consultar historial de suscripciones y cambios; requiere endpoint de lectura de historial.
+- [x] Consultar el historial paginado de suscripciones y cambios, ordenado del más reciente al más antiguo.
 - [ ] Aclarar visualmente que la gestión es manual y no procesa cobros.
 
 ### 9.5 Edición de empresas desde plataforma
 
 - [x] Listar empresas y consultar sus datos básicos desde una organización.
-- [ ] Añadir detalle editable de nombre, contacto, zona horaria y logo.
-- [ ] Gestionar estado activo/suspendido y mostrar impacto antes de guardar.
-- [ ] Confirmar/añadir endpoints superadmin para lectura y edición; los contratos actuales cubren principalmente consulta y creación.
+- [x] Añadir detalle editable de nombre, contacto, zona horaria y logo mediante URL pública.
+- [x] Gestionar estado activo/suspendido y mostrar impacto antes de guardar.
+- [x] Añadir endpoints superadmin para lectura y edición de empresas, con sus contratos documentados.
 
 ### 9.6 Auditoría, accesos y seguridad
 
@@ -323,7 +328,7 @@ el estado real del repositorio y de la API.
 - [x] Registrar la transferencia de propiedad y otras mutaciones de plataforma en auditoría.
 - [x] Permitir a superadmin cambiar el correo de acceso de un miembro tras confirmar un código enviado al correo nuevo.
 - [ ] Añadir ajuste de seguridad para exigir 2FA a OWNER/ADMIN (endpoint existente, falta UI).
-- [ ] Crear visor global de auditoría de plataforma, con filtros por organización, actor, acción y fecha; requiere endpoint de consulta de `platform_audit_logs`.
+- [x] Crear visor global de auditoría de plataforma, con filtros por organización, actor, acción y fecha, paginación y detalle de cambios.
 - [ ] Añadir vista de sesiones y controles de revocación/reinicio de acceso; verificar o definir endpoints superadmin antes de integrarla.
 
 ## Orden de entrega recomendado
@@ -356,3 +361,4 @@ gestionar la agenda diaria.
 - [ ] Crear una bandeja para superadmin con búsqueda, filtros, asignación y cambios masivos de estado.
 - [ ] Registrar en auditoría las asignaciones, cambios de prioridad/estado y respuestas del equipo interno.
 - [ ] Añadir avisos de nuevos mensajes, vencimientos y SLA cuando se definan las reglas de soporte.
+- [ ] Añadir sesiones temporales de soporte para superadmin, acotadas a organización o empresa, con motivo obligatorio, caducidad, banner visible, acceso de solo lectura por defecto y auditoría de apertura, acciones y cierre. No otorgar acceso permanente ni reutilizar membresías normales de clientes.

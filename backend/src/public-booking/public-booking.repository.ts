@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { DatabaseService } from "../database/database.service";
+import type { ServiceCustomField } from "../services/dto/service-custom-field.dto";
 
 export interface PublicOrganizationRecord {
   id: string;
@@ -15,6 +16,7 @@ export interface PublicServiceRecord {
   description: string | null;
   price: string | null;
   duration_minutes: number;
+  custom_fields: ServiceCustomField[];
   business_id: string;
   business_name: string;
   business_logo_url: string | null;
@@ -55,7 +57,7 @@ export class PublicBookingRepository {
   ): Promise<PublicServiceRecord[]> {
     const result = await this.databaseService.query<PublicServiceRecord>(
       `SELECT services.id, services.name, services.description, services.price,
-        services.duration_minutes, businesses.id AS business_id,
+        services.duration_minutes, services.custom_fields, businesses.id AS business_id,
         businesses.name AS business_name, businesses.logo_url AS business_logo_url
       FROM services
       INNER JOIN businesses

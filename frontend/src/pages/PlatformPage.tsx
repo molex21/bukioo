@@ -1,7 +1,7 @@
 import { Alert, Avatar, Badge, Breadcrumbs, Burger, Button, CloseButton, Divider, Drawer, Group, Menu, Modal, Pagination, Paper, Popover, Select, SimpleGrid, Skeleton, Stack, Table, Text, Textarea, TextInput, ThemeIcon, Title } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { BriefcaseBusinessIcon, ClipboardCheckIcon, LayoutGridIcon, type BriefcaseBusinessIconHandle, type ClipboardCheckIconHandle, type LayoutGridIconHandle } from "lucide-animated";
-import { ArrowLeft, Building2, CalendarDays, ChevronRight, CircleAlert, CircleCheck, CreditCard, Eye, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, SlidersHorizontal, UserRound, Users } from "lucide-react";
+import { ArrowLeft, Building2, CalendarDays, ChevronRight, CircleAlert, CircleCheck, Copy, CreditCard, ExternalLink, Eye, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, SlidersHorizontal, UserRound, Users } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
 import headerLogo from "../assets/IMAGOTIPO-COLOR.svg";
@@ -88,6 +88,20 @@ function formatDate(value: string) {
 
 function ViewAction({ onClick }: { onClick: () => void }) {
   return <Button leftSection={<Eye size={14} />} onClick={onClick} size="xs" variant="default">Ver</Button>;
+}
+
+function AccessLink({ label, url }: { label: string; url: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2_000);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return <Paper p="lg" radius="lg" withBorder><Stack gap="sm"><div><Text fw={700}>{label}</Text><Text c="dimmed" size="xs">Enlace de la organización</Text></div><TextInput readOnly value={url} /><Group><Button component="a" href={url} leftSection={<ExternalLink size={15} />} size="compact-sm" target="_blank" variant="light">Abrir</Button><Button leftSection={<Copy size={15} />} onClick={() => void copy()} size="compact-sm" variant="default">{copied ? "Copiado" : "Copiar"}</Button></Group></Stack></Paper>;
 }
 
 function OrganizationsPage() {
@@ -342,6 +356,9 @@ function BusinessDetailPage({ businessId, onBack, onBackToOrganizations, organiz
   if (!organization || !business) return <Stack gap="md"><Button leftSection={<ArrowLeft size={16} />} onClick={onBack} variant="subtle">Volver a empresas</Button><Alert color="red" title="No se pudo cargar la empresa">{error ?? "La empresa no está disponible."}</Alert></Stack>;
 
   const currentStatus = organizationStatus(business.status);
+  const applicationOrigin = window.location.origin;
+  const publicBookingUrl = `${applicationOrigin}/book/${encodeURIComponent(organization.slug)}/${encodeURIComponent(business.slug)}`;
+  const staffAccessUrl = `${applicationOrigin}/${encodeURIComponent(organization.slug)}/staff/login`;
   async function saveBusiness(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true); setError(null);
@@ -365,6 +382,7 @@ function BusinessDetailPage({ businessId, onBack, onBackToOrganizations, organiz
       <Paper p="lg" radius="lg" withBorder><Text c="dimmed" size="xs">Teléfono</Text><Text mt={4}>{business.phone ?? "No configurado"}</Text></Paper>
       <Paper p="lg" radius="lg" withBorder><Text c="dimmed" size="xs">Empleados activos</Text><Text fw={700} mt={4}>{business.employeeCount}</Text></Paper>
     </SimpleGrid>
+    <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md"><AccessLink label="Reserva pública" url={publicBookingUrl} /><AccessLink label="Acceso del equipo" url={staffAccessUrl} /></SimpleGrid>
     <PlatformTeamAccess key={organizationId + businessId} organizationId={organizationId} organizationName={organization.name} organizationActive={organization.status === "ACTIVE"} business={business} onChanged={() => setRequestVersion((v) => v + 1)} />
     <Modal centered opened={editing} onClose={() => { if (!saving) setEditing(false); }} title="Editar empresa" closeOnClickOutside={!saving} closeOnEscape={!saving} withCloseButton={!saving}>
       <form onSubmit={(event) => void saveBusiness(event)}><Stack gap="md">

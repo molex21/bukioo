@@ -36,6 +36,7 @@ export class PublicBookingService {
         description: service.description,
         price: service.price,
         durationMinutes: service.duration_minutes,
+        customFields: service.custom_fields,
         business: {
           id: service.business_id,
           name: service.business_name,

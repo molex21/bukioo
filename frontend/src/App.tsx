@@ -1,9 +1,10 @@
 import { CalendarDays, Store } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router";
 import "./App.css";
 import { useAuth } from "./auth/useAuth";
 import { staffAuth } from "./lib/staff-auth";
+import { getStaffLoginOrganizationSlug } from "./lib/workspace-context";
 import { CustomerAccessPage } from "./pages/CustomerAccessPage";
 import { DesignSystemPage } from "./pages/DesignSystemPage";
 import { LoginPage, OrganizationStaffLoginPage } from "./pages/LoginPage";
@@ -59,7 +60,10 @@ function ProtectedRoute({ children, requiresSuperadmin = false, redirectTo = "/"
   if (isInitializing || (requiresSuperadmin && session && isSuperadmin === null)) {
     return <main className="placeholder-page"><p className="placeholder-description">Comprobando sesión…</p></main>;
   }
-  if (!session || (requiresSuperadmin && !isSuperadmin)) return <Navigate replace to={redirectTo} />;
+  if (!session || (requiresSuperadmin && !isSuperadmin)) {
+    const staffLoginSlug = !requiresSuperadmin ? getStaffLoginOrganizationSlug() : null;
+    return <Navigate replace to={staffLoginSlug ? `/${staffLoginSlug}/staff/login` : redirectTo} />;
+  }
 
   return <>{children}</>;
 }
@@ -76,6 +80,14 @@ function NotFoundPage() {
   );
 }
 
+function StaffEntryRoute() {
+  const { session, isInitializing } = useAuth();
+  const { organizationSlug } = useParams();
+
+  if (isInitializing) return <main className="placeholder-page"><p className="placeholder-description">Comprobando sesion...</p></main>;
+  return <Navigate replace to={session ? "/app" : `/${organizationSlug ?? ""}/staff/login`} />;
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -84,9 +96,11 @@ function App() {
         <Route path="/design-system" element={<DesignSystemPage />} />
         <Route path="/platform/access" element={<LoginPage area="platform" />} />
         <Route path="/:organizationSlug/login" element={<CustomerAccessPage />} />
+        <Route path="/:organizationSlug/staff" element={<StaffEntryRoute />} />
         <Route path="/:organizationSlug/staff/login" element={<OrganizationStaffLoginPage />} />
         <Route path="/app/*" element={<ProtectedRoute><WorkspacePage /></ProtectedRoute>} />
-        <Route path="/book/:organizationSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Este sera el flujo publico de reserva para cada empresa." />} />
+        <Route path="/book/:organizationSlug/:businessSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Este sera el flujo publico de reserva para la empresa seleccionada." />} />
+        <Route path="/book/:organizationSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Elige una empresa para continuar con tu reserva." />} />
         <Route path="/customer/:organizationSlug/*" element={<PlaceholderPage icon={CalendarDays} eyebrow="Area cliente" title="Tus citas" description="Aqui se gestionara la sesion y las reservas de cada cliente." />} />
         <Route path="/platform/*" element={<ProtectedRoute requiresSuperadmin redirectTo="/platform/access"><PlatformPage /></ProtectedRoute>} />
         <Route path="/appointments/reschedule" element={<PlaceholderPage icon={CalendarDays} eyebrow="Cambio de cita" title="Reprogramacion de cita" description="Aqui se mostrara la propuesta enviada por la empresa." />} />

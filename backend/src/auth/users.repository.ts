@@ -21,6 +21,7 @@ export interface UserRecord {
 export interface UserOrganizationRecord {
   id: string;
   name: string;
+  slug: string;
   logo_url: string | null;
   role: "OWNER" | "ADMIN" | "MANAGER" | "EMPLOYEE" | "CLIENT";
 }
@@ -58,7 +59,7 @@ export class UsersRepository {
     userId: string,
   ): Promise<UserOrganizationRecord[]> {
     const result = await this.databaseService.query<UserOrganizationRecord>(
-      `SELECT organizations.id, organizations.name, organizations.logo_url,
+      `SELECT organizations.id, organizations.name, organizations.slug, organizations.logo_url,
         organization_memberships.role
       FROM organization_memberships
       INNER JOIN organizations

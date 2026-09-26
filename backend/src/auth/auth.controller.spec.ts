@@ -441,14 +441,15 @@ describe("AuthController", () => {
     );
   });
 
-  it("verifies the email code and exchanges its cookie for password activation", async () => {
+  it("verifies the email code and exchanges its cookie for password activation when required", async () => {
     const verifyEmailDto = { token: "verification-token" };
     const cookie = jest.fn();
     const clearCookie = jest.fn();
     const httpResponse = { cookie, clearCookie } as unknown as Response;
-    authServiceMock.verifyInitialEmail.mockResolvedValue(
-      "password-attempt-token",
-    );
+    authServiceMock.verifyInitialEmail.mockResolvedValue({
+      passwordActivationAttemptToken: "password-attempt-token",
+      passwordChangeRequired: true,
+    });
     configServiceMock.get.mockReturnValue("development");
 
     await expect(
@@ -467,6 +468,34 @@ describe("AuthController", () => {
       "password_activation_attempt",
       "password-attempt-token",
       expect.objectContaining({ path: "/api/v1/auth/activate/password" }),
+    );
+    expect(clearCookie).toHaveBeenCalledWith(
+      "email_verification_attempt",
+      expect.objectContaining({ path: "/api/v1/auth/activate/verify" }),
+    );
+  });
+
+  it("verifies a recovered account without setting a password-activation cookie", async () => {
+    const cookie = jest.fn();
+    const clearCookie = jest.fn();
+    const httpResponse = { cookie, clearCookie } as unknown as Response;
+    authServiceMock.verifyInitialEmail.mockResolvedValue({
+      passwordChangeRequired: false,
+    });
+    configServiceMock.get.mockReturnValue("development");
+
+    await expect(
+      controller.verifyInitialEmail(
+        { token: "verification-token" },
+        "email_verification_attempt=verification-attempt-token",
+        httpResponse,
+      ),
+    ).resolves.toEqual({ emailVerified: true, passwordChangeRequired: false });
+
+    expect(cookie).not.toHaveBeenCalledWith(
+      "password_activation_attempt",
+      expect.anything(),
+      expect.anything(),
     );
     expect(clearCookie).toHaveBeenCalledWith(
       "email_verification_attempt",

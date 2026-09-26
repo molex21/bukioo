@@ -24,6 +24,8 @@ de las pantallas de producto.
 
 - `/platform/access`: acceso interno a la plataforma. Tras iniciar sesión se
   comprueba que la cuenta sea superadmin.
+- `/:organizationSlug/staff`: entrada del equipo; sin sesión redirige al login y
+  con sesión abre `/app`.
 - `/:organizationSlug/staff/login`: acceso del equipo de una organización.
 - `/:organizationSlug/login`: acceso de clientes de una organización. La vista
   ya está diferenciada y se conectará al flujo customer en el siguiente bloque.
@@ -54,6 +56,12 @@ no necesitan la clave privada de onboarding. El alta de organización no admite
 logo en su contrato actual; el alta de empresa admite `logoUrl` opcional.
 Ambas altas permiten elegir una zona horaria IANA. Los mensajes de error
 conservan los valores introducidos y los avisos de éxito duran 15 segundos.
+
+En la ficha de cada empresa de Plataforma se muestran los enlaces copiables y
+abribles de **Reserva pública** (`/book/:organizationSlug/:businessSlug`) y
+**Acceso del equipo** (`/:organizationSlug/staff/login`). El primero abre la
+empresa concreta; el segundo pertenece a la organización para permitir el
+acceso del personal con más de una empresa asignada.
 
 ### Equipo y accesos (plataforma)
 
@@ -145,10 +153,51 @@ y el teléfono propio con `PATCH /auth/me`. El correo electrónico se muestra co
 dato de consulta y no puede cambiarse desde ese formulario.
 
 El área interna `/app` carga el perfil mediante `/auth/me` y utiliza sus
-organizaciones y empresas accesibles para establecer el contexto de trabajo. Su
-selector permite cambiar de empresa y deja preparadas las rutas de resumen,
-agenda, citas, clientes, equipo y configuración; cada módulo se conectará a sus
-datos específicos en los bloques posteriores.
+organizaciones y empresas accesibles para establecer el contexto de trabajo. La
+empresa activa se indica como `?business=<uuid>` en la URL y se conserva solo
+durante la pestaña actual; si la cuenta solo tiene una empresa, se selecciona
+automáticamente. El selector permite cambiar de empresa y deja preparadas estas
+rutas:
+
+- `/app` o `/app/dashboard`: resumen;
+- `/app/agenda`, `/app/appointments` y `/app/customers`;
+- `/app/team` y `/app/settings`, visibles solo para `OWNER` y `ADMIN`.
+
+Cada módulo se conectará a sus datos específicos en los bloques posteriores.
+Al cerrar sesión desde este espacio se vuelve al acceso staff de la organización
+desde la que se inició sesión.
+
+`OWNER` y `ADMIN` disponen además de **Configuración → Gestionar empresas**
+(`/app/settings/businesses`): lista las empresas de la organización activa y
+permite crear, editar, suspender o reactivar una empresa. El alta valida en API
+el permiso organizativo, los campos y el slug duplicado; el logo sigue siendo
+una URL pública de imagen. `MANAGER` y `EMPLOYEE` no ven esta sección ni pueden
+abrir esa ruta.
+
+En **Configuración → Gestionar empresas**, al abrir una empresa existente,
+`OWNER` y `ADMIN` ven sin poder editar los enlaces de reserva de esa empresa
+(`/book/<organizationSlug>/<businessSlug>`) y de acceso del equipo
+(`/<organizationSlug>/staff/login`), con acciones para abrirlos o copiarlos.
+El modal de gestión usa ancho ampliado para mostrar esos enlaces sin comprimir
+los campos de configuración.
+
+En **Configuración → Gestionar servicios** (`/app/settings/services`), `OWNER`
+y `ADMIN` pueden crear y renombrar categorías en un listado independiente,
+además de crear servicios para la empresa activa. El formulario cubre categoría,
+duración, precio base, buffers y confirmación automática; los servicios se pueden
+editar o suspender.
+
+Cada servicio también puede definir hasta 20 **datos configurables** que se
+mostrarán en el futuro flujo de reserva: número (con unidad y límites), selector,
+texto o sí/no. Un número puede sumar un importe por unidad y un selector puede
+definir un suplemento por opción. De forma independiente, ambos pueden sumar
+tiempo por unidad u opción. Por ejemplo, ruedas, litros, tipo de pelo o
+número de personas. Esta configuración ya se guarda por empresa y se expone en el
+catálogo público; el paso que recoge respuestas, calcula el total final y conserva
+su instantánea en la cita se implementará con la pantalla de reservas.
+
+La asignación de empleados y la eliminación con sus conflictos se incorporarán en
+el bloque de Equipo.
 
 ## Instalación
 

@@ -710,6 +710,30 @@ describe("AuthService", () => {
     expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
   });
 
+  it("pauses an unverified active account so it can enter its verification code", async () => {
+    usersRepositoryMock.findByEmail.mockResolvedValue(user);
+    jest.mocked(argon2.verify).mockResolvedValue(true);
+    userTokensRepositoryMock.replaceEmailVerificationToken.mockResolvedValue(
+      undefined,
+    );
+    emailProviderMock.sendEmailVerification.mockResolvedValue(undefined);
+    jwtServiceMock.signAsync.mockResolvedValue("verification-attempt-token");
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.login({
+        email: user.email,
+        password: "a-secure-password",
+      }),
+    ).resolves.toEqual({
+      emailVerificationRequired: true,
+      verificationAttemptToken: "verification-attempt-token",
+    });
+
+    expect(emailProviderMock.sendEmailVerification).toHaveBeenCalledTimes(1);
+    expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
+  });
+
   it("resumes password activation without resending email after initial verification", async () => {
     usersRepositoryMock.findByEmail.mockResolvedValue({
       ...user,
@@ -737,13 +761,18 @@ describe("AuthService", () => {
     expect(userSessionsRepositoryMock.create).not.toHaveBeenCalled();
   });
 
-  it("verifies an initial email and creates a password-activation attempt", async () => {
+  it("verifies an initial email and creates a password-activation attempt when required", async () => {
     jwtServiceMock.verifyAsync.mockResolvedValue({
       sub: user.id,
       purpose: "EMAIL_VERIFICATION_ATTEMPT",
       jti: "attempt-id",
     });
     userTokensRepositoryMock.verifyInitialEmail.mockResolvedValue(true);
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-09-25T10:00:00.000Z"),
+      password_change_required: true,
+    });
     jwtServiceMock.signAsync.mockResolvedValue("password-activation-token");
     configServiceMock.getOrThrow.mockReturnValue("verification-secret");
 
@@ -752,11 +781,38 @@ describe("AuthService", () => {
         { token: "verification-token" },
         "verification-attempt-token",
       ),
-    ).resolves.toBe("password-activation-token");
+    ).resolves.toEqual({
+      passwordActivationAttemptToken: "password-activation-token",
+      passwordChangeRequired: true,
+    });
 
     expect(userTokensRepositoryMock.verifyInitialEmail).toHaveBeenCalledWith(
       expect.objectContaining({ userId: user.id }),
     );
+  });
+
+  it("verifies a recovered account without asking it to set its password again", async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      purpose: "EMAIL_VERIFICATION_ATTEMPT",
+      jti: "attempt-id",
+    });
+    userTokensRepositoryMock.verifyInitialEmail.mockResolvedValue(true);
+    usersRepositoryMock.findById.mockResolvedValue({
+      ...user,
+      email_verified_at: new Date("2026-09-25T10:00:00.000Z"),
+      password_change_required: false,
+    });
+    configServiceMock.getOrThrow.mockReturnValue("verification-secret");
+
+    await expect(
+      service.verifyInitialEmail(
+        { token: "verification-token" },
+        "verification-attempt-token",
+      ),
+    ).resolves.toEqual({ passwordChangeRequired: false });
+
+    expect(jwtServiceMock.signAsync).not.toHaveBeenCalled();
   });
 
   it("sets the initial password and creates a session", async () => {
@@ -912,6 +968,7 @@ describe("AuthService", () => {
       {
         id: "organization-id",
         name: "Example Company",
+        slug: "example-company",
         logo_url: "https://cdn.example.com/organization-logo.png",
         role: "OWNER",
       },
@@ -942,6 +999,7 @@ describe("AuthService", () => {
         {
           id: "organization-id",
           name: "Example Company",
+          slug: "example-company",
           logoUrl: "https://cdn.example.com/organization-logo.png",
           role: "OWNER",
           businesses: [
@@ -967,12 +1025,14 @@ describe("AuthService", () => {
       {
         id: "organization-ana",
         name: "Peluqueria Ana",
+        slug: "peluqueria-ana",
         logo_url: null,
         role: "EMPLOYEE",
       },
       {
         id: "organization-other",
         name: "Otro negocio",
+        slug: "otro-negocio",
         logo_url: null,
         role: "MANAGER",
       },
@@ -1021,6 +1081,7 @@ describe("AuthService", () => {
       {
         id: "organization-id",
         name: "Example Company",
+        slug: "example-company",
         logo_url: null,
         role: "EMPLOYEE",
       },

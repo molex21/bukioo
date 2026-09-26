@@ -614,7 +614,7 @@ uno o más `businessIds` a los que ya tenga acceso y el rol `EMPLOYEE` o
 `MANAGER`. La API rechaza altas en negocios ajenos.
 
 `GET /api/v1/auth/me` incluye las organizaciones activas asociadas al usuario,
-con su `id`, `name` y `role`, para que el cliente pueda seleccionar el contexto
+con su `id`, `name`, `slug` y `role`, para que el cliente pueda seleccionar el contexto
 de trabajo sin recibir datos de organizaciones ajenas.
 
 Los endpoints de negocios requieren `Authorization: Bearer <accessToken>` y
@@ -844,6 +844,17 @@ asociadas; de otro modo devuelve `409 Conflict`.
 Crear, editar, borrar y sustituir sus empleados requiere `OWNER` o `ADMIN`;
 las consultas admiten usuarios con acceso al negocio.
 
+Un servicio puede incluir hasta 20 `customFields`, guardados exclusivamente en
+ese negocio: `NUMBER`, `SELECT`, `TEXT` o `BOOLEAN`. Los numéricos admiten
+`unitLabel`, `minValue`, `maxValue` y la regla `PER_UNIT` con `unitPrice`; los
+selectores admiten opciones y la regla `OPTION` con `priceModifier` por opción.
+De forma independiente, `durationMode` admite `PER_UNIT` con
+`unitDurationMinutes` o `OPTION` con `durationModifierMinutes` por opción.
+Los demás campos usan `NONE`. La API valida tipos, límites, identificadores y
+opciones únicas. Estos metadatos se devuelven también en el catálogo público,
+pero las respuestas del cliente y el cálculo/snapshot del importe se añadirán al
+crear la pantalla de reserva.
+
 ```text
 GET    /api/v1/businesses/<businessId>/services
 POST   /api/v1/businesses/<businessId>/services
@@ -970,8 +981,9 @@ GET /api/v1/businesses/<businessId>/availability?employeeId=<uuid>&serviceId=<uu
 
 La reserva publica comienza con un catalogo sin autenticacion. Solo expone
 organizaciones y negocios activos, junto con servicios activos y sus datos de
-reserva. El `business.id` de cada servicio se usara para elegir empleado y
-consultar disponibilidad en los siguientes pasos.
+reserva, incluidos los `customFields` configurados en cada servicio. El
+`business.id` de cada servicio se usara para elegir empleado y consultar
+disponibilidad en los siguientes pasos.
 
 ```text
 GET /api/v1/public/<organizationSlug>/services?businessId=<uuid>
@@ -1027,10 +1039,12 @@ Las cuentas creadas por Register u Onboard reciben por email una contrasena
 temporal de ocho caracteres y un solo uso. El primer `POST /auth/login` con esa contrasena envia
 el token de verificacion y responde `202`; tambien guarda una cookie HttpOnly
 temporal ligada al navegador. `POST /auth/activate/verify` recibe el codigo de
-email y exige esa cookie. Si es correcto, crea una segunda cookie HttpOnly de
-corta duración. `POST /auth/activate/password` recibe la contrasena definitiva,
-exige la segunda cookie, invalida la contrasena temporal y crea la sesion sin un
-segundo Login.
+email y exige esa cookie. Si es correcto y la cuenta aún usa contraseña temporal,
+crea una segunda cookie HttpOnly de corta duración. `POST /auth/activate/password`
+recibe la contrasena definitiva, exige la segunda cookie, invalida la contrasena
+temporal y crea la sesion sin un segundo Login. Una cuenta que ya restableció su
+contraseña solo verifica el correo y después vuelve a iniciar sesión con esa
+contraseña.
 
 `POST /auth/refresh` y `GET /auth/me` rechazan cuentas sin email verificado o
 pendientes de cambiar su contrasena temporal.

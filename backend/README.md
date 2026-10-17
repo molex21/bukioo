@@ -855,6 +855,11 @@ opciones únicas. Estos metadatos se devuelven también en el catálogo público
 pero las respuestas del cliente y el cálculo/snapshot del importe se añadirán al
 crear la pantalla de reserva.
 
+El servicio admite `priceType`: `FIXED` (por defecto) para un precio cerrado o
+`FROM` para un precio mínimo. `FROM` requiere `price` y se devuelve también en
+el catálogo público para que el cliente pueda mostrar «Desde X €»; el importe
+final se confirmará al implementar la edición de la cita.
+
 ```text
 GET    /api/v1/businesses/<businessId>/services
 POST   /api/v1/businesses/<businessId>/services

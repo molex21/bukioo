@@ -26,6 +26,7 @@ export class ServicesService {
     await this.assertCanManage(userId, businessId);
     await this.assertCategoryBelongsToBusiness(dto.categoryId, businessId);
     this.assertLoyaltyConfiguration(dto);
+    this.assertPriceConfiguration(dto);
     return this.servicesRepository.create(businessId, {
       ...dto,
       name: dto.name.trim(),
@@ -49,6 +50,7 @@ export class ServicesService {
     const service = await this.getService(businessId, serviceId);
     await this.assertCategoryBelongsToBusiness(dto.categoryId, businessId);
     this.assertLoyaltyConfiguration(dto, service);
+    this.assertPriceConfiguration(dto, service);
     const update: UpdateServiceDto = {
       ...dto,
       name: dto.name?.trim(),
@@ -196,6 +198,24 @@ export class ServicesService {
     ) {
       throw new BadRequestException(
         "Debes indicar puntos por unidad monetaria para esta regla de fidelizacion",
+      );
+    }
+  }
+
+  private assertPriceConfiguration(
+    dto: Pick<CreateServiceDto | UpdateServiceDto, "price" | "priceType">,
+    current?: ServiceRecord,
+  ): void {
+    const priceType = dto.priceType ?? current?.price_type ?? "FIXED";
+    const price =
+      dto.price ??
+      (current?.price === null || current?.price === undefined
+        ? null
+        : Number(current.price));
+
+    if (priceType === "FROM" && price === null) {
+      throw new BadRequestException(
+        "Debes indicar el precio mínimo para un servicio con precio desde",
       );
     }
   }

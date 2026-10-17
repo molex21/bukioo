@@ -26,6 +26,7 @@ describe("ServicesService", () => {
     name: "Haircut",
     description: null,
     price: "25.00",
+    price_type: "FIXED" as const,
     duration_minutes: 30,
     buffer_before_minutes: 0,
     buffer_after_minutes: 0,
@@ -108,6 +109,24 @@ describe("ServicesService", () => {
           name: "Oil change",
           durationMinutes: 30,
           loyaltyEarningType: "FIXED",
+        },
+        "actor-id",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(repositoryMock.create).not.toHaveBeenCalled();
+  });
+
+  it("requires a minimum price for a service priced from", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+
+    await expect(
+      service.create(
+        serviceRecord.business_id,
+        {
+          name: "Wheel change",
+          durationMinutes: 30,
+          priceType: "FROM",
         },
         "actor-id",
       ),

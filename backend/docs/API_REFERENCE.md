@@ -106,7 +106,7 @@ son opcionales.
 | Employee | `{"firstName":"Ana","lastName":"Diaz","email":"ana@example.com","phone":"600000000","color":"#228B22","inviteUser":true}` |
 | Customer | `{"firstName":"Lucia","lastName":"Perez","email":"lucia@example.com","phone":"600000001","notes":""}` |
 | Service category | `{"name":"Cortes","sortOrder":0}` |
-| Service | `{"name":"Corte","categoryId":"{{categoryId}}","durationMinutes":60,"price":"25.00","bufferBeforeMinutes":0,"bufferAfterMinutes":0,"autoConfirmAppointments":true,"customFields":[{"id":"11111111-1111-4111-8111-111111111111","label":"Tipo de pelo","fieldType":"SELECT","required":true,"pricingMode":"OPTION","durationMode":"OPTION","options":[{"value":"largo","label":"Largo","priceModifier":8,"durationModifierMinutes":15}]}]}` |
+| Service | `{"name":"Corte","categoryId":"{{categoryId}}","durationMinutes":60,"price":"25.00","priceType":"FROM","bufferBeforeMinutes":0,"bufferAfterMinutes":0,"autoConfirmAppointments":true,"customFields":[{"id":"11111111-1111-4111-8111-111111111111","label":"Tipo de pelo","fieldType":"SELECT","required":true,"pricingMode":"OPTION","durationMode":"OPTION","options":[{"value":"largo","label":"Largo","priceModifier":8,"durationModifierMinutes":15}]}]}` |
 | Branding | `{"logoUrl":"https://cdn.example.com/logo.png"}`. Enviar `{"logoUrl":null}` elimina el logo. |
 | Working hours | `{"items":[{"dayOfWeek":1,"startTime":"09:00","endTime":"18:00"}]}` |
 | Calendar block | `{"employeeId":"{{employeeId}}","type":"BREAK","startAt":"2026-09-07T12:00:00.000Z","endAt":"2026-09-07T13:00:00.000Z","reason":"Comida"}` |

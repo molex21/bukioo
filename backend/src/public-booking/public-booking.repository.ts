@@ -15,6 +15,7 @@ export interface PublicServiceRecord {
   name: string;
   description: string | null;
   price: string | null;
+  price_type: "FIXED" | "FROM";
   duration_minutes: number;
   custom_fields: ServiceCustomField[];
   business_id: string;
@@ -56,7 +57,7 @@ export class PublicBookingRepository {
     businessId: string,
   ): Promise<PublicServiceRecord[]> {
     const result = await this.databaseService.query<PublicServiceRecord>(
-      `SELECT services.id, services.name, services.description, services.price,
+      `SELECT services.id, services.name, services.description, services.price, services.price_type,
         services.duration_minutes, services.custom_fields, businesses.id AS business_id,
         businesses.name AS business_name, businesses.logo_url AS business_logo_url
       FROM services

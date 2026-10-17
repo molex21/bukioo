@@ -357,8 +357,8 @@ npm run compile:frontend
 npm run check:frontend
 ```
 
-El script `npm run check` ejecuta el lint y las pruebas unitarias del backend,
-el lint del frontend y las compilaciones de ambos paquetes. Las pruebas E2E,
+El script `npm run check` ejecuta las pruebas de scripts, el lint y las pruebas
+unitarias del backend, el lint del frontend y las compilaciones de ambos paquetes. Las pruebas E2E,
 que requieren `DATABASE_URL_TEST` y PostgreSQL, se ejecutan por separado.
 
 ## Docker y variables de entorno
@@ -468,7 +468,17 @@ npm run commit
 
 `docs:update` ejecuta una revisión de los README mediante Codex.
 
-`commit` ejecuta la automatización de commits del proyecto.
+`commit` utiliza únicamente los archivos que hayas preparado previamente con
+`git add`. Muestra el contenido propuesto, ejecuta `npm run check` y solicita
+confirmación del título `DD/MM/AAAA Descripción (A)` y los archivos. Puedes
+escribir la descripción o generarla con Codex (esto envía el diff preparado a
+Codex). Antes revisa con `git diff --cached` que no incluya secretos. El push
+se consulta y confirma por separado; el script no prepara todos los archivos.
+
+Las reglas de desarrollo están en [AGENTS.md](AGENTS.md) y
+[docs/development.md](docs/development.md). El estado y la revisión pendiente
+se mantienen en [MEMORY.md](MEMORY.md); las pruebas manuales para escritorio y
+móvil están en [docs/frontend-verification.md](docs/frontend-verification.md).
 
 ## Seguridad
 

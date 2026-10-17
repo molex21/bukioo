@@ -1,152 +1,51 @@
+# BUKIOO: instrucciones de trabajo
 
-# BUKIOO - Codex Instructions
+BUKIOO es un SaaS multiempresa de citas, clientes y negocios de servicios.
+Frontend: React, TypeScript, Vite y Mantine en `frontend/`. Backend: NestJS y
+SQL parametrizado con `pg` en `backend/`. PostgreSQL usa Docker y dbmate.
 
-## Proyecto
+## Antes de empezar
 
-BUKIOO es un SaaS multiempresa para la gestión de citas, reservas,
-clientes y negocios de servicios.
+- Lee `MEMORY.md`, incluido cualquier primer paso temporal, y la documentación
+  pertinente. El estado del código prevalece sobre documentos antiguos;
+  distingue lo implementado de lo pendiente.
+- Consulta `docs/constitution.md` y `docs/development.md` para seguridad,
+  proceso, SDD, documentación, agentes y Git. El roadmap está en
+  `frontend/FRONTEND_ROADMAP.md` y la API en `backend/docs/API_REFERENCE.md`.
+- Antes de iniciar otra funcionalidad, realiza la revisión de frontend pendiente
+  descrita en `MEMORY.md`; presenta resultados y acuerda el siguiente paso.
 
-## Estructura
+## Comandos desde la raíz
 
-- `/frontend`: aplicación React + TypeScript + Vite.
-- `/backend`: API REST NestJS + TypeScript.
-- PostgreSQL se ejecuta mediante Docker Compose.
-- `/scripts`: automatizaciones del proyecto.
+- `npm run setup`: instalar dependencias; `npm run dev`: iniciar desarrollo.
+- `npm run check`: pruebas de scripts, lint, tests backend y builds de ambos.
+- `npm run check:frontend` / `npm run check:backend`: controles parciales.
+- `npm run docker:up`, `npm run docker:ps`, `npm run docker:down`: PostgreSQL.
+- Desde `backend/`: `npx dbmate status` y `npx dbmate up`; no ejecutar
+  migraciones o cambios destructivos sin autorización cuando corresponda.
+- `npm run commit`: trabaja con los cambios ya preparados; pide aprobación.
+  El push requiere otra aprobación separada. Detalles en `docs/development.md`.
 
-## Documentación
+## Reglas esenciales
 
-Existen tres archivos principales de documentación:
-
-- `README.md`: documentación general.
-- `frontend/README.md`: documentación del frontend.
-- `backend/README.md`: documentación del backend.
-
-La documentación debe representar siempre el estado REAL del repositorio.
-
-No documentar una dependencia como instalada si no aparece realmente
-en el package.json correspondiente.
-
-## Actualización de README
-
-Cuando cambie cualquiera de estos elementos:
-
-- dependencias;
-- scripts npm;
-- arquitectura;
-- Docker;
-- variables de entorno;
-- configuración;
-- forma de iniciar el proyecto;
-- forma de compilar;
-- forma de ejecutar tests;
-- estructura importante;
-- funcionalidades importantes;
-
-revisar los README afectados.
-
-Responsabilidades:
-
-### README.md
-
-Mantener:
-
-- descripción general;
-- arquitectura;
-- estructura;
-- requisitos;
-- instalación;
-- comandos globales;
-- Docker;
-- flujo de desarrollo.
-
-### frontend/README.md
-
-Mantener:
-
-- tecnologías frontend;
-- dependencias relevantes;
-- instalación;
-- ejecución;
-- build;
-- lint;
-- variables de entorno.
-
-### backend/README.md
-
-Mantener:
-
-- tecnologías backend;
-- dependencias relevantes;
-- instalación;
-- ejecución;
-- build;
-- tests;
-- lint;
-- PostgreSQL;
-- migraciones;
-- variables de entorno.
-
-## Código
-
-- Usar TypeScript.
-- Mantener código sencillo y legible.
-- Evitar dependencias innecesarias.
-- No añadir una dependencia sin una razón clara.
-- No guardar secretos en el repositorio.
-- No modificar archivos `.env` con credenciales reales.
-
-## Validación
-
-Antes de considerar terminado un cambio ejecutar:
-
-npm run check
-
-El proyecto no debe considerarse válido si falla:
-
-- lint;
-- tests;
-- compilación del backend;
-- compilación del frontend.
-
-## Commits
-
-Usar Conventional Commits.
-
-Tipos permitidos:
-
-- feat
-- fix
-- refactor
-- docs
-- test
-- chore
-- build
-- ci
-- perf
-- style
-
-Los mensajes de commit deben:
-
-- estar en inglés;
-- ser breves;
-- describir el cambio principal;
-- no terminar en punto;
-- usar una sola línea en commits normales.
-
-Ejemplos:
-
-feat: add appointment creation endpoint
-fix: validate duplicate customer email
-docs: update development setup
-refactor: simplify database connection
-
-## Seguridad
-
-Nunca incluir en Git:
-
-- `.env`;
-- contraseñas;
-- API keys;
-- tokens;
-- secretos;
-- credenciales reales.
+- Trabaja paso a paso; usa SDD para cambios relevantes y pide las dos
+  aprobaciones descritas en `docs/development.md`. No implementes lo no pedido.
+- Mantén TypeScript sencillo, arquitectura existente y dependencias mínimas.
+  Consulta antes de añadir dependencias, cambiar arquitectura o migraciones,
+  salvo que ya estén expresamente aprobadas en el plan.
+- Autoriza y filtra siempre por organización y empresa según corresponda;
+  nunca confíes solo en identificadores recibidos del cliente.
+- No expongas secretos ni modifiques `.env` con credenciales reales. No
+  sobrescribas trabajo ajeno ni ejecutes operaciones destructivas sin permiso.
+- Para código, scripts o configuración ejecuta `npm run check`; para cambios
+  solo documentales verifica las referencias y comunica lo que no se ejecutó.
+  Añade pruebas específicas, E2E y manuales cuando corresponda.
+- Revisa los README afectados por cambios importantes de dependencias, scripts,
+  arquitectura, entorno, ejecución, build, tests o funcionalidades. Documenta
+  solo el estado real. Actualiza `MEMORY.md`, roadmap y changelog cuando aplique.
+- El formato de commit acordado es `DD/MM/AAAA Descripción (A)`; presenta
+  título, archivos, pruebas y pendientes y espera confirmación para cada commit.
+- Nunca añadas `Co-authored-by` ni atribuciones de coautoría a los commits.
+- La validación frontend incluye responsive y accesibilidad, además de pruebas
+  manuales en escritorio y móvil; no declares comprobado lo que no probaste.
+  Consulta `docs/frontend-verification.md`.

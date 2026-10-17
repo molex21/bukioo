@@ -12,6 +12,7 @@ export interface ServiceRecord {
   name: string;
   description: string | null;
   price: string | null;
+  price_type: "FIXED" | "FROM";
   duration_minutes: number;
   buffer_before_minutes: number;
   buffer_after_minutes: number;
@@ -111,14 +112,14 @@ export class ServicesRepository {
   ): Promise<ServiceRecord> {
     const result = await this.databaseService.query<ServiceRecord>(
       `INSERT INTO services
-        (organization_id, business_id, category_id, name, description, price,
+        (organization_id, business_id, category_id, name, description, price, price_type,
          duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
          loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields)
-       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb
+       SELECT organization_id, id, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb
        FROM businesses WHERE id = $1
        RETURNING id, organization_id, business_id, category_id, name, description,
-         price, duration_minutes, buffer_before_minutes, buffer_after_minutes,
+        price, price_type, duration_minutes, buffer_before_minutes, buffer_after_minutes,
          minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking,
          auto_confirm_appointments, loyalty_earning_type, loyalty_fixed_points,
          loyalty_points_per_currency_unit, custom_fields,
@@ -129,6 +130,7 @@ export class ServicesRepository {
         dto.name,
         dto.description ?? null,
         dto.price ?? null,
+        dto.priceType ?? "FIXED",
         dto.durationMinutes,
         dto.bufferBeforeMinutes ?? 0,
         dto.bufferAfterMinutes ?? 0,
@@ -147,7 +149,7 @@ export class ServicesRepository {
 
   async listByBusiness(businessId: string): Promise<ServiceRecord[]> {
     const result = await this.databaseService.query<ServiceRecord>(
-      `SELECT id, organization_id, business_id, category_id, name, description, price,
+      `SELECT id, organization_id, business_id, category_id, name, description, price, price_type,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
@@ -164,7 +166,7 @@ export class ServicesRepository {
     serviceId: string,
   ): Promise<ServiceRecord | null> {
     const result = await this.databaseService.query<ServiceRecord>(
-      `SELECT id, organization_id, business_id, category_id, name, description, price,
+      `SELECT id, organization_id, business_id, category_id, name, description, price, price_type,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
@@ -182,21 +184,22 @@ export class ServicesRepository {
     const result = await this.databaseService.query<ServiceRecord>(
       `UPDATE services SET category_id = COALESCE($1, category_id), name = COALESCE($2, name),
         description = COALESCE($3, description), price = COALESCE($4, price),
-        duration_minutes = COALESCE($5, duration_minutes),
-        buffer_before_minutes = COALESCE($6, buffer_before_minutes),
-        buffer_after_minutes = COALESCE($7, buffer_after_minutes),
-        minimum_booking_notice_minutes = COALESCE($8, minimum_booking_notice_minutes),
-        maximum_booking_advance_days = COALESCE($9, maximum_booking_advance_days),
-        same_day_booking = COALESCE($10, same_day_booking),
-        auto_confirm_appointments = CASE WHEN $12 THEN $11 ELSE auto_confirm_appointments END,
-        loyalty_earning_type = COALESCE($13, loyalty_earning_type),
-        loyalty_fixed_points = COALESCE($14, loyalty_fixed_points),
-        loyalty_points_per_currency_unit = COALESCE($15, loyalty_points_per_currency_unit),
-        custom_fields = CASE WHEN $17 THEN $16::jsonb ELSE custom_fields END,
-        is_active = COALESCE($18, is_active),
+        price_type = COALESCE($5, price_type),
+        duration_minutes = COALESCE($6, duration_minutes),
+        buffer_before_minutes = COALESCE($7, buffer_before_minutes),
+        buffer_after_minutes = COALESCE($8, buffer_after_minutes),
+        minimum_booking_notice_minutes = COALESCE($9, minimum_booking_notice_minutes),
+        maximum_booking_advance_days = COALESCE($10, maximum_booking_advance_days),
+        same_day_booking = COALESCE($11, same_day_booking),
+        auto_confirm_appointments = CASE WHEN $13 THEN $12 ELSE auto_confirm_appointments END,
+        loyalty_earning_type = COALESCE($14, loyalty_earning_type),
+        loyalty_fixed_points = COALESCE($15, loyalty_fixed_points),
+        loyalty_points_per_currency_unit = COALESCE($16, loyalty_points_per_currency_unit),
+        custom_fields = CASE WHEN $18 THEN $17::jsonb ELSE custom_fields END,
+        is_active = COALESCE($19, is_active),
         updated_at = NOW()
-      WHERE id = $19 AND business_id = $20 AND organization_id = $21 AND archived_at IS NULL
-      RETURNING id, organization_id, business_id, category_id, name, description, price,
+      WHERE id = $20 AND business_id = $21 AND organization_id = $22 AND archived_at IS NULL
+      RETURNING id, organization_id, business_id, category_id, name, description, price, price_type,
         duration_minutes, buffer_before_minutes, buffer_after_minutes,
         minimum_booking_notice_minutes, maximum_booking_advance_days, same_day_booking, auto_confirm_appointments,
         loyalty_earning_type, loyalty_fixed_points, loyalty_points_per_currency_unit, custom_fields,
@@ -206,6 +209,7 @@ export class ServicesRepository {
         dto.name,
         dto.description,
         dto.price,
+        dto.priceType,
         dto.durationMinutes,
         dto.bufferBeforeMinutes,
         dto.bufferAfterMinutes,

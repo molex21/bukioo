@@ -15,6 +15,10 @@ el estado real del repositorio y de la API.
   peticiones (`429`) de forma util para la persona usuaria.
 - No guardar ni registrar tokens publicos de citas o reprogramaciones.
 
+El estado de trabajo y la revisión previa a la siguiente funcionalidad están
+en [`MEMORY.md`](../MEMORY.md). Las comprobaciones manuales de escritorio,
+móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/frontend-verification.md).
+
 ## Bloque 0 — Base tecnica y sistema visual
 
 ### 0.1 Arquitectura
@@ -124,8 +128,9 @@ el estado real del repositorio y de la API.
 
 ### 3.2 Empleados
 
-- [ ] Crear listado de empleados.
-- [ ] Crear alta y edicion de empleado, incluyendo color y notas.
+- [x] Crear listado de empleados.
+- [x] Crear alta y edicion de empleado, incluyendo color y notas.
+- [x] Permitir elegir entre crear solo la ficha de agenda o invitar al empleado al panel.
 - [ ] Permitir invitar y reenviar invitacion.
 - [ ] Permitir reset de 2FA solo a usuarios autorizados.
 - [ ] Permitir enviar recuperacion de contrasena solo a usuarios autorizados.

@@ -18,6 +18,10 @@ import {
 import { Type } from "class-transformer";
 import { IsArray, ValidateNested } from "class-validator";
 import { ServiceCustomFieldDto } from "./service-custom-field.dto";
+import {
+  servicePriceTypes,
+  type ServicePriceType,
+} from "./service-price.types";
 
 export class UpdateServiceDto {
   @IsOptional()
@@ -40,6 +44,10 @@ export class UpdateServiceDto {
   @Min(0)
   @Max(99_999_999.99)
   price?: number;
+
+  @IsOptional()
+  @IsIn(servicePriceTypes)
+  priceType?: ServicePriceType;
 
   @IsOptional()
   @IsInt()

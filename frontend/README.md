@@ -131,7 +131,11 @@ Restablecer el permiso conserva el mismo empleado y comprueba la capacidad del p
 En «Añadir usuario como empleado», la selección del usuario queda fija; para
 elegir otro se cierra el formulario y se vuelve a abrir. Los textos de producto
 usan «Empresa»; las rutas, identificadores y contratos `businesses` no cambian.
-La pantalla de equipo de `/app` continúa pendiente de integración; el login no cambia.
+La pantalla de **Equipo** de `/app` lista las fichas activas de la empresa
+seleccionada y permite crear o editar nombre, contacto, color y notas. Al crear,
+un `OWNER` o `ADMIN` puede decidir si solo crea una ficha de agenda o si además
+invita a la persona al panel. La asignación de servicios, horarios, bloqueos y
+acciones de seguridad se incorporarán en los siguientes bloques.
 
 Las reglas puras de permisos/vinculación tienen pruebas sin dependencias extra.
 Desde la raíz, con Node compatible con borrado de tipos:
@@ -163,7 +167,8 @@ rutas:
 - `/app/agenda`, `/app/appointments` y `/app/customers`;
 - `/app/team` y `/app/settings`, visibles solo para `OWNER` y `ADMIN`.
 
-Cada módulo se conectará a sus datos específicos en los bloques posteriores.
+Agenda, citas y clientes se conectarán a sus datos específicos en los bloques
+posteriores.
 Al cerrar sesión desde este espacio se vuelve al acceso staff de la organización
 desde la que se inició sesión.
 
@@ -186,6 +191,10 @@ y `ADMIN` pueden crear y renombrar categorías en un listado independiente,
 además de crear servicios para la empresa activa. El formulario cubre categoría,
 duración, precio base, buffers y confirmación automática; los servicios se pueden
 editar o suspender.
+
+El tipo de precio puede ser **cerrado** o **desde**. El segundo exige un precio
+mínimo y se muestra como «Desde X €» en los listados; no representa todavía el
+importe final de una cita.
 
 Cada servicio también puede definir hasta 20 **datos configurables** que se
 mostrarán en el futuro flujo de reserva: número (con unidad y límites), selector,

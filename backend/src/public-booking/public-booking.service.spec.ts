@@ -40,6 +40,8 @@ describe("PublicBookingService", () => {
         name: "Corte",
         description: "Corte de pelo",
         price: "20.00",
+        price_type: "FIXED",
+        custom_fields: [],
         duration_minutes: 30,
         business_id: "business-id",
         business_name: "Mi negocio",
@@ -64,6 +66,8 @@ describe("PublicBookingService", () => {
           name: "Corte",
           description: "Corte de pelo",
           price: "20.00",
+          priceType: "FIXED",
+          customFields: [],
           durationMinutes: 30,
           business: {
             id: "business-id",

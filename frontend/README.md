@@ -244,6 +244,25 @@ El script `lint:check` también está definido, pero usa un patrón pensado para
 
 ## Perfil y administración de plataforma
 
+Equipo incluye la acción "Horarios" para editar turnos semanales en hora local de la empresa. Permite varios turnos diarios, reemplaza toda la semana al guardar y confirma antes de dejarla vacía. Bloquea horarios con vigencias o precisión incompatible para evitar pérdida de configuración.
+
+En el catálogo, la acción "Empleados" de cada servicio consulta y reemplaza
+sus asignaciones de empleados activos de la empresa. Guardar sin empleados
+deja el servicio sin franjas reservables hasta completar asignaciones y
+horarios. La asignación no modifica las citas existentes.
+
+Equipo permite invitar al panel una ficha sin cuenta vinculada y con correo,
+solicitar recuperación y restablecer 2FA de la cuenta vinculada, y archivar la
+ficha con confirmación. Archivar conserva historial y no revoca acceso al panel.
+Solicitar un correo no confirma su recepción. El reenvío de invitaciones no
+está disponible actualmente.
+
+El catálogo del panel de empresa permite eliminar servicios y categorías con
+confirmación. Si existen referencias, el backend rechaza el borrado y la
+interfaz ofrece desactivar el recurso conservando sus datos. Los recursos
+inactivos pueden reactivarse. Desactivar una categoría no desactiva sus
+servicios ni los retira automáticamente de la reserva pública.
+
 Desde **Mi perfil**, un usuario puede cambiar su correo de acceso en dos pasos:
 solicita el envío del código al correo nuevo y lo confirma. Al completarlo se
 cierra la sesión y se debe acceder con la dirección nueva.

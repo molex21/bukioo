@@ -246,6 +246,26 @@ describe("ServicesService", () => {
     );
   });
 
+  it("allows explicitly clearing all service employee assignments", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findById.mockResolvedValue(serviceRecord);
+    repositoryMock.findActiveEmployeeIds.mockResolvedValue([]);
+
+    await expect(
+      service.replaceEmployees(
+        serviceRecord.business_id,
+        serviceRecord.id,
+        { employeeIds: [] },
+        "actor-id",
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(repositoryMock.replaceEmployees).toHaveBeenCalledWith(
+      serviceRecord,
+      [],
+    );
+  });
+
   it("rejects employees outside the business or inactive", async () => {
     repositoryMock.canManageBusiness.mockResolvedValue(true);
     repositoryMock.findById.mockResolvedValue(serviceRecord);

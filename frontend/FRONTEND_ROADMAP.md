@@ -112,6 +112,7 @@ móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/fron
 - [x] Añadir suspensión/reactivación desde la ficha de empresa.
 - [ ] Añadir eliminación con confirmación y manejo de `409`.
 - [ ] Sustituir la URL manual del logo por subida de archivo a almacenamiento de objetos, con previsualización, límites de tipo/tamaño y limpieza del archivo anterior.
+      Propuesta pendiente de aprobación: `docs/logo-storage-proposal.md`.
 - [ ] Validar manualmente el flujo multiempresa y multiorganización: cambio de contexto, persistencia por pestaña, aislamiento de listados y permisos por organización.
 
 ## Bloque 3 — Catalogo, equipo y calendario laboral
@@ -121,10 +122,24 @@ móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/fron
 - [x] Crear listado y formulario de categorías.
 - [ ] Añadir filtros de estado y categoría al listado de servicios.
 - [x] Crear formulario de servicio: duración, precio, buffers y confirmación.
+- [ ] Definir e implementar precio por hora de mano de obra opcional, solicitado
+      el 18/10/2026. Acordar si se configura por empresa, servicio o empleado;
+      si es coste interno o precio al cliente; y su relación con precio fijo,
+      «desde», duración y suplementos. Definir vacío frente a cero, redondeo y
+      conservación histórica en citas. Requiere especificación y revisión de
+      contratos backend antes de implementar; no se considera disponible.
 - [x] Permitir editar y suspender servicios.
 - [x] Configurar datos adicionales por servicio: número, lista, texto o sí/no; suplementos de precio y tiempo por unidad u opción.
 - [ ] **Pendiente de pruebas manuales:** crear, editar y conservar datos adicionales, opciones, suplementos de precio y tiempo, y sus interruptores en varias empresas. Verificar después su cálculo, edición por empleado e instantánea al implementar las citas y la reserva pública.
-- [ ] Añadir eliminación de servicios y explicar los conflictos por datos asociados.
+- [x] Añadir eliminación de servicios y categorías con confirmación, permisos
+      OWNER/ADMIN y manejo de conflictos 409. Backend ya dispone de DELETE;
+      integrado en el cliente API y la interfaz. Servicios con empleados
+      asignados o citas y categorías con servicios no se pueden borrar según
+      la regla actual. Revisar concurrencia e histórico antes de implementar.
+      Impacto: `docs/catalog-deletion-impact.md`.
+- [ ] Verificar manualmente eliminación, cancelación, conflictos 409,
+      desactivación/reactivación y responsive/teclado; concurrencia con nuevas
+      referencias pendiente. No se ha ejecutado Playwright para esta entrega.
 
 ### 3.2 Empleados
 
@@ -132,17 +147,29 @@ móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/fron
 - [x] Crear alta y edicion de empleado, incluyendo color y notas.
 - [x] Permitir elegir entre crear solo la ficha de agenda o invitar al empleado al panel.
 - [ ] Permitir invitar y reenviar invitacion.
-- [ ] Permitir reset de 2FA solo a usuarios autorizados.
-- [ ] Permitir enviar recuperacion de contrasena solo a usuarios autorizados.
-- [ ] Permitir eliminar con confirmacion y manejo de referencias existentes.
+- [x] Conectar invitación de ficha existente sin cuenta y con email; confirmación
+      y gestión de resultado incierto. Reenvío sigue pendiente de contrato backend.
+- [x] Permitir reset de 2FA solo a usuarios autorizados.
+- [x] Permitir solicitar recuperación de contraseña solo a usuarios autorizados.
+- [x] Archivar ficha con confirmación e historial preservado según DELETE actual;
+      no elimina la cuenta ni revoca sus permisos.
+- [ ] Verificar manualmente acciones de empleados, correos de prueba, permisos,
+      errores y archivo. Revisar cómo se ve el color del empleado en la tabla.
 
 ### 3.3 Asignaciones y horarios
 
-- [ ] Crear selector de empleados asignados a cada servicio.
-- [ ] Validar que un servicio tenga al menos un empleado asignado.
-- [ ] Crear editor semanal de horarios, incluidos turnos partidos.
-- [ ] Representar claramente la convención domingo (`0`) a sabado (`6`).
-- [ ] Guardar el reemplazo completo de horarios del empleado.
+- [x] Crear selector de empleados activos asignados a cada servicio existente.
+- [x] Avisar cuando un servicio queda sin empleados: el backend admite guardar
+      configuración incompleta. Para obtener franjas reservables necesita
+      empleados asignados y horarios; no se impone un mínimo nuevo en la API.
+- [ ] Verificar manualmente asignación, sustitución, retirada, recarga, permisos,
+      aislamiento y errores de red en escritorio, móvil y teclado.
+- [x] Crear editor semanal de horarios, incluidos turnos partidos.
+- [x] Representar claramente la convención domingo (0) a sábado (6).
+- [x] Guardar el reemplazo completo de horarios del empleado, con confirmación
+      adicional al dejar la semana vacía y bloqueo ante cargas fallidas.
+- [ ] Verificar editor en navegador: responsive/teclado, recarga, permisos,
+      turnos partidos y errores. No se ha reactivado Playwright.
 
 ### 3.4 Bloqueos
 

@@ -6,6 +6,12 @@ export type ServiceCategory = {
   name: string;
   sort_order: number;
 };
+export type ServiceEmployee = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+};
 export type ServiceCustomFieldType = "NUMBER" | "SELECT" | "TEXT" | "BOOLEAN";
 export type ServiceCustomFieldPricingMode = "NONE" | "PER_UNIT" | "OPTION";
 export type ServiceCustomFieldDurationMode = "NONE" | "PER_UNIT" | "OPTION";
@@ -59,6 +65,29 @@ export type ServiceInput = {
 };
 
 export const workspaceCatalogApi = {
+  listEmployees: (businessId: string, serviceId: string) =>
+    authenticatedApiRequest<ServiceEmployee[]>(
+      `/businesses/${businessId}/services/${serviceId}/employees`,
+    ),
+  replaceEmployees: (
+    businessId: string,
+    serviceId: string,
+    employeeIds: string[],
+  ) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/services/${serviceId}/employees`,
+      { method: "PUT", body: JSON.stringify({ employeeIds }) },
+    ),
+  deleteCategory: (businessId: string, categoryId: string) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/service-categories/${categoryId}`,
+      { method: "DELETE" },
+    ),
+  deleteService: (businessId: string, serviceId: string) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/services/${serviceId}`,
+      { method: "DELETE" },
+    ),
   createCategory: (businessId: string, input: { name: string }) =>
     authenticatedApiRequest<ServiceCategory>(
       `/businesses/${businessId}/service-categories`,
@@ -84,7 +113,7 @@ export const workspaceCatalogApi = {
   updateCategory: (
     businessId: string,
     categoryId: string,
-    input: { name: string },
+    input: { name?: string; isActive?: boolean },
   ) =>
     authenticatedApiRequest<ServiceCategory>(
       `/businesses/${businessId}/service-categories/${categoryId}`,

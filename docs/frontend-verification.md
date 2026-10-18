@@ -69,3 +69,38 @@ revisar también cookies/sesión y firewall. Este acceso aún no se ha validado.
 
 Resultado por caso: **pendiente / correcto / falla / bloqueado**, dispositivo,
 ruta, pasos, resultado observado y captura sin datos personales si procede.
+
+## Pruebas de catálogo, Equipo y calendario pendientes
+
+Guía manual sin Playwright. Usar QA Norte 181026 y QA Sur 181026 de la base
+local de pruebas. Son empresas de una misma organización, no entornos aislados.
+Crear cuentas independientes para OWNER/ADMIN y EMPLOYEE cuando corresponda.
+Una acción sin interfaz se marca bloqueada en frontend; puede probarse su API
+con la colección de `postman/` y los contratos de `backend/docs/API_REFERENCE.md`.
+No confundir una respuesta API correcta con un flujo de interfaz validado.
+
+| Área | Pasos y resultado que comprobar |
+| --- | --- |
+| Categorías y servicios | Crear y editar en Norte; recargar y comprobar valores. Cambiar a Sur y comprobar que no aparecen. Probar precio fijo y «desde», duración y buffers. |
+| Datos adicionales | Crear número, lista, texto y sí/no; guardar, reabrir y revisar obligatoriedad, límites, opciones y suplementos de precio/tiempo. Cambiar interruptores y comprobar persistencia. El cálculo final en citas sigue pendiente de implementación/verificación. |
+| Empleados | Crear ficha sin invitación, editar color/notas y recargar. Verificar empresa y ausencia de acceso al panel. Probar cancelación del formulario sin guardar. |
+| Invitación y recuperación | Cuando exista UI, invitar a una cuenta controlada y completar el acceso. Probar reenvío y recuperación, resultado visible y errores. Sin proveedor de correo de pruebas, la recepción y uso del enlace/código quedan bloqueados, aunque la API responda correctamente. |
+| Reset de 2FA | Usar exclusivamente una cuenta de prueba con 2FA; confirmar reset por OWNER/ADMIN y comprobar el flujo posterior según contrato. EMPLOYEE no debe poder ejecutar la operación. |
+| Eliminación | Usar una ficha desechable: cancelar primero y comprobar que se conserva; confirmar después. Probar referencias existentes y el conflicto previsto por API, preservando historial. |
+| Asignaciones | Cuando exista UI, asignar empleados de la misma empresa a un servicio, guardar y recargar. Probar sustitución y retirada del último empleado conforme a la regla que se acuerde. Rechazar empleados de otra empresa. |
+| Horarios | Guardar lunes 09:00–13:00 y 16:00–19:00; recargar y comprobar ambos turnos. Probar domingo 0 y sábado 6, intervalos invertidos y solapados. Verificar que guardar reemplaza el horario completo y no duplica turnos. |
+| Bloqueos | Crear descanso/vacaciones de un empleado de prueba, editar fechas y eliminar; comprobar listados por rango y empleado y efecto en disponibilidad. Registrar zona horaria y probar límites de día. Agenda sin implementar queda bloqueada como verificación visual. |
+| Permisos y alcance | Repetir acciones con EMPLOYEE y comprobar rechazo por API además de controles visuales. Probar IDs de Norte bajo rutas de Sur. Otra organización requiere cuenta y datos separados. |
+
+Para cada caso anotar entrada, resultado esperado/observado, recarga, rol,
+empresa, anchura o dispositivo y estado. Repetir los flujos críticos a ancho
+móvil y con teclado. No enviar invitaciones a terceros.
+
+### Futuro precio por hora de mano de obra
+
+No implementado. Tras aprobar su especificación, comprobar campo vacío frente
+a cero, decimales, rechazo de negativos, edición y persistencia por alcance.
+Si se acuerda cálculo proporcional sin mínimo ni redondeo intermedio, 40 €/h
+y 90 minutos deberían producir 60 € de mano de obra; este ejemplo no fija la
+regla de negocio. Verificar convivencia con precio fijo/«desde» y suplementos,
+permisos, aislamiento e histórico de citas al cambiar la tarifa.

@@ -3,6 +3,7 @@ import {
   Avatar,
   Badge,
   Button,
+  ColorInput,
   Group,
   Modal,
   Paper,
@@ -20,6 +21,8 @@ import { useDisclosure } from "@mantine/hooks";
 import { CircleAlert, Pencil, Plus, RefreshCw, UsersRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "../lib/api-client";
+import { WorkspaceEmployeeActions } from "../components/WorkspaceEmployeeActions";
+import { EmployeeWorkingHours } from "../components/EmployeeWorkingHours";
 import {
   workspaceEmployeesApi,
   type WorkspaceEmployee,
@@ -74,6 +77,7 @@ export function WorkspaceTeamPage({
   const [editing, setEditing] = useState<WorkspaceEmployee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyEmployee);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -162,6 +166,16 @@ export function WorkspaceTeamPage({
         </Button>
       </Group>
 
+      {notice && (
+        <Alert
+          color="teal"
+          role="status"
+          withCloseButton
+          onClose={() => setNotice(null)}
+        >
+          {notice}
+        </Alert>
+      )}
       {error && (
         <Alert
           color="red"
@@ -239,7 +253,9 @@ export function WorkspaceTeamPage({
                         color={employee.user_id ? "teal" : "gray"}
                         variant="light"
                       >
-                        {employee.user_id ? "Con acceso" : "Sin acceso"}
+                        {employee.user_id
+                          ? "Cuenta vinculada"
+                          : "Sin cuenta vinculada"}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
@@ -248,14 +264,33 @@ export function WorkspaceTeamPage({
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Button
-                        leftSection={<Pencil size={14} />}
-                        onClick={() => openEmployee(employee)}
-                        size="xs"
-                        variant="default"
-                      >
-                        Gestionar
-                      </Button>
+                      <Group gap="xs">
+                        <Button
+                          leftSection={<Pencil size={14} />}
+                          onClick={() => openEmployee(employee)}
+                          size="xs"
+                          variant="default"
+                        >
+                          Gestionar
+                        </Button>
+                        <WorkspaceEmployeeActions
+                          key={`${businessId}:${employee.id}:${version}`}
+                          businessId={businessId}
+                          employee={employee}
+                          disabled={saving}
+                          onChanged={(message) => {
+                            setNotice(message ?? null);
+                            setVersion((value) => value + 1);
+                          }}
+                        />
+                        <EmployeeWorkingHours
+                          key={`hours:${businessId}:${employee.id}`}
+                          businessId={businessId}
+                          employeeId={employee.id}
+                          employeeName={`${employee.first_name} ${employee.last_name}`}
+                          disabled={saving}
+                        />
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -320,12 +355,21 @@ export function WorkspaceTeamPage({
               }
               value={form.phone}
             />
-            <TextInput
-              description="Formato hexadecimal, por ejemplo #228B22."
+            <ColorInput
+              format="hex"
+              withPreview
+              withEyeDropper={false}
+              swatches={[
+                "#6C5CE7",
+                "#3B82F6",
+                "#2DD4BF",
+                "#16A34A",
+                "#F59E0B",
+                "#EF4444",
+              ]}
+              description="Elige el color del empleado en la agenda."
               label="Color de agenda"
-              onChange={(event) =>
-                updateForm("color", event.currentTarget.value)
-              }
+              onChange={(value) => updateForm("color", value)}
               value={form.color}
             />
             <Textarea

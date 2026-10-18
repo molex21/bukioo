@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ApiError } from "../lib/api-client";
+import { CatalogResourceActions } from "../components/CatalogResourceActions";
+import { ServiceEmployeesAction } from "../components/ServiceEmployeesAction";
 import {
   workspaceCatalogApi,
   type BusinessService,
@@ -529,14 +531,26 @@ export function WorkspaceCatalogPage({
                         </Badge>
                       </Table.Td>
                       <Table.Td>
-                        <Button
-                          leftSection={<Pencil size={14} />}
-                          onClick={() => openCategory(category)}
-                          size="xs"
-                          variant="default"
-                        >
-                          Editar
-                        </Button>
+                        <Group gap="xs">
+                          <Button
+                            leftSection={<Pencil size={14} />}
+                            onClick={() => openCategory(category)}
+                            size="xs"
+                            variant="default"
+                          >
+                            Editar
+                          </Button>
+                          <CatalogResourceActions
+                            key={`${businessId}:${category.id}`}
+                            businessId={businessId}
+                            id={category.id}
+                            name={category.name}
+                            isActive={category.is_active}
+                            kind="category"
+                            disabled={saving}
+                            onChanged={() => setVersion((value) => value + 1)}
+                          />
+                        </Group>
                       </Table.Td>
                     </Table.Tr>
                   ))}
@@ -616,14 +630,33 @@ export function WorkspaceCatalogPage({
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Button
-                        leftSection={<Pencil size={14} />}
-                        onClick={() => openService(service)}
-                        size="xs"
-                        variant="default"
-                      >
-                        Gestionar
-                      </Button>
+                      <Group gap="xs">
+                        <Button
+                          leftSection={<Pencil size={14} />}
+                          onClick={() => openService(service)}
+                          size="xs"
+                          variant="default"
+                        >
+                          Gestionar
+                        </Button>
+                        <ServiceEmployeesAction
+                          key={`employees:${businessId}:${service.id}`}
+                          businessId={businessId}
+                          serviceId={service.id}
+                          serviceName={service.name}
+                          disabled={saving}
+                        />
+                        <CatalogResourceActions
+                          key={`${businessId}:${service.id}`}
+                          businessId={businessId}
+                          id={service.id}
+                          name={service.name}
+                          isActive={service.is_active}
+                          kind="service"
+                          disabled={saving}
+                          onChanged={() => setVersion((value) => value + 1)}
+                        />
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ))}

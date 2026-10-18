@@ -25,8 +25,54 @@ export type EmployeeInput = {
   notes?: string;
   phone?: string;
 };
+export type WorkingHourInput = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
+export type EmployeeWorkingHour = {
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  valid_from: string | null;
+  valid_to: string | null;
+};
 
 export const workspaceEmployeesApi = {
+  listWorkingHours: (businessId: string, employeeId: string) =>
+    authenticatedApiRequest<EmployeeWorkingHour[]>(
+      `/businesses/${businessId}/employees/${employeeId}/working-hours`,
+    ),
+  replaceWorkingHours: (
+    businessId: string,
+    employeeId: string,
+    hours: WorkingHourInput[],
+  ) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/employees/${employeeId}/working-hours`,
+      { method: "PUT", body: JSON.stringify({ hours }) },
+    ),
+  invite: (businessId: string, employeeId: string) =>
+    authenticatedApiRequest<WorkspaceEmployee>(
+      `/businesses/${businessId}/employees/${employeeId}/invite`,
+      { method: "POST" },
+    ),
+  requestPasswordReset: (businessId: string, employeeId: string) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/employees/${employeeId}/password-reset`,
+      { method: "POST" },
+    ),
+  resetTwoFactor: (businessId: string, employeeId: string) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/employees/${employeeId}/2fa/reset`,
+      { method: "POST" },
+    ),
+  archive: (businessId: string, employeeId: string) =>
+    authenticatedApiRequest<void>(
+      `/businesses/${businessId}/employees/${employeeId}`,
+      { method: "DELETE" },
+    ),
   create: (
     businessId: string,
     input: Required<Pick<EmployeeInput, "firstName" | "lastName">> &

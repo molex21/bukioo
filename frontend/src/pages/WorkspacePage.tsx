@@ -288,12 +288,14 @@ export function WorkspacePage() {
 
   useEffect(() => {
     if (
+      loading ||
+      !selectedBusiness ||
       !requestedNavigationItem ||
       activeSection === requestedNavigationItem.path
     )
       return;
     navigate({ pathname: "/app", search: location.search }, { replace: true });
-  }, [activeSection, location.search, navigate, requestedNavigationItem]);
+  }, [activeSection, loading, location.search, navigate, requestedNavigationItem, selectedBusiness]);
 
   async function logout() {
     setIsLoggingOut(true);

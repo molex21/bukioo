@@ -72,6 +72,29 @@ describe("WorkingHoursService", () => {
     expect(repositoryMock.replace).not.toHaveBeenCalled();
   });
 
+  it("allows clearing the complete working week", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findActiveEmployee.mockResolvedValue(employee);
+    await service.replace(
+      "business-id",
+      "employee-id",
+      { hours: [] },
+      "actor-id",
+    );
+    expect(repositoryMock.replace).toHaveBeenCalledWith(employee, []);
+  });
+
+  it("accepts adjacent Sunday shifts without treating them as overlapping", async () => {
+    repositoryMock.canManageBusiness.mockResolvedValue(true);
+    repositoryMock.findActiveEmployee.mockResolvedValue(employee);
+    const hours = [
+      { dayOfWeek: 0, startTime: "09:00", endTime: "13:00" },
+      { dayOfWeek: 0, startTime: "13:00", endTime: "16:00" },
+    ];
+    await service.replace("business-id", "employee-id", { hours }, "actor-id");
+    expect(repositoryMock.replace).toHaveBeenCalledWith(employee, hours);
+  });
+
   it("rejects an employee outside the selected business", async () => {
     repositoryMock.canAccessBusiness.mockResolvedValue(true);
     repositoryMock.findActiveEmployee.mockResolvedValue(null);

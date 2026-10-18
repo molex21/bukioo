@@ -64,6 +64,9 @@ confundir cuota con ocupación de contexto.
 
 ## Validación y documentación
 
+- Los README son documentación pública de presentación y uso del proyecto o
+  componente. Mantener decisiones de trabajo, valoraciones y aprobaciones en
+  especificaciones, documentos de seguimiento y MEMORY.md, no en los README.
 - Código, scripts o configuración: ejecutar `npm run check`; si falla, no
   declarar el cambio válido y comunicar fallos preexistentes o bloqueos.
 - Markdown puro: comprobar coherencia, formato y enlaces; informar que no se

@@ -1,5 +1,17 @@
 # Planes de funcionalidades pendientes
 
+27/10: cuadrante completo implementado y probado con migraciones en base aislada;
+ambas aplicadas después en desarrollo con autorización. Evidencia actual en
+[verification-full.md](008-cuadrante-equipo/verification-full.md). Habilitación
+en desarrollo completada con autorización de las migraciones; verificación de interfaz
+y revisión global de textos/skills pendientes, sin commit/push.
+
+27/10/2026: propuesta nueva pendiente de validación en
+[cuadrante y colores](008-cuadrante-equipo/spec.md) y su
+[plan](008-cuadrante-equipo/plan.md). Amplía el alcance de horarios/bloqueos a
+plantillas, rotaciones y ausencias; no se ha implementado. El usuario ha
+solicitado aprobar antes de aplicar.
+
 Entrega 3A implementada y con controles automáticos correctos; evidencia y
 pruebas pendientes en 003-asignaciones-horarios-bloqueos/verification-3a.md.
 

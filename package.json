@@ -15,7 +15,7 @@
     "check": "npm run check:scripts && npm run check:backend && npm run check:frontend && npm run compile",
     "check:scripts": "node --check scripts/commit.mjs && node --test scripts/commit.test.mjs scripts/commit-cli.test.mjs",
     "check:backend": "npm --prefix backend run lint:check && npm --prefix backend run test -- --runInBand",
-    "check:frontend": "npm --prefix frontend run lint",
+    "check:frontend": "npm --prefix frontend run lint && node --test frontend/tests/team-quadrant.test.mjs frontend/tests/employee-color.test.mjs",
     "docs:update": "node scripts/update-readmes.mjs",
     "commit": "node scripts/commit.mjs",
     "stop": "npm run docker:down"

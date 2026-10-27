@@ -244,6 +244,20 @@ El script `lint:check` también está definido, pero usa un patrón pensado para
 
 ## Perfil y administración de plataforma
 
+En Equipo, "Cuadrante" permite consultar y editar días, turnos partidos/nocturnos,
+pausas y ausencias, con navegación semanal, filtro y paginación. "Plantillas"
+define ciclos de hasta 12 semanas y "Asignar ciclo" los copia a los empleados
+seleccionados, con fechas y semana inicial por empleado. En móvil se organiza
+por días. Usa la hora de la empresa y no muestra las citas como fichaje.
+Los cambios se comprueban antes de confirmar y se rechazan si afectan a citas
+futuras. Requiere que el backend tenga las migraciones de planificación aplicadas;
+ver [API y despliegue](../backend/docs/SCHEDULING_API.md). La base de desarrollo
+no se migra automáticamente.
+
+La comprobación de frontend incluye pruebas de fechas y cambios horarios con
+el ejecutor de Node, sin nuevas dependencias. El entorno actual usa Node 24;
+se requiere una versión que permita importar TypeScript de forma nativa.
+
 Equipo incluye la acción "Horarios" para editar turnos semanales en hora local de la empresa. Permite varios turnos diarios, reemplaza toda la semana al guardar y confirma antes de dejarla vacía. Bloquea horarios con vigencias o precisión incompatible para evitar pérdida de configuración.
 
 En el catálogo, la acción "Empleados" de cada servicio consulta y reemplaza

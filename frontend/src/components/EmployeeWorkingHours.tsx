@@ -208,9 +208,8 @@ export function EmployeeWorkingHours({
       >
         <Stack gap="md">
           <Text size="sm">
-            Horas locales de la empresa. Guardar reemplaza la semana completa;
-            no cambia las citas existentes. Domingo corresponde a 0 y sábado a
-            6.
+            Configura los turnos de cada día según la hora de la empresa. Al
+            guardar se actualizará toda la semana. Las citas existentes se mantienen.
           </Text>
           {loading ? (
             <Skeleton height={180} />

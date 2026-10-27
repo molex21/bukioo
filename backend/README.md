@@ -7,6 +7,16 @@ La referencia completa de endpoints, flujos, limites y casos limite esta en
 
 API REST de **BUKIOO** desarrollada con NestJS y TypeScript.
 
+## Planificación laboral
+
+El módulo de planificación incorpora excepciones por fecha, plantillas de
+turnos, ciclos de hasta 12 semanas y ausencias. Comparte horario efectivo con
+disponibilidad y validación de citas, y controla conflictos y cambios concurrentes.
+Requiere las migraciones 20261027190000 y 20261027191000 antes de arrancar el
+código nuevo contra una base existente. No se aplican automáticamente.
+Contratos, despliegue y reversión: [API del cuadrante](docs/SCHEDULING_API.md).
+La suite adicional scheduling.e2e-spec.ts requiere una base _test migrada.
+
 ## Logos de organizacion y negocio
 
 La API guarda `logoUrl` como una URL absoluta `http` o `https`; no almacena

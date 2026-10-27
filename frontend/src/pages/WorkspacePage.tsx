@@ -416,6 +416,7 @@ export function WorkspacePage() {
     <WorkspaceTeamPage
       businessId={selectedBusiness.business.id}
       businessName={selectedBusiness.business.name}
+      organizationId={selectedBusiness.organization.id}
     />
   ) : (
     <Stack gap="xl">

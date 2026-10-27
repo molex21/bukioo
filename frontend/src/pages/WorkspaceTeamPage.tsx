@@ -1,6 +1,5 @@
 import {
   Alert,
-  Avatar,
   Badge,
   Button,
   ColorInput,
@@ -16,6 +15,7 @@ import {
   TextInput,
   ThemeIcon,
   Title,
+  useComputedColorScheme,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { CircleAlert, Pencil, Plus, RefreshCw, UsersRound } from "lucide-react";
@@ -23,6 +23,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiError } from "../lib/api-client";
 import { WorkspaceEmployeeActions } from "../components/WorkspaceEmployeeActions";
 import { EmployeeWorkingHours } from "../components/EmployeeWorkingHours";
+import { TeamQuadrant } from "../components/TeamQuadrant";
+import { EmployeeAvatar } from "../components/EmployeeAvatar";
+import {
+  employeeColorContrast,
+  improvedEmployeeColor,
+} from "../lib/employee-color";
 import {
   workspaceEmployeesApi,
   type WorkspaceEmployee,
@@ -66,9 +72,11 @@ const requestMessage = (error: unknown) =>
 export function WorkspaceTeamPage({
   businessId,
   businessName,
+  organizationId,
 }: {
   businessId: string;
   businessName: string;
+  organizationId: string;
 }) {
   const [employees, setEmployees] = useState<WorkspaceEmployee[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +86,9 @@ export function WorkspaceTeamPage({
   const [form, setForm] = useState<EmployeeForm>(emptyEmployee);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "quadrant">("list");
+  const dark = useComputedColorScheme("light") === "dark";
+  const colorContrast = employeeColorContrast(form.color, dark);
 
   useEffect(() => {
     let active = true;
@@ -196,120 +207,140 @@ export function WorkspaceTeamPage({
         </Alert>
       )}
 
-      <Paper p="lg" radius="lg" withBorder>
-        {!employees ? (
-          <Stack gap="sm">
-            {Array.from({ length: 4 }, (_, index) => (
-              <Skeleton height={64} key={index} />
-            ))}
-          </Stack>
-        ) : employees.length ? (
-          <Table.ScrollContainer minWidth={720}>
-            <Table highlightOnHover striped verticalSpacing="sm">
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Empleado</Table.Th>
-                  <Table.Th>Contacto</Table.Th>
-                  <Table.Th>Acceso</Table.Th>
-                  <Table.Th>Notas</Table.Th>
-                  <Table.Th>Acciones</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {employees.map((employee) => (
-                  <Table.Tr key={employee.id}>
-                    <Table.Td>
-                      <Group gap="sm" wrap="nowrap">
-                        <Avatar
-                          color="bukioo"
-                          radius="xl"
-                          style={
-                            employee.color
-                              ? { backgroundColor: employee.color }
-                              : undefined
-                          }
-                        >
-                          {employee.first_name.charAt(0)}
-                          {employee.last_name.charAt(0)}
-                        </Avatar>
-                        <div>
-                          <Text fw={700} size="sm">
-                            {employee.first_name} {employee.last_name}
-                          </Text>
-                          <Text c="dimmed" size="xs">
-                            Ficha de agenda
-                          </Text>
-                        </div>
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm">{employee.email ?? "Sin correo"}</Text>
-                      <Text c="dimmed" size="xs">
-                        {employee.phone ?? "Sin teléfono"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge
-                        color={employee.user_id ? "teal" : "gray"}
-                        variant="light"
-                      >
-                        {employee.user_id
-                          ? "Cuenta vinculada"
-                          : "Sin cuenta vinculada"}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text c="dimmed" lineClamp={1} size="sm">
-                        {employee.notes ?? "Sin notas"}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Button
-                          leftSection={<Pencil size={14} />}
-                          onClick={() => openEmployee(employee)}
-                          size="xs"
-                          variant="default"
-                        >
-                          Gestionar
-                        </Button>
-                        <WorkspaceEmployeeActions
-                          key={`${businessId}:${employee.id}:${version}`}
-                          businessId={businessId}
-                          employee={employee}
-                          disabled={saving}
-                          onChanged={(message) => {
-                            setNotice(message ?? null);
-                            setVersion((value) => value + 1);
-                          }}
-                        />
-                        <EmployeeWorkingHours
-                          key={`hours:${businessId}:${employee.id}`}
-                          businessId={businessId}
-                          employeeId={employee.id}
-                          employeeName={`${employee.first_name} ${employee.last_name}`}
-                          disabled={saving}
-                        />
-                      </Group>
-                    </Table.Td>
+      <Group gap="xs">
+        <Button
+          variant={view === "list" ? "filled" : "default"}
+          aria-pressed={view === "list"}
+          onClick={() => setView("list")}
+        >
+          Empleados
+        </Button>
+        <Button
+          variant={view === "quadrant" ? "filled" : "default"}
+          aria-pressed={view === "quadrant"}
+          onClick={() => setView("quadrant")}
+        >
+          Cuadrante
+        </Button>
+      </Group>
+      {view === "quadrant" && employees ? (
+        <Paper p="lg" radius="lg" withBorder>
+          <TeamQuadrant
+            key={businessId}
+            businessId={businessId}
+            organizationId={organizationId}
+            employees={employees}
+          />
+        </Paper>
+      ) : (
+        <Paper p="lg" radius="lg" withBorder>
+          {!employees ? (
+            <Stack gap="sm">
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton height={64} key={index} />
+              ))}
+            </Stack>
+          ) : employees.length ? (
+            <Table.ScrollContainer minWidth={720}>
+              <Table highlightOnHover striped verticalSpacing="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Empleado</Table.Th>
+                    <Table.Th>Contacto</Table.Th>
+                    <Table.Th>Acceso</Table.Th>
+                    <Table.Th>Notas</Table.Th>
+                    <Table.Th>Acciones</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        ) : (
-          <Stack align="center" gap="sm" py="xl">
-            <ThemeIcon color="gray" radius="xl" size={48} variant="light">
-              <UsersRound size={24} />
-            </ThemeIcon>
-            <Text fw={700}>Aún no hay empleados</Text>
-            <Text c="dimmed" size="sm">
-              Añade al primer miembro del equipo para asignarle servicios y
-              horarios después.
-            </Text>
-          </Stack>
-        )}
-      </Paper>
+                </Table.Thead>
+                <Table.Tbody>
+                  {employees.map((employee) => (
+                    <Table.Tr key={employee.id}>
+                      <Table.Td>
+                        <Group gap="sm" wrap="nowrap">
+                          <EmployeeAvatar
+                            firstName={employee.first_name}
+                            lastName={employee.last_name}
+                            color={employee.color}
+                          />
+                          <div>
+                            <Text fw={700} size="sm">
+                              {employee.first_name} {employee.last_name}
+                            </Text>
+                            <Text c="dimmed" size="xs">
+                              Ficha de agenda
+                            </Text>
+                          </div>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{employee.email ?? "Sin correo"}</Text>
+                        <Text c="dimmed" size="xs">
+                          {employee.phone ?? "Sin teléfono"}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={employee.user_id ? "teal" : "gray"}
+                          variant="light"
+                        >
+                          {employee.user_id
+                            ? "Cuenta vinculada"
+                            : "Sin cuenta vinculada"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text c="dimmed" lineClamp={1} size="sm">
+                          {employee.notes ?? "Sin notas"}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Button
+                            leftSection={<Pencil size={14} />}
+                            onClick={() => openEmployee(employee)}
+                            size="xs"
+                            variant="default"
+                          >
+                            Gestionar
+                          </Button>
+                          <WorkspaceEmployeeActions
+                            key={`${businessId}:${employee.id}:${version}`}
+                            businessId={businessId}
+                            employee={employee}
+                            disabled={saving}
+                            onChanged={(message) => {
+                              setNotice(message ?? null);
+                              setVersion((value) => value + 1);
+                            }}
+                          />
+                          <EmployeeWorkingHours
+                            key={`hours:${businessId}:${employee.id}`}
+                            businessId={businessId}
+                            employeeId={employee.id}
+                            employeeName={`${employee.first_name} ${employee.last_name}`}
+                            disabled={saving}
+                          />
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          ) : (
+            <Stack align="center" gap="sm" py="xl">
+              <ThemeIcon color="gray" radius="xl" size={48} variant="light">
+                <UsersRound size={24} />
+              </ThemeIcon>
+              <Text fw={700}>Aún no hay empleados</Text>
+              <Text c="dimmed" size="sm">
+                Añade al primer miembro del equipo para asignarle servicios y
+                horarios después.
+              </Text>
+            </Stack>
+          )}
+        </Paper>
+      )}
 
       <Modal
         centered
@@ -372,6 +403,21 @@ export function WorkspaceTeamPage({
               onChange={(value) => updateForm("color", value)}
               value={form.color}
             />
+            {colorContrast !== null && colorContrast < 4.5 && (
+              <Alert color="yellow">
+                Este tono puede dificultar la lectura de las iniciales.
+                <Button
+                  variant="subtle"
+                  size="xs"
+                  disabled={saving}
+                  onClick={() =>
+                    updateForm("color", improvedEmployeeColor(form.color, dark))
+                  }
+                >
+                  Mejorar contraste
+                </Button>
+              </Alert>
+            )}
             <Textarea
               label="Notas internas"
               minRows={3}

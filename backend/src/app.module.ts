@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { SchedulingModule } from "./scheduling/scheduling.module";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { DatabaseModule } from "./database/database.module";
@@ -121,6 +122,7 @@ import Joi from "joi";
     ServicesModule,
     CustomersModule,
     WorkingHoursModule,
+    SchedulingModule,
     CalendarBlocksModule,
     AppointmentsModule,
     AuditModule,

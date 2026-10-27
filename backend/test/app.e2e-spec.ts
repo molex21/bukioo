@@ -156,11 +156,18 @@ runE2e("HTTP integration", () => {
 
   it("allows only one confirmed appointment for simultaneous requests in the same slot", async () => {
     const fixture = await createAppointmentFixture();
+    // The fixture works on Mondays. Keep the race in the future instead of
+    // using a fixed date which eventually starts failing temporal validation.
+    const nextMonday = new Date();
+    nextMonday.setUTCDate(
+      nextMonday.getUTCDate() + ((8 - nextMonday.getUTCDay()) % 7 || 7),
+    );
+    nextMonday.setUTCHours(10, 0, 0, 0);
     const body = {
       customerId: fixture.customerId,
       employeeId: fixture.employeeId,
       serviceId: fixture.serviceId,
-      startAt: "2026-09-07T10:00:00.000Z",
+      startAt: nextMonday.toISOString(),
     };
     const createRequest = () =>
       request(app.getHttpServer())

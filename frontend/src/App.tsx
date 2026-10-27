@@ -28,7 +28,7 @@ function PlaceholderPage({ icon: Icon, eyebrow, title, description, action }: Pl
         <p className="eyebrow">{eyebrow}</p>
         <h1 id="page-title">{title}</h1>
         <p className="placeholder-description">{description}</p>
-        <span className="status-chip">Base de interfaz preparada</span>
+        <span className="status-chip">Próximamente</span>
         {action}
       </section>
     </main>

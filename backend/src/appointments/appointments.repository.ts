@@ -221,21 +221,13 @@ export class AppointmentsRepository {
     occupiedEndAt: Date,
   ): Promise<boolean> {
     const result = await this.databaseService.query<{ exists: boolean }>(
-      `SELECT EXISTS (SELECT 1 FROM employee_working_hours
-        WHERE employee_id = $1 AND business_id = $2 AND organization_id = $3
-          AND day_of_week = EXTRACT(DOW FROM $4::timestamptz AT TIME ZONE $6)::smallint
-          AND start_time <= ($4::timestamptz AT TIME ZONE $6)::time
-          AND end_time >= ($5::timestamptz AT TIME ZONE $6)::time
-          AND ($4::timestamptz AT TIME ZONE $6)::date = ($5::timestamptz AT TIME ZONE $6)::date
-          AND (valid_from IS NULL OR valid_from <= ($4::timestamptz AT TIME ZONE $6)::date)
-          AND (valid_to IS NULL OR valid_to >= ($4::timestamptz AT TIME ZONE $6)::date)) AS exists`,
+      `SELECT scheduling_covers($3::uuid,$2::uuid,$1::uuid,$4::timestamptz,$5::timestamptz) AS exists`,
       [
         context.employee_id,
         context.business_id,
         context.organization_id,
         occupiedStartAt,
         occupiedEndAt,
-        context.timezone,
       ],
     );
     return result.rows[0]?.exists ?? false;

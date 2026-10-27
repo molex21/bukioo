@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
+import { schedulingError } from "./scheduling-error";
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -35,7 +36,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     text: string,
     params: unknown[] = [],
   ): Promise<QueryResult<T>> {
-    return this.pool.query<T>(text, params);
+    try {
+      return await this.pool.query<T>(text, params);
+    } catch (error) {
+      throw schedulingError(error);
+    }
   }
 
   async transaction<T>(
@@ -51,7 +56,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       return result;
     } catch (error: unknown) {
       await client.query("ROLLBACK");
-      throw error;
+      throw schedulingError(error);
     } finally {
       client.release();
     }

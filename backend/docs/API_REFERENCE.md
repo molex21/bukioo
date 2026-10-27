@@ -1,5 +1,8 @@
 # BUKIOO API Reference
 
+Cuadrante laboral, plantillas, ciclos y ausencias: contratos y requisitos de
+esquema en [SCHEDULING_API.md](SCHEDULING_API.md).
+
 Guia operativa para frontend e integraciones. Refleja los controllers y DTOs
 actuales. Base URL local: `http://localhost:3000/api/v1`.
 

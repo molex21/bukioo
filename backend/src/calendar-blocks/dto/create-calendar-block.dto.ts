@@ -16,6 +16,7 @@ export const CALENDAR_BLOCK_TYPES = [
   "HOLIDAY",
   "MANUAL_BLOCK",
   "OTHER",
+  "PERMISSION",
 ] as const;
 
 export class CreateCalendarBlockDto {

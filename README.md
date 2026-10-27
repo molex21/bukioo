@@ -358,7 +358,9 @@ npm run check:frontend
 ```
 
 El script `npm run check` ejecuta las pruebas de scripts, el lint y las pruebas
-unitarias del backend, el lint del frontend y las compilaciones de ambos paquetes. Las pruebas E2E,
+unitarias del backend, el lint y las pruebas de fechas/contraste del frontend y
+las compilaciones de ambos paquetes. Las pruebas frontend usan Node con soporte
+nativo de TypeScript; el entorno comprobado es Node 24. Las pruebas E2E,
 que requieren `DATABASE_URL_TEST` y PostgreSQL, se ejecutan por separado.
 
 ## Docker y variables de entorno

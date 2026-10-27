@@ -158,6 +158,15 @@ móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/fron
 
 ### 3.3 Asignaciones y horarios
 
+- [x] Mostrar cuadrante de consulta semanal en Equipo con turnos y bloqueos,
+      filtro de empleado, navegación y lista por día en móvil.
+- [x] Implementar edición de días, plantillas y rotaciones desde cuadrante;
+      requiere migraciones de planificación antes de usarlo en desarrollo.
+- [x] Valorar y aprobar nuevo cuadrante con plantillas, rotaciones, pausas,
+      vacaciones y permisos; sustituirá progresivamente al editor semanal.
+      Requisitos y plan propuestos en specs/008-cuadrante-equipo/.
+- [x] Avatar compartido con borde/iniciales del color y fondo suave; cálculo de
+      contraste y corrección voluntaria. Verificación visual de temas pendiente.
 - [x] Crear selector de empleados activos asignados a cada servicio existente.
 - [x] Avisar cuando un servicio queda sin empleados: el backend admite guardar
       configuración incompleta. Para obtener franjas reservables necesita
@@ -173,10 +182,13 @@ móvil y entorno limpio están en [`docs/frontend-verification.md`](../docs/fron
 
 ### 3.4 Bloqueos
 
-- [ ] Crear listado de bloqueos por rango y empleado.
-- [ ] Crear formulario para descanso, vacaciones, reunion y ausencia.
-- [ ] Permitir editar y eliminar bloqueos.
-- [ ] Refrescar agenda y disponibilidad tras cada cambio.
+- [x] Mostrar bloqueos por rango y empleado en cuadrante.
+- [x] Formulario de pausas, vacaciones, permisos, reunión y otras ausencias.
+- [x] Editar y retirar ausencias futuras del empleado con comprobación de citas.
+- [x] Actualizar el cuadrante tras cambios y compartir horario efectivo con
+      disponibilidad/validación de citas. Agenda operativa completa sigue pendiente.
+- [ ] Aplicar migraciones en desarrollo con autorización y verificar flujos
+      visuales, responsive, teclado y permisos desde navegador.
 
 ## Bloque 4 — Agenda y citas
 

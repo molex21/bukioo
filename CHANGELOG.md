@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+- Cuadrante editable por día, descansos explícitos, plantillas/ciclos con desfase
+  individual, pausas y ausencias por horas/días, con previsualización y versiones.
+- Horario efectivo compartido con reservas y protección SQL ante cambios
+  incompatibles con citas futuras, con pruebas HTTP y PostgreSQL aisladas.
+- Avatar compartido de empleado y aviso de contraste con corrección voluntaria.
+- Vista semanal de consulta del cuadrante en Equipo: turnos, bloqueos,
+  navegación por semanas, filtro de empleado y presentación por días en móvil.
+- Identidad de empleados en Equipo con borde e iniciales del color seleccionado
+  y fondo suave del mismo tono.
 - Editor semanal de horarios de empleados, con turnos partidos, validación y confirmación de semana vacía.
 
 - Asignación de empleados activos a servicios desde el catálogo, con selección

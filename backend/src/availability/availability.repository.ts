@@ -98,7 +98,13 @@ export class AvailabilityRepository {
     to: Date,
   ): Promise<AvailableSlot[]> {
     const result = await this.databaseService.query<AvailableSlot>(
-      `WITH candidate_slots AS (
+      `WITH effective_days AS MATERIALIZED (
+        SELECT d.attention FROM generate_series(($2::timestamptz AT TIME ZONE $1)::date::timestamp,
+          ($3::timestamptz AT TIME ZONE $1)::date::timestamp, interval '1 day') day
+        CROSS JOIN LATERAL scheduling_day($8::uuid,$7::uuid,$6::uuid,day::date) d
+      ), effective AS MATERIALIZED (
+        SELECT coalesce(range_agg(piece),'{}'::tstzmultirange) AS hours FROM effective_days CROSS JOIN LATERAL unnest(attention) piece
+      ), candidate_slots AS (
         SELECT local_start, local_start AT TIME ZONE $1 AS start_at
         FROM generate_series(
           date_trunc('day', $2::timestamptz AT TIME ZONE $1),
@@ -106,28 +112,18 @@ export class AvailabilityRepository {
           make_interval(mins => $4::integer)
         ) AS local_start
       )
-      SELECT candidate_slots.start_at AS "startAt",
+      SELECT DISTINCT candidate_slots.start_at AS "startAt",
         candidate_slots.start_at + make_interval(mins => $5::integer) AS "endAt"
       FROM candidate_slots
-      INNER JOIN employee_working_hours
-        ON employee_working_hours.employee_id = $6::uuid
-        AND employee_working_hours.business_id = $7::uuid
-        AND employee_working_hours.organization_id = $8::uuid
-        AND employee_working_hours.day_of_week = EXTRACT(DOW FROM candidate_slots.local_start)::integer
-        AND (employee_working_hours.valid_from IS NULL
-          OR candidate_slots.local_start::date >= employee_working_hours.valid_from)
-        AND (employee_working_hours.valid_to IS NULL
-          OR candidate_slots.local_start::date <= employee_working_hours.valid_to)
+      CROSS JOIN effective
       WHERE candidate_slots.start_at >= $2::timestamptz
         AND candidate_slots.start_at + make_interval(mins => $5::integer) <= $3::timestamptz
         AND candidate_slots.start_at >= NOW() + make_interval(mins => $9::integer)
         AND candidate_slots.local_start::date <=
           (NOW() AT TIME ZONE $1)::date + $10::integer
         AND ($11::boolean OR candidate_slots.local_start::date > (NOW() AT TIME ZONE $1)::date)
-        AND candidate_slots.start_at - make_interval(mins => $12::integer) >=
-          ((candidate_slots.local_start::date + employee_working_hours.start_time) AT TIME ZONE $1)
-        AND candidate_slots.start_at + make_interval(mins => $5::integer + $13::integer) <=
-          ((candidate_slots.local_start::date + employee_working_hours.end_time) AT TIME ZONE $1)
+        AND effective.hours @> tstzrange(candidate_slots.start_at-make_interval(mins=>$12::integer),
+          candidate_slots.start_at+make_interval(mins=>$5::integer+$13::integer),'[)')
         AND NOT EXISTS (
           SELECT 1 FROM appointments
           WHERE appointments.business_id = $7::uuid

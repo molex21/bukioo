@@ -6,6 +6,18 @@ el estado real del repositorio y de la API.
 
 ## Principios de implementacion
 
+Segunda revisión del 02/11: biblioteca de plantillas, semana seleccionable,
+pausas computables y rotaciones con intervalo obligatorio implementados.
+Migración 20261102150000 probada y aplicada en desarrollo con permiso separado;
+revisión visual pendiente. Evidencia en specs/008-cuadrante-equipo/verification-week-editor.md.
+
+Ampliación de horarios del 02/11: plantillas diarias separadas de rotaciones,
+guardado con comprobación automática, reasignación conjunta de citas y editor
+semanal con vigencia implementados. Requiere migración 20261102120000; aplicada
+en pruebas y después en desarrollo con autorización separada. Pendiente revisión visual/manual.
+En la revisión de frontend, rediseñar visualmente el cuadrante y su selector de
+semana; no se ha acordado ni aplicado todavía ese diseño.
+
 - La API se consume desde `VITE_API_URL`, cuya base local es
   `http://localhost:3000/api/v1`.
 - El access token solo vive en memoria. Los refresh tokens son cookies HttpOnly.

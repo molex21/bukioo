@@ -1,5 +1,19 @@
 # Planes de funcionalidades pendientes
 
+Última revisión del 02/11: biblioteca de plantillas, semana seleccionable,
+pausas computables y rotaciones con fechas implementadas según el
+[plan aprobado](008-cuadrante-equipo/redesign-week-editor-plan.md).
+[Evidencia](008-cuadrante-equipo/verification-week-editor.md): controles completos
+y 50 E2E correctos; migración 20261102150000 aplicada en pruebas y después en
+desarrollo con permiso separado. La revisión visual sigue pendiente.
+
+02/11: requisitos y plan de [usabilidad de horarios](008-cuadrante-equipo/revision-usabilidad.md)
+aprobados e implementados. Evidencia en
+[verification-usability.md](008-cuadrante-equipo/verification-usability.md).
+La migración nueva está aplicada en pruebas y después en desarrollo con permiso separado.
+Pendientes visuales: cuadrante, selector de semana y revisión general de frontend.
+Las notas inferiores del 27/10 y 18/10 son históricas, no el estado de esta entrega.
+
 27/10: cuadrante completo implementado y probado con migraciones en base aislada;
 ambas aplicadas después en desarrollo con autorización. Evidencia actual en
 [verification-full.md](008-cuadrante-equipo/verification-full.md). Habilitación

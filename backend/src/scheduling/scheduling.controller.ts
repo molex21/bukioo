@@ -20,6 +20,21 @@ import { SchedulingCommandDto, TemplateDto } from "./scheduling.dto";
 @UseGuards(JwtAuthGuard)
 export class SchedulingController {
   constructor(private readonly service: SchedulingService) {}
+  @Get("reassignment-options/:appointmentId") reassignmentOptions(
+    @Param("businessId", ParseUUIDPipe) biz: string,
+    @Param("appointmentId", ParseUUIDPipe) appointment: string,
+    @CurrentUser() actor: string,
+  ) {
+    return this.service.reassignmentOptions(biz, actor, appointment);
+  }
+  @Get("weekly-base/:employeeId") weeklyBase(
+    @Param("businessId", ParseUUIDPipe) biz: string,
+    @Param("employeeId", ParseUUIDPipe) employee: string,
+    @Query("from") from: string | undefined,
+    @CurrentUser() actor: string,
+  ) {
+    return this.service.weeklyBase(biz, actor, employee, from);
+  }
   @Get("quadrant") quadrant(
     @Param("businessId", ParseUUIDPipe) biz: string,
     @Query("from") from: string,

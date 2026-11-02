@@ -1,8 +1,89 @@
 # Memoria de BUKIOO
 
-Actualizada: 27/10/2026. Estado real, decisiones y continuidad; sin secretos.
+Actualizada: 02/11/2026. Estado real, decisiones y continuidad; sin secretos.
 
 ## Primer paso de la próxima sesión: revisar antes de avanzar
+
+### Entrega de usabilidad, 02/11/2026
+
+Pendiente para la revisión futura del frontend: rediseñar el selector de
+empleados de "Asignar ciclo", además del cuadrante y selector de semana.
+Anotado en specs/008-cuadrante-equipo/redesign-week-editor-plan.md; no cambiarlo
+ahora por esta petición.
+
+Último ajuste solicitado: simplificar asignación de ciclos a elegir plantilla y
+empleados, manteniendo inicio/fin. Añadida creación de rotación dentro de la
+asignación; al guardar queda seleccionada y conserva empleados y fechas.
+Semana inicial por empleado queda en opciones desplegables, solo en rotaciones
+de más de una semana. El resto del flujo se mantiene; sin cambios de esquema.
+
+Último ajuste aprobado mediante "go": editor de turnos abierto automáticamente
+al seleccionar días; sin botón "Definir turnos". Si los horarios difieren,
+empieza vacío y exige edición explícita o plantilla antes de sustituirlos.
+Revisados formularios: plantilla diaria sin fechas/días; rotación define semanas
+y las fechas se eligen al asignarla. Textos aclarados en biblioteca y horario
+del empleado. No requiere migración. Pendiente comprobar visualmente este ajuste.
+
+Nuevo feedback manual: el usuario rechaza el selector para editar plantillas y
+los controles de copia de días. Requisitos aprobados mediante "go" en
+specs/008-cuadrante-equipo/redesign-week-editor.md: biblioteca con botón "Nueva",
+semana tipo cuadrante con selección múltiple para aplicar plantilla/turno,
+horas estimadas y casilla por pausa para computarla como trabajo, y rotaciones
+con inicio/fin obligatorios en la interfaz. Las pausas siempre bloquean citas,
+computen o no. Plan técnico aprobado mediante "sí" e implementado:
+specs/008-cuadrante-equipo/redesign-week-editor-plan.md. Evidencia actual en
+specs/008-cuadrante-equipo/verification-week-editor.md. Biblioteca, selección
+semanal y de fechas, horas estimadas y límites de rotaciones listos para repaso.
+
+Migración 20261102150000 probada primero en bukioo_scheduling_20261027_test y
+aplicada después a localhost/bukioo con autorización separada mediante "go".
+Desarrollo: 37 aplicadas, ninguna pendiente. Función de cálculo y lectura real
+verificadas. No volver a ejecutar migraciones a ciegas. Controles completos correctos:
+12 pruebas de scripts, 459 backend, 22 helpers frontend y 50 E2E aislados.
+La estimación nominal cubre todo el intervalo; el detalle/cálculo real de preview
+se limita explícitamente a 42 días. Revisión visual/manual aún pendiente.
+
+Requisitos y plan aprobados. Implementados plantillas diarias/rotaciones
+separadas, carga automática de turnos, selección de fechas concretas, guardado
+con comprobación automática, alerta al restablecer, reasignación atómica de
+citas y nuevo editor semanal con pausas/noches/copia/vigencia. Evidencia y
+límites: specs/008-cuadrante-equipo/verification-usability.md.
+
+Migración 20261102120000 probada primero en bukioo_scheduling_20261027_test y
+aplicada después a localhost/bukioo con autorización separada mediante "go".
+Desarrollo: 36 migraciones aplicadas, ninguna pendiente; esquema y lectura del
+horario efectivo verificados. No se ha hecho commit/push de esta entrega.
+Pruebas: 45 E2E correctos en base aislada; comprobación completa en evidencia.
+La revisión visual/manual del nuevo flujo sigue pendiente; Playwright pausado.
+
+Observaciones que motivaron la entrega (implementadas salvo el diseño global):
+
+- Avatar aprobado por el usuario en el tema disponible. No tiene modo oscuro;
+  su comprobación visual sigue sin realizarse, no añadirlo por esta observación.
+- Pendiente para la revisión de frontend: mejorar visualmente el cuadrante y
+  replantear el selector de semana; todavía no se ha acordado su diseño.
+- La creación de plantillas resulta confusa. Se necesitan plantillas de turno
+  aplicables a días elegidos, además de los ciclos repetitivos actuales.
+- Al elegir una plantilla, cargar sus turnos automáticamente en el borrador,
+  sin un botón adicional de copia y sin guardar hasta confirmar.
+- Aprobado e implementado: un solo botón "Confirmar y guardar" que
+  compruebe primero los cambios y guarde solo si son válidos; conservar la
+  revalidación transaccional y mostrar conflictos comprensibles.
+- Aclarar "Horario habitual": retirar la excepción de una fecha recupera el
+  ciclo asignado o, si no existe, el horario semanal; no elimina ausencias.
+- El usuario pide también rediseñar el editor del horario habitual, no solo
+  cambiar su nombre. Usar "Restablecer horario previsto" para recuperar un día
+  y mostrar antes de confirmar una alerta con fecha, turnos y pausas resultantes
+  o "Día libre", origen del horario y ausencias que continúan aplicándose.
+- Incorporar al diseño la opción de reasignar una cita afectada a otra persona:
+  comprobar servicio asignado, disponibilidad, pausas, ausencias, solapamientos,
+  permisos y alcance de empresa. No reasignar automáticamente ni presentar
+  una cita como resuelta hasta confirmar el cambio. Definir transacción y
+  concurrencia según el plan técnico del flujo conjunto ya implementado.
+- Explicar que tener citas no impide cualquier edición: el cambio se rechaza
+  si deja citas fuera del horario de atención. Cualquier opción de guardar
+  aun con citas afectadas requiere acordar una política antes de implementarla.
+
 
 Por petición del usuario, revisar primero todo lo implementado en esta sesión.
 No empezar otra funcionalidad ni dar por comprobada la interfaz solo por compilar.
@@ -30,8 +111,8 @@ pausa hasta indicación del usuario. La revisión global con skills sigue pendie
 
 ## Estado actual comprobado
 
-- Rama de trabajo mvp. Último commit confirmado antes de esta entrega: 7504c6a,
-  sincronizado con origin/mvp el 18/10. Comprobar Git en cada sesión.
+- Rama de trabajo mvp. Último commit d6950d3, sincronizado con origin/mvp;
+  la entrega de usabilidad del 02/11 está sin commit. Comprobar Git en cada sesión.
 - SaaS multiempresa: React/TypeScript/Vite/Mantine y NestJS/PostgreSQL/dbmate,
   SQL parametrizado. Contratos reales prevalecen sobre documentación histórica.
 - Cuadrante completo implementado el 27/10: excepciones por fecha, plantillas,

@@ -1,4 +1,4 @@
-import {
+﻿import {
   Button,
   Checkbox,
   Group,
@@ -24,7 +24,7 @@ export function ScheduleDayEditor({
   businessId,
   day,
   employee,
-  templates,
+  templates: availableTemplates,
   timezone,
   onSaved,
   onBusy,
@@ -42,6 +42,7 @@ export function ScheduleDayEditor({
   const [busy, setBusy] = useState(false);
   const [templateId, setTemplateId] = useState<string | null>(null),
     [week, setWeek] = useState("0");
+  const templates = availableTemplates.filter((t) => t.kind === "DAY");
   const [block, setBlock] = useState<ScheduleBlock | null>(null);
   const [blockType, setBlockType] = useState("VACATION"),
     [from, setFrom] = useState(day.date),
@@ -61,7 +62,12 @@ export function ScheduleDayEditor({
   };
   const command =
     mode === "day"
-      ? { ...common, type: "day", date: day.date, spans }
+      ? {
+          ...common,
+          type: "day",
+          date: day.date,
+          spans,
+        }
       : mode === "resetDay"
         ? { ...common, type: "resetDay", date: day.date }
         : mode === "deleteBlock"
@@ -109,7 +115,7 @@ export function ScheduleDayEditor({
         data={[
           { value: "day", label: "Turnos del día" },
           { value: "absence", label: "Ausencia" },
-          { value: "resetDay", label: "Horario habitual" },
+          { value: "resetDay", label: "Restablecer horario previsto" },
         ]}
       />
       {mode === "day" && (
@@ -127,19 +133,39 @@ export function ScheduleDayEditor({
               onChange={(value) => {
                 setTemplateId(value);
                 setWeek("0");
+                const selected = templates.find((item) => item.id === value);
+                if (selected)
+                  setSpans(
+                    structuredClone(
+                      selected.kind === "DAY"
+                        ? selected.pattern[0][0]
+                        : selected.pattern[0][
+                            new Date(`${day.date}T12:00Z`).getUTCDay()
+                          ],
+                    ),
+                  );
               }}
               data={templates.map((item) => ({
                 value: item.id,
                 label: item.name,
               }))}
             />
-            {template && (
+            {template?.kind === "CYCLE" && (
               <Select
                 label="Semana de la plantilla"
                 allowDeselect={false}
                 value={week}
                 disabled={busy}
-                onChange={(value) => setWeek(value ?? "0")}
+                onChange={(value) => {
+                  setWeek(value ?? "0");
+                  setSpans(
+                    structuredClone(
+                      template.pattern[Number(value ?? "0")][
+                        new Date(`${day.date}T12:00Z`).getUTCDay()
+                      ],
+                    ),
+                  );
+                }}
                 data={template.pattern.map((_, index) => ({
                   value: String(index),
                   label: `Semana ${index + 1}`,
@@ -147,23 +173,6 @@ export function ScheduleDayEditor({
               />
             )}
           </Group>
-          {template && (
-            <Button
-              variant="light"
-              disabled={busy}
-              onClick={() =>
-                setSpans(
-                  structuredClone(
-                    template.pattern[Number(week)][
-                      new Date(`${day.date}T12:00Z`).getUTCDay()
-                    ],
-                  ),
-                )
-              }
-            >
-              Copiar turnos de la plantilla
-            </Button>
-          )}
           <ScheduleSpansEditor
             disabled={busy}
             value={spans}

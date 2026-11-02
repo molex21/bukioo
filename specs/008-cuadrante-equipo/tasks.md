@@ -1,5 +1,23 @@
 # Tareas propuestas
 
+Última revisión: tareas de biblioteca, semana seleccionable y pausas computables
+en [redesign-week-editor-plan.md](redesign-week-editor-plan.md). Implementadas y
+probadas; migración 20261102150000 aplicada en desarrollo con autorización separada.
+
+## Ampliación de usabilidad, 02/11/2026
+
+- [x] Aprobar requisitos y después plan de revision-usabilidad.md.
+- [x] Comprobación automática antes de guardar y resumen al restablecer.
+- [x] Plantillas diarias separadas de rotaciones, carga automática y fechas elegidas.
+- [x] Reasignación de citas junto al horario, con disponibilidad, versiones y auditoría.
+- [x] Editor semanal con fecha de inicio, pausas/noches, plantillas y copia de días.
+- [x] Autorizar y aplicar migración 20261102120000 solo en base aislada de pruebas.
+- [x] Pruebas de integración y helper de guardado; evidencia en verification-usability.md.
+- [x] Autorizar y aplicar la migración nueva en desarrollo; 36 aplicadas, 0 pendientes.
+- [ ] Validación manual/visual de esta entrega; rediseño global del cuadrante y selector.
+
+## Entrega original
+
 Implementación completada para pruebas de integración, 27/10/2026. Verificación
 de interfaz pendiente; migraciones aplicadas en desarrollo con autorización.
 

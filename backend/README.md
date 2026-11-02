@@ -12,7 +12,11 @@ API REST de **BUKIOO** desarrollada con NestJS y TypeScript.
 El módulo de planificación incorpora excepciones por fecha, plantillas de
 turnos, ciclos de hasta 12 semanas y ausencias. Comparte horario efectivo con
 disponibilidad y validación de citas, y controla conflictos y cambios concurrentes.
-Requiere las migraciones 20261027190000 y 20261027191000 antes de arrancar el
+Añade plantillas diarias, horarios semanales con fecha de inicio y reasignación
+de citas junto al cambio de horario, sin escrituras parciales ni solapes nuevos.
+Las pausas pueden contar como trabajo estimado sin permitir citas en ellas.
+Incluye cálculo real por fecha y respeta el final de las rotaciones nocturnas.
+Requiere las migraciones 20261027190000, 20261027191000, 20261102120000 y 20261102150000 antes de arrancar el
 código nuevo contra una base existente. No se aplican automáticamente.
 Contratos, despliegue y reversión: [API del cuadrante](docs/SCHEDULING_API.md).
 La suite adicional scheduling.e2e-spec.ts requiere una base _test migrada.

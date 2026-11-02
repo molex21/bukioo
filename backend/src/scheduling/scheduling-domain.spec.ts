@@ -1,6 +1,33 @@
 import { date, pattern, spans } from "./scheduling-domain";
 const empty = () => Array.from({ length: 7 }, () => [] as unknown[]);
 describe("Scheduling domain", () => {
+  it("preserves per-pause work accounting without converting old pauses", () => {
+    expect(
+      spans([
+        {
+          start: 540,
+          end: 1020,
+          pauses: [
+            { start: 600, end: 630, countsAsWork: true },
+            { start: 720, end: 750, countsAsWork: false },
+          ],
+        },
+      ])[0].pauses.map((p) => p.countsAsWork),
+    ).toEqual([true, false]);
+    expect(
+      spans([{ start: 540, end: 1020, pauses: [{ start: 600, end: 630 }] }])[0]
+        .pauses[0],
+    ).not.toHaveProperty("countsAsWork");
+    expect(() =>
+      spans([
+        {
+          start: 540,
+          end: 1020,
+          pauses: [{ start: 600, end: 630, countsAsWork: "true" }],
+        },
+      ]),
+    ).toThrow();
+  });
   it("keeps an explicit rest day", () => {
     expect(spans([])).toEqual([]);
   });

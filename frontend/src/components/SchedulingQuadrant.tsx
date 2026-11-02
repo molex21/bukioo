@@ -1,6 +1,7 @@
 import {
   Alert,
   Button,
+  Checkbox,
   Group,
   Modal,
   Pagination,
@@ -12,7 +13,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../lib/api-client";
 import { workspaceBusinessesApi } from "../lib/workspace-businesses-api";
 import type { WorkspaceEmployee } from "../lib/workspace-employees-api";
@@ -28,6 +29,8 @@ import { ScheduleDayEditor } from "./ScheduleDayEditor";
 import { absenceTypes } from "../lib/scheduling-api";
 import { ScheduleAssignmentEditor } from "./ScheduleAssignmentEditor";
 import { ScheduleTemplateManager } from "./ScheduleTemplateManager";
+import { ScheduleDatesEditor } from "./ScheduleDatesEditor";
+import { formatWorkMinutes } from "../lib/schedule-editor";
 
 type Data = {
   key: string;
@@ -39,6 +42,11 @@ type Editor =
   | {
       type: "day";
       day: ScheduleDay;
+      employee: ScheduleQuadrant["employees"][number];
+    }
+  | {
+      type: "dates";
+      days: ScheduleDay[];
       employee: ScheduleQuadrant["employees"][number];
     }
   | { type: "templates" | "assign" };
@@ -59,6 +67,12 @@ export function SchedulingQuadrant({
     [error, setError] = useState<{ key: string; text: string } | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null),
     [busy, setBusy] = useState(false);
+  const [templateDirty, setTemplateDirty] = useState(false),
+    [discardTemplate, setDiscardTemplate] = useState(false);
+  const onTemplateDirty = useCallback((dirty: boolean) => {
+    setTemplateDirty(dirty);
+    if (!dirty) setDiscardTemplate(false);
+  }, []);
   const employeeKey = employees
     .map((item) => `${item.id}:${item.updated_at}`)
     .join();
@@ -72,6 +86,13 @@ export function SchedulingQuadrant({
     employeeKey,
   ]);
   const current = data?.key === key ? data : null;
+  const [selection, setSelection] = useState<{
+    key: string;
+    employeeId: string;
+    dates: string[];
+  }>({ key: "", employeeId: "", dates: [] });
+  const selected =
+    selection.key === key ? selection : { key, employeeId: "", dates: [] };
   const currentError = error?.key === key ? error.text : null;
   useEffect(() => {
     let active = true;
@@ -136,6 +157,27 @@ export function SchedulingQuadrant({
       }).format(new Date(instant));
     return (
       <Stack gap={5}>
+        <Checkbox
+          size="xs"
+          label="Seleccionar"
+          aria-label={`Seleccionar ${dateLabel(day)} de ${employee.first_name} ${employee.last_name}`}
+          checked={
+            selected.employeeId === employee.id && selected.dates.includes(day)
+          }
+          disabled={
+            day < dateInZone(new Date(), timezone) ||
+            (selected.dates.length > 0 && selected.employeeId !== employee.id)
+          }
+          onChange={(event) =>
+            setSelection({
+              key,
+              employeeId: employee.id,
+              dates: event.currentTarget.checked
+                ? [...selected.dates, day]
+                : selected.dates.filter((d) => d !== day),
+            })
+          }
+        />
         {entry.presence.length ? (
           entry.presence.map((span, index) => (
             <Text size="sm" fw={600} key={index}>
@@ -187,6 +229,12 @@ export function SchedulingQuadrant({
         <Text c="dimmed" size="xs">
           Presencia: {(Number(entry.presenceMinutes) / 60).toFixed(1)} h ·
           Atención: {(Number(entry.attentionMinutes) / 60).toFixed(1)} h
+        </Text>
+        <Text size="xs" fw={600}>
+          Trabajo estimado:{" "}
+          {formatWorkMinutes(
+            entry.workMinutes === null ? null : Number(entry.workMinutes),
+          )}
         </Text>
         <Button
           size="compact-xs"
@@ -287,6 +335,47 @@ export function SchedulingQuadrant({
         <Skeleton height={240} />
       ) : (
         <>
+          <Group>
+            <Text size="sm">
+              Selecciona fechas de un empleado para aplicar plantillas o turnos
+              juntos.
+            </Text>
+            {!!selected.dates.length && (
+              <>
+                <Text size="sm">
+                  {selected.dates.length} días seleccionados
+                </Text>
+                <Button
+                  variant="light"
+                  onClick={() => {
+                    const employee = current.quadrant.employees.find(
+                      (e) => e.id === selected.employeeId,
+                    );
+                    if (employee)
+                      setEditor({
+                        type: "dates",
+                        employee,
+                        days: current.quadrant.days.filter(
+                          (d) =>
+                            d.employeeId === employee.id &&
+                            selected.dates.includes(d.date),
+                        ),
+                      });
+                  }}
+                >
+                  Editar días seleccionados
+                </Button>
+                <Button
+                  variant="subtle"
+                  onClick={() =>
+                    setSelection({ key, employeeId: "", dates: [] })
+                  }
+                >
+                  Quitar selección
+                </Button>
+              </>
+            )}
+          </Group>
           <Text fw={600}>
             {dateLabel(current.dates[0])} – {dateLabel(current.dates[6])} ·{" "}
             {current.quadrant.timezone}
@@ -307,7 +396,24 @@ export function SchedulingQuadrant({
               <Table.Tbody>
                 {current.quadrant.employees.map((employee) => (
                   <Table.Tr key={employee.id}>
-                    <Table.Th scope="row">{name(employee)}</Table.Th>
+                    <Table.Th scope="row">
+                      {name(employee)}
+                      <Text size="xs" mt="xs">
+                        Semana:{" "}
+                        {formatWorkMinutes(
+                          current.quadrant.days
+                            .filter((d) => d.employeeId === employee.id)
+                            .some((d) => d.workMinutes === null)
+                            ? null
+                            : current.quadrant.days
+                                .filter((d) => d.employeeId === employee.id)
+                                .reduce(
+                                  (sum, d) => sum + Number(d.workMinutes),
+                                  0,
+                                ),
+                        )}
+                      </Text>
+                    </Table.Th>
                     {current.dates.map((day) => (
                       <Table.Td key={day}>{cell(employee, day)}</Table.Td>
                     ))}
@@ -350,17 +456,59 @@ export function SchedulingQuadrant({
         title={
           editor?.type === "day"
             ? `Planificación del ${dateLabel(editor.day.date)} · ${editor.employee.first_name}`
-            : editor?.type === "templates"
-              ? "Plantillas de turnos"
-              : "Asignar un ciclo"
+            : editor?.type === "dates"
+              ? `${editor.days.length} fechas · ${editor.employee.first_name}`
+              : editor?.type === "templates"
+                ? "Plantillas de turnos"
+                : "Asignar un ciclo"
         }
         onClose={() => {
-          if (!busy) setEditor(null);
+          if (!busy) {
+            if (editor?.type === "templates" && templateDirty)
+              setDiscardTemplate(true);
+            else setEditor(null);
+          }
         }}
         closeOnEscape={!busy}
         closeOnClickOutside={!busy}
         withCloseButton={!busy}
       >
+        {discardTemplate && editor?.type === "templates" && (
+          <Alert color="yellow" title="Hay cambios sin guardar" mb="md">
+            <Group>
+              <Button
+                disabled={busy}
+                color="red"
+                onClick={() => {
+                  setEditor(null);
+                  setDiscardTemplate(false);
+                  setTemplateDirty(false);
+                }}
+              >
+                Descartar y cerrar
+              </Button>
+              <Button
+                disabled={busy}
+                variant="default"
+                onClick={() => setDiscardTemplate(false)}
+              >
+                Seguir editando
+              </Button>
+            </Group>
+          </Alert>
+        )}
+        {current && editor?.type === "dates" && (
+          <ScheduleDatesEditor
+            key={`${editor.employee.id}:${editor.days.map((d) => d.date).join()}`}
+            businessId={businessId}
+            employee={editor.employee}
+            days={editor.days}
+            timezone={current.quadrant.timezone}
+            templates={current.templates}
+            onSaved={refresh}
+            onBusy={setBusy}
+          />
+        )}
         {current && editor?.type === "day" && (
           <ScheduleDayEditor
             key={`${editor.employee.id}:${editor.day.date}:${editor.employee.version}`}
@@ -375,14 +523,28 @@ export function SchedulingQuadrant({
         )}
         {current && editor?.type === "templates" && (
           <ScheduleTemplateManager
+            onDirtyChange={onTemplateDirty}
             businessId={businessId}
             templates={current.templates}
-            onSaved={refresh}
+            onSaved={() => setVersion((value) => value + 1)}
             onBusy={setBusy}
           />
         )}
         {current && editor?.type === "assign" && (
           <ScheduleAssignmentEditor
+            onTemplateCreated={(template) =>
+              setData((value) =>
+                value?.key === key
+                  ? {
+                      ...value,
+                      templates: [
+                        ...value.templates.filter((t) => t.id !== template.id),
+                        template,
+                      ],
+                    }
+                  : value,
+              )
+            }
             businessId={businessId}
             employees={current.quadrant.employees}
             templates={current.templates}

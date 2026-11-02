@@ -3,7 +3,7 @@ import { BadRequestException } from "@nestjs/common";
 export type Span = {
   start: number;
   end: number;
-  pauses: { start: number; end: number }[];
+  pauses: { start: number; end: number; countsAsWork?: boolean }[];
 };
 export type Pattern = Span[][][];
 const fail = (message: string): never => {
@@ -39,9 +39,17 @@ export function spans(value: unknown): Span[] {
       const pauses = ((input.pauses ?? []) as unknown[])
         .map((pause) => {
           const p = record(pause);
+          if (
+            p.countsAsWork !== undefined &&
+            typeof p.countsAsWork !== "boolean"
+          )
+            return fail("Indica si la pausa cuenta como tiempo de trabajo.");
           return {
             start: integer(p.start, start, end - 1),
             end: integer(p.end, start + 1, end),
+            ...(p.countsAsWork !== undefined
+              ? { countsAsWork: p.countsAsWork }
+              : {}),
           };
         })
         .sort((a, b) => a.start - b.start);

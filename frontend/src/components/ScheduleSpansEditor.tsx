@@ -8,6 +8,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import type { ScheduleSpan } from "../lib/scheduling-api";
+import { nominalMinutes, formatWorkMinutes } from "../lib/schedule-editor";
 const time = (minutes: number) =>
   minutes < 0
     ? ""
@@ -32,6 +33,9 @@ export function ScheduleSpansEditor({
     );
   return (
     <Stack gap="sm">
+      <Text size="sm" fw={600}>
+        Trabajo estimado: {formatWorkMinutes(nominalMinutes(value))}
+      </Text>
       {!value.length && (
         <Text c="dimmed" size="sm">
           Día libre
@@ -136,6 +140,7 @@ export function ScheduleSpansEditor({
                       pauses: span.pauses.map((item, i) =>
                         i === p
                           ? {
+                              ...item,
                               start: (item.start % 1440) + next,
                               end: item.end,
                             }
@@ -171,6 +176,19 @@ export function ScheduleSpansEditor({
                 >
                   Quitar pausa
                 </Button>
+                <Checkbox
+                  label="Cuenta como tiempo de trabajo"
+                  checked={pause.countsAsWork ?? false}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const countsAsWork = event.currentTarget.checked;
+                    update(index, {
+                      pauses: span.pauses.map((item, i) =>
+                        i === p ? { ...item, countsAsWork } : item,
+                      ),
+                    });
+                  }}
+                />
               </Group>
             ))}
             <Button

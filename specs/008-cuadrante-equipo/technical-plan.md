@@ -1,5 +1,14 @@
 # Diseño técnico completo del cuadrante
 
+Última revisión del 02/11: biblioteca y selección semanal implementadas según
+[plan aprobado](redesign-week-editor-plan.md); ver
+[evidencia](verification-week-editor.md). Migración 20261102150000 aplicada también
+en desarrollo con autorización separada; revisión manual pendiente.
+
+Ampliación del 02/11/2026: ver [revisión de usabilidad](revision-usabilidad.md)
+y [evidencia actual](verification-usability.md) para plantillas diarias,
+guardado automático, reasignaciones y editor del horario semanal con vigencia.
+
 27/10/2026. Segunda aprobación recibida mediante "go". Implementación preparada;
 ver verification-full.md para evidencia, decisiones finales y límites.
 El usuario autorizó primero la base de pruebas y, después de los controles,

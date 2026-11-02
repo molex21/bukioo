@@ -2,6 +2,25 @@
 
 ## Sin publicar
 
+- Editor de turnos abierto al seleccionar días y textos que distinguen la
+  plantilla diaria sin fechas de la asignación del horario a un empleado.
+
+- Biblioteca de plantillas con listado y botón "Nueva", edición semanal por
+  selección de días y aplicación de turnos o plantillas en lote.
+- Horas programadas estimadas con pausas computables opcionales; las pausas
+  siguen bloqueando citas. Cálculo nominal y cálculo real por fecha con DST.
+- Rotaciones con inicio/fin en interfaz, resumen del intervalo y recorte de
+  la última noche al finalizar la asignación. Migración 20261102150000 requerida.
+
+- Plantillas de turno aplicables a fechas elegidas, separadas de rotaciones;
+  carga automática del turno en el borrador al seleccionar la plantilla.
+- Guardado del cuadrante con comprobación automática y reasignación explícita
+  de citas afectadas a empleados disponibles, en una transacción conjunta.
+- Restablecimiento con resumen del horario previsto y nuevo editor semanal
+  con pausas, turnos nocturnos, copia de días y fecha de inicio.
+- Migración aditiva 20261102120000 para tipos de plantilla y bases semanales;
+  requiere aplicación explícita antes de usar el nuevo código.
+
 - Cuadrante editable por día, descansos explícitos, plantillas/ciclos con desfase
   individual, pausas y ausencias por horas/días, con previsualización y versiones.
 - Horario efectivo compartido con reservas y protección SQL ante cambios

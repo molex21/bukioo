@@ -13,10 +13,11 @@ export const absenceTypes = [
 export type ScheduleSpan = {
   start: number;
   end: number;
-  pauses: { start: number; end: number }[];
+  pauses: { start: number; end: number; countsAsWork?: boolean }[];
 };
 export type SchedulePattern = ScheduleSpan[][][];
 export type ShiftTemplate = {
+  kind: "DAY" | "CYCLE";
   id: string;
   name: string;
   pattern: SchedulePattern;
@@ -40,6 +41,7 @@ export type ScheduleDay = {
   presence: { startAt: string; endAt: string }[];
   attention: { startAt: string; endAt: string }[];
   presenceMinutes: number;
+  workMinutes: number | null;
   attentionMinutes: number;
   blocks: ScheduleBlock[];
 };
@@ -60,12 +62,56 @@ export type ScheduleQuadrant = {
   limit: number;
 };
 export type SchedulePreview = {
+  estimatedFrom?: string;
+  estimatedTo?: string;
+  estimatedTruncated?: boolean;
+  estimatedDays?: {
+    employeeId: string;
+    date: string;
+    minutes: number | null;
+  }[];
+  estimatedTotalMinutes?: number | null;
+  restoredDay?: {
+    spans: ScheduleSpan[];
+    origin: string;
+    ambiguous: boolean;
+    attention: { startAt: string; endAt: string }[];
+  };
   ok: boolean;
   preview: boolean;
   conflicts: { id: string; employeeId: string; startAt: string }[];
 };
+export type Reassignment = {
+  employeeName?: string;
+  startAt?: string;
+  appointmentId: string;
+  employeeId: string;
+  expectedEmployeeId: string;
+  expectedUpdatedAt: string;
+};
+export type ReassignmentOptions = Omit<Reassignment, "employeeId"> & {
+  serviceName: string;
+  startAt: string;
+  employees: { id: string; name: string }[];
+};
+export type WeeklyBase = {
+  week: ScheduleSpan[][];
+  version: number;
+  timezone: string;
+  from: string;
+  today: string;
+  nextDate: string | null;
+};
 const base = (biz: string) => `/businesses/${biz}/scheduling`;
 export const schedulingApi = {
+  weeklyBase: (biz: string, emp: string, from: string) =>
+    authenticatedApiRequest<WeeklyBase>(
+      `${base(biz)}/weekly-base/${emp}?${new URLSearchParams({ from })}`,
+    ),
+  reassignmentOptions: (biz: string, appointment: string) =>
+    authenticatedApiRequest<ReassignmentOptions>(
+      `${base(biz)}/reassignment-options/${appointment}`,
+    ),
   quadrant: (
     biz: string,
     from: string,
@@ -83,6 +129,7 @@ export const schedulingApi = {
     name: string,
     pattern: SchedulePattern,
     template?: ShiftTemplate,
+    kind: "DAY" | "CYCLE" = template?.kind ?? "CYCLE",
   ) =>
     authenticatedApiRequest<ShiftTemplate>(
       `${base(biz)}/templates${template ? `/${template.id}` : ""}`,
@@ -91,6 +138,7 @@ export const schedulingApi = {
         body: JSON.stringify({
           name,
           pattern,
+          kind,
           ...(template ? { expectedVersion: template.version } : {}),
         }),
       },

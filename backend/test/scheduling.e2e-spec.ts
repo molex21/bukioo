@@ -297,6 +297,383 @@ run("Scheduling PostgreSQL integration", () => {
       true,
     );
   });
+  const version = async () =>
+    (
+      await client.query<{ version: number }>(
+        "SELECT coalesce((SELECT version FROM employee_schedule_versions WHERE employee_id=$1),0) AS version",
+        [emp],
+      )
+    ).rows[0].version;
+  it("previews the actual restored base without deleting the exception", async () => {
+    await base();
+    await exception("2030-01-07", []);
+    const preview = await service().change(
+      biz,
+      actor,
+      {
+        type: "resetDay",
+        date: "2030-01-07",
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+      },
+      true,
+    );
+    expect(preview.restoredDay).toMatchObject({
+      origin: "base",
+      spans: [{ start: 540, end: 1020, pauses: [] }],
+    });
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      false,
+    );
+  });
+  it("stores daily templates separately and refuses to assign them as rotations", async () => {
+    const week = Array.from({ length: 7 }, () => [] as unknown[]);
+    week[0] = [
+      { start: 1320, end: 1560, pauses: [{ start: 1410, end: 1440 }] },
+    ];
+    const template = await service().saveTemplate(biz, actor, {
+      name: "Noche",
+      kind: "DAY",
+      pattern: [week],
+    });
+    expect(template.kind).toBe("DAY");
+    await expect(
+      service().change(
+        biz,
+        actor,
+        {
+          type: "assignment",
+          from: "2030-01-07",
+          employeeIds: [emp],
+          expectedVersions: { [emp]: 0 },
+          templateId: template.id,
+          templateVersion: template.version,
+        },
+        false,
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+  it("applies one daily shift to arbitrary dates without recurrence", async () => {
+    await service().change(
+      biz,
+      actor,
+      {
+        type: "days",
+        date: "2030-01-07",
+        dates: ["2030-01-07", "2030-01-09"],
+        employeeIds: [emp],
+        expectedVersions: { [emp]: 0 },
+        spans: [{ start: 540, end: 780 }],
+      },
+      false,
+    );
+    expect(await covers("2030-01-09T09:00+01", "2030-01-09T10:00+01")).toBe(
+      true,
+    );
+    expect(await covers("2030-01-14T09:00+01", "2030-01-14T10:00+01")).toBe(
+      false,
+    );
+  });
+  it("rolls back all selected dates when one affects an appointment", async () => {
+    await base();
+    const { customer, serviceId } = await appointmentData();
+    await insertAppointment(client, customer, serviceId);
+    const result = await service().change(
+      biz,
+      actor,
+      {
+        type: "days",
+        date: "2030-01-07",
+        dates: ["2030-01-07", "2030-01-09"],
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+        spans: [],
+      },
+      true,
+    );
+    expect(result.ok).toBe(false);
+    expect(
+      (
+        await client.query(
+          "SELECT 1 FROM employee_schedule_exceptions WHERE employee_id=$1",
+          [emp],
+        )
+      ).rowCount,
+    ).toBe(0);
+  });
+  it("keeps past base hours and later scheduled weeks, with pauses and overnight shifts", async () => {
+    await base();
+    const week = Array.from({ length: 7 }, () => [] as unknown[]);
+    week[1] = [
+      { start: 1320, end: 1560, pauses: [{ start: 1380, end: 1410 }] },
+    ];
+    const command = {
+      type: "weekly",
+      from: "2030-01-07",
+      week,
+      employeeIds: [emp],
+      expectedVersions: { [emp]: await version() },
+    };
+    await service().change(biz, actor, command, false);
+    expect(await covers("2029-12-31T09:00+01", "2029-12-31T10:00+01")).toBe(
+      true,
+    );
+    expect(await covers("2030-01-07T23:00+01", "2030-01-07T23:15+01")).toBe(
+      false,
+    );
+    expect(await covers("2030-01-08T00:00+01", "2030-01-08T01:00+01")).toBe(
+      true,
+    );
+    await service().change(
+      biz,
+      actor,
+      {
+        ...command,
+        from: "2030-02-04",
+        week: Array.from({ length: 7 }, () => []),
+        expectedVersions: { [emp]: await version() },
+      },
+      false,
+    );
+    const loaded = await service().weeklyBase(biz, actor, emp, "2030-01-07");
+    expect(loaded.nextDate).toBe("2030-02-04");
+    expect(loaded.week).toEqual(
+      week.map((d) => d.map((s) => ({ ...(s as object) }))),
+    );
+    expect(await covers("2030-02-04T22:00+01", "2030-02-04T23:00+01")).toBe(
+      false,
+    );
+  });
+
+  async function reassignmentFixture() {
+    await base();
+    const { customer, serviceId } = await appointmentData();
+    const target = randomUUID();
+    await client.query(
+      "INSERT INTO employees(id,organization_id,business_id,first_name,last_name) VALUES($1,$2,$3,'Other','Employee')",
+      [target, org, biz],
+    );
+    await client.query(
+      "INSERT INTO employee_services(organization_id,business_id,employee_id,service_id) VALUES($1,$2,$3,$4)",
+      [org, biz, target, serviceId],
+    );
+    await client.query(
+      "INSERT INTO employee_working_hours(organization_id,business_id,employee_id,day_of_week,start_time,end_time) VALUES($1,$2,$3,1,'09:00','17:00')",
+      [org, biz, target],
+    );
+    await insertAppointment(client, customer, serviceId);
+    const appointmentId = (
+      await client.query<{ id: string }>(
+        "SELECT id FROM appointments WHERE business_id=$1",
+        [biz],
+      )
+    ).rows[0].id;
+    await client.query(
+      "UPDATE appointments SET conflict_override=TRUE WHERE id=$1",
+      [appointmentId],
+    );
+    await client.query("SET CONSTRAINTS ALL IMMEDIATE");
+    const options = await service().reassignmentOptions(
+      biz,
+      actor,
+      appointmentId,
+    );
+    const reassignment = {
+      appointmentId,
+      employeeId: target,
+      expectedEmployeeId: options.expectedEmployeeId,
+      expectedUpdatedAt: options.expectedUpdatedAt,
+    };
+    const command = {
+      type: "day",
+      date: "2030-01-07",
+      spans: [],
+      employeeIds: [emp],
+      expectedVersions: { [emp]: await version() },
+      reassignments: [reassignment],
+    };
+    return { target, appointmentId, options, command };
+  }
+  it("previews and saves a reassignment and the schedule together without changing appointment snapshots", async () => {
+    const { target, appointmentId, options, command } =
+      await reassignmentFixture();
+    expect(options.employees).toContainEqual(
+      expect.objectContaining({ id: target }),
+    );
+    const before = (
+      await client.query<Record<string, unknown>>(
+        "SELECT * FROM appointments WHERE id=$1",
+        [appointmentId],
+      )
+    ).rows[0];
+    expect((await service().change(biz, actor, command, true)).ok).toBe(true);
+    expect(
+      (
+        await client.query<{ employee_id: string }>(
+          "SELECT employee_id FROM appointments WHERE id=$1",
+          [appointmentId],
+        )
+      ).rows[0].employee_id,
+    ).toBe(emp);
+    await service().change(biz, actor, command, false);
+    const after = (
+      await client.query<Record<string, unknown>>(
+        "SELECT * FROM appointments WHERE id=$1",
+        [appointmentId],
+      )
+    ).rows[0];
+    expect(after.employee_id).toBe(target);
+    expect(after.conflict_override).toBe(false);
+    for (const field of [
+      "start_at",
+      "end_at",
+      "price_amount",
+      "duration_minutes",
+      "status",
+      "service_id",
+    ])
+      expect(after[field]).toEqual(before[field]);
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      false,
+    );
+  });
+  it("rejects stale appointments and rolls back the schedule", async () => {
+    const { appointmentId, command } = await reassignmentFixture();
+    await client.query(
+      "UPDATE appointments SET status='CANCELLED' WHERE id=$1",
+      [appointmentId],
+    );
+    await expect(
+      service().change(biz, actor, command, false),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      true,
+    );
+    expect(
+      (
+        await client.query<{ employee_id: string }>(
+          "SELECT employee_id FROM appointments WHERE id=$1",
+          [appointmentId],
+        )
+      ).rows[0].employee_id,
+    ).toBe(emp);
+  });
+  it("rejects a destination that loses its service assignment", async () => {
+    const { target, command } = await reassignmentFixture();
+    await client.query("DELETE FROM employee_services WHERE employee_id=$1", [
+      target,
+    ]);
+    await expect(
+      service().change(biz, actor, command, false),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      true,
+    );
+  });
+  it("rejects a destination blocked after candidates were loaded", async () => {
+    const { target, command } = await reassignmentFixture();
+    await client.query(
+      "INSERT INTO calendar_blocks(organization_id,business_id,employee_id,type,start_at,end_at) VALUES($1,$2,$3,'VACATION','2030-01-07 08:00+01','2030-01-07 18:00+01')",
+      [org, biz, target],
+    );
+    await expect(
+      service().change(biz, actor, command, false),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      true,
+    );
+  });
+  it("rejects overlaps instead of leaving the reassigned appointment pending", async () => {
+    const { target, appointmentId, command } = await reassignmentFixture();
+    await client.query(
+      `INSERT INTO appointments(organization_id,business_id,reference_code,customer_id,employee_id,service_id,start_at,end_at,occupied_start_at,occupied_end_at,duration_minutes)
+      SELECT organization_id,business_id,'SCHED-OTHER',customer_id,$2,service_id,start_at,end_at,occupied_start_at,occupied_end_at,duration_minutes FROM appointments WHERE id=$1`,
+      [appointmentId, target],
+    );
+    await expect(
+      service().change(biz, actor, command, false),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(
+      (
+        await client.query<{ employee_id: string }>(
+          "SELECT employee_id FROM appointments WHERE id=$1",
+          [appointmentId],
+        )
+      ).rows[0].employee_id,
+    ).toBe(emp);
+  });
+  it("checks buffers when listing replacement employees", async () => {
+    const { appointmentId, target } = await reassignmentFixture();
+    await client.query(
+      "UPDATE employee_working_hours SET start_time='08:00' WHERE employee_id=$1",
+      [emp],
+    );
+    await client.query(
+      "UPDATE appointments SET occupied_start_at=start_at-interval '15 minutes',buffer_before_minutes=15 WHERE id=$1",
+      [appointmentId],
+    );
+    const options = await service().reassignmentOptions(
+      biz,
+      actor,
+      appointmentId,
+    );
+    expect(options.employees.some((e) => e.id === target)).toBe(false);
+  });
+  it("rejects a foreign destination and a foreign appointment without changing either resource", async () => {
+    const { command } = await reassignmentFixture();
+    await expect(
+      service().change(
+        biz,
+        actor,
+        {
+          ...command,
+          reassignments: [
+            { ...command.reassignments[0], employeeId: randomUUID() },
+          ],
+        },
+        false,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service().reassignmentOptions(biz, actor, randomUUID()),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service().weeklyBase(biz, randomUUID(), emp, "2030-01-07"),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service().reassignmentOptions(
+        biz,
+        randomUUID(),
+        command.reassignments[0].appointmentId,
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it("preserves dated legacy hours instead of silently freezing future changes", async () => {
+    await client.query(
+      "INSERT INTO employee_working_hours(organization_id,business_id,employee_id,day_of_week,start_time,end_time,valid_from,valid_to) VALUES($1,$2,$3,1,'09:00','17:00','2030-01-01','2030-02-01')",
+      [org, biz, emp],
+    );
+    await expect(
+      service().weeklyBase(biz, actor, emp, "2030-01-07"),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service().change(
+        biz,
+        actor,
+        {
+          type: "weekly",
+          from: "2030-01-07",
+          week: Array.from({ length: 7 }, () => []),
+          employeeIds: [emp],
+          expectedVersions: { [emp]: await version() },
+        },
+        false,
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(await covers("2030-01-07T09:00+01", "2030-01-07T10:00+01")).toBe(
+      true,
+    );
+  });
   it("copies a template and preserves the tail of an open assignment when replacing a finite range", async () => {
     const week = Array.from({ length: 7 }, () => [] as unknown[]);
     week[1] = [{ start: 540, end: 780 }];
@@ -446,9 +823,217 @@ run("Scheduling PostgreSQL integration", () => {
         [org, actor],
       );
       await request(app.getHttpServer()).get(`${root}/templates`).expect(403);
+      await request(app.getHttpServer())
+        .get(`${root}/weekly-base/${emp}`)
+        .expect(403);
+      await request(app.getHttpServer())
+        .get(`${root}/reassignment-options/${randomUUID()}`)
+        .expect(403);
     } finally {
       await app.close();
     }
+  });
+  it("paid pauses change work estimates but never appointment availability", async () => {
+    const spans = [
+      {
+        start: 540,
+        end: 1020,
+        pauses: [{ start: 720, end: 750, countsAsWork: false }],
+      },
+    ];
+    await exception("2030-01-07", spans);
+    const work = async (day: string) =>
+      (
+        await client.query<{ minutes: string | null }>(
+          "SELECT scheduling_work_minutes($1,$2,$3,$4) AS minutes",
+          [org, biz, emp, day],
+        )
+      ).rows[0].minutes;
+    expect(Number(await work("2030-01-07"))).toBe(450);
+    expect(await covers("2030-01-07T12:00+01", "2030-01-07T12:15+01")).toBe(
+      false,
+    );
+    spans[0].pauses[0].countsAsWork = true;
+    await exception("2030-01-07", spans);
+    expect(Number(await work("2030-01-07"))).toBe(480);
+    expect(await covers("2030-01-07T12:00+01", "2030-01-07T12:15+01")).toBe(
+      false,
+    );
+    const quadrant = await service().quadrant(
+      biz,
+      actor,
+      "2030-01-07",
+      "2030-01-07",
+    );
+    expect(Number(quadrant.days[0].workMinutes)).toBe(480);
+  });
+  it("preserves pause accounting through templates, bases, date batches and copied rotations", async () => {
+    const shift = [
+      {
+        start: 540,
+        end: 1020,
+        pauses: [{ start: 720, end: 750, countsAsWork: true }],
+      },
+    ];
+    const daily = Array.from({ length: 7 }, () => [] as unknown[]);
+    daily[0] = shift;
+    expect(
+      (
+        await service().saveTemplate(biz, actor, {
+          kind: "DAY",
+          name: "Paid break",
+          pattern: [daily],
+        })
+      ).pattern,
+    ).toEqual([daily]);
+    const week = Array.from({ length: 7 }, () => [] as unknown[]);
+    week[1] = shift;
+    await service().change(
+      biz,
+      actor,
+      {
+        type: "weekly",
+        from: "2030-01-07",
+        week,
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+      },
+      false,
+    );
+    expect(
+      (await service().weeklyBase(biz, actor, emp, "2030-01-07")).week,
+    ).toEqual(week);
+    await service().change(
+      biz,
+      actor,
+      {
+        type: "dates",
+        date: "2030-01-08",
+        entries: [
+          { date: "2030-01-08", spans: shift },
+          { date: "2030-01-10", spans: [] },
+        ],
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+      },
+      false,
+    );
+    const stored = (
+      await client.query<{ spans: unknown }>(
+        "SELECT spans FROM employee_schedule_exceptions WHERE employee_id=$1 AND work_date='2030-01-08'",
+        [emp],
+      )
+    ).rows[0];
+    expect(stored.spans).toEqual(shift);
+    const template = await service().saveTemplate(biz, actor, {
+      kind: "CYCLE",
+      name: "Paid rotation",
+      pattern: [week],
+    });
+    await service().change(
+      biz,
+      actor,
+      {
+        type: "assignment",
+        from: "2030-01-07",
+        to: "2030-02-01",
+        templateId: template.id,
+        templateVersion: template.version,
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+      },
+      false,
+    );
+    expect(
+      (
+        await client.query<{ pattern_snapshot: unknown }>(
+          "SELECT pattern_snapshot FROM employee_shift_assignments WHERE employee_id=$1",
+          [emp],
+        )
+      ).rows[0].pattern_snapshot,
+    ).toEqual([week]);
+    const preview = await service().change(
+      biz,
+      actor,
+      {
+        type: "resetDay",
+        date: "2030-01-07",
+        employeeIds: [emp],
+        expectedVersions: { [emp]: await version() },
+      },
+      true,
+    );
+    expect(preview.restoredDay).toMatchObject({ spans: shift });
+  });
+  it("uses actual DST duration and reports ambiguous estimates as unavailable", async () => {
+    await exception("2030-03-31", [
+      {
+        start: 0,
+        end: 240,
+        pauses: [{ start: 60, end: 90, countsAsWork: true }],
+      },
+    ]);
+    const work = async (day: string) =>
+      (
+        await client.query<{ minutes: string | null }>(
+          "SELECT scheduling_work_minutes($1,$2,$3,$4) AS minutes",
+          [org, biz, emp, day],
+        )
+      ).rows[0].minutes;
+    expect(Number(await work("2030-03-31"))).toBe(180);
+    await exception("2030-10-27", [{ start: 0, end: 240, pauses: [] }]);
+    expect(Number(await work("2030-10-27"))).toBe(300);
+    await exception("2030-10-27", [
+      {
+        start: 0,
+        end: 240,
+        pauses: [{ start: 135, end: 150, countsAsWork: true }],
+      },
+    ]);
+    expect(await work("2030-10-27")).toBeNull();
+  });
+  it("splits an overnight pause by calendar date without double counting", async () => {
+    await exception("2030-01-07", [
+      { start: 1320, end: 1560, pauses: [{ start: 1410, end: 1470 }] },
+    ]);
+    const result = await service().quadrant(
+      biz,
+      actor,
+      "2030-01-07",
+      "2030-01-08",
+    );
+    expect(result.days.map((d) => Number(d.workMinutes))).toEqual([90, 90]);
+  });
+  it("clips the final rotation night and preserves the following base schedule", async () => {
+    await client.query(
+      "INSERT INTO employee_working_hours(organization_id,business_id,employee_id,day_of_week,start_time,end_time) VALUES($1,$2,$3,2,'09:00','17:00')",
+      [org, biz, emp],
+    );
+    const week = Array.from({ length: 7 }, () => [] as unknown[]);
+    week[1] = [{ start: 1320, end: 1560, pauses: [] }];
+    const template = await service().saveTemplate(biz, actor, {
+      kind: "CYCLE",
+      name: "Night",
+      pattern: [week],
+    });
+    const command = {
+      type: "assignment",
+      from: "2030-01-07",
+      to: "2030-01-07",
+      templateId: template.id,
+      templateVersion: template.version,
+      employeeIds: [emp],
+      expectedVersions: { [emp]: await version() },
+    };
+    const preview = await service().change(biz, actor, command, true);
+    expect(preview).toMatchObject({ ok: true, estimatedTotalMinutes: 120 });
+    await service().change(biz, actor, command, false);
+    expect(await covers("2030-01-08T00:00+01", "2030-01-08T01:00+01")).toBe(
+      false,
+    );
+    expect(await covers("2030-01-08T09:00+01", "2030-01-08T10:00+01")).toBe(
+      true,
+    );
   });
   it("availability and appointment validation consume the canonical schedule", async () => {
     const day = (

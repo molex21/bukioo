@@ -244,21 +244,42 @@ El script `lint:check` también está definido, pero usa un patrón pensado para
 
 ## Perfil y administración de plataforma
 
-En Equipo, "Cuadrante" permite consultar y editar días, turnos partidos/nocturnos,
+En Equipo, "Cuadrante" permite seleccionar varias fechas de un empleado y
+aplicarles plantillas o turnos, conservando los demás días. También permite
+consultar y editar días, turnos partidos/nocturnos,
 pausas y ausencias, con navegación semanal, filtro y paginación. "Plantillas"
-define ciclos de hasta 12 semanas y "Asignar ciclo" los copia a los empleados
-seleccionados, con fechas y semana inicial por empleado. En móvil se organiza
-por días. Usa la hora de la empresa y no muestra las citas como fichaje.
-Los cambios se comprueban antes de confirmar y se rechazan si afectan a citas
-futuras. Requiere que el backend tenga las migraciones de planificación aplicadas;
+separa turnos diarios reutilizables de rotaciones de hasta 12 semanas.
+La biblioteca muestra todas las plantillas con sus horarios y horas estimadas,
+botón "Nueva" y acciones de editar/archivar. Las semanas se editan seleccionando
+uno o varios días del cuadrante, sin controles de copiar un día a otro.
+Elegir una plantilla carga sus turnos para revisarlos; se pueden aplicar a
+fechas concretas sin repetirlos. "Asignar ciclo" copia rotaciones a los empleados
+seleccionados, con inicio y fin obligatorios y semana inicial por empleado.
+Desde la asignación se puede crear una rotación y volver con ella seleccionada,
+conservando empleados y fechas. La semana inicial está en opciones desplegables.
+Muestra la estimación nominal del intervalo completo y un detalle real de hasta
+42 días, indicado en pantalla. Cada pausa tiene "Cuenta como tiempo de trabajo";
+aunque cuente, siempre bloquea citas. El turno nocturno del último día termina
+a medianoche. En móvil se organiza por días. Usa la hora de la empresa y no
+muestra las citas como fichaje.
+"Confirmar y guardar" comprueba los cambios automáticamente antes de guardar.
+Si hay citas afectadas, permite elegir otra persona habilitada y disponible;
+citas y horario se guardan juntos. Si no se resuelve el conflicto, no se guarda.
+"Restablecer horario previsto" muestra antes el horario que se recuperará,
+incluidas las pausas y la atención restante tras las ausencias.
+Requiere que el backend tenga las migraciones de planificación aplicadas;
 ver [API y despliegue](../backend/docs/SCHEDULING_API.md). La base de desarrollo
 no se migra automáticamente.
 
-La comprobación de frontend incluye pruebas de fechas y cambios horarios con
+La comprobación de frontend incluye pruebas del guardado automático, fechas y cambios horarios con
 el ejecutor de Node, sin nuevas dependencias. El entorno actual usa Node 24;
 se requiere una versión que permita importar TypeScript de forma nativa.
 
-Equipo incluye la acción "Horarios" para editar turnos semanales en hora local de la empresa. Permite varios turnos diarios, reemplaza toda la semana al guardar y confirma antes de dejarla vacía. Bloquea horarios con vigencias o precisión incompatible para evitar pérdida de configuración.
+Equipo incluye "Horario semanal": siete días con turnos partidos/nocturnos,
+pausas, plantillas diarias y selección múltiple de días para aplicar turnos. Se aplica desde una
+fecha y conserva el pasado y otros horarios semanales programados después.
+Las rotaciones y excepciones de una fecha tienen prioridad. Conserva sin
+convertir horarios antiguos con futuras vigencias o precisión incompatible.
 
 En el catálogo, la acción "Empleados" de cada servicio consulta y reemplaza
 sus asignaciones de empleados activos de la empresa. Guardar sin empleados

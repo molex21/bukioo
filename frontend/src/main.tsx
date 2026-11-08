@@ -10,14 +10,19 @@ import { createRoot } from "react-dom/client";
 import { AuthProvider } from "./auth/AuthProvider";
 import "./index.css";
 import App from "./App.tsx";
-import { bukiooTheme } from "./theme";
+import { bukiooTheme, bukiooCssVariablesResolver } from "./theme";
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <MantineProvider theme={bukiooTheme}>
+    <MantineProvider
+      theme={bukiooTheme}
+      cssVariablesResolver={bukiooCssVariablesResolver}
+    >
       <DatesProvider settings={{ firstDayOfWeek: 1, locale: "es" }}>
         <Notifications autoClose={15000} position="top-right" />
-        <AuthProvider><App /></AuthProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
       </DatesProvider>
     </MantineProvider>
   </StrictMode>,

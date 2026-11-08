@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+- Borrador único de turnos: cambiar selección o vigencia conserva las horas;
+  guardar comprueba y envía el horario visible. Avisos de descarte y recarga.
+- Cuadrante con selector semanal agrupado, día activo en móvil y estado en URL;
+  asignación con búsqueda de empleados y comprobación de versiones por persona.
+- Etiquetas accesibles, contraseña en español y por teclado, cierres con nombre,
+  enlaces de navegación, salto al contenido y mayor contraste de texto secundario.
+
+- Retirada la opción de pausa al crear ausencias; las pausas se configuran en
+  turnos y plantillas. Se conservan los bloqueos de pausa existentes.
+
 - Editor de turnos abierto al seleccionar días y textos que distinguen la
   plantilla diaria sin fechas de la asignación del horario a un empleado.
 

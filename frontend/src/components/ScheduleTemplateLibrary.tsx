@@ -11,7 +11,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   schedulingApi,
   type SchedulePattern,
@@ -25,6 +25,7 @@ import {
 } from "../lib/schedule-editor";
 import { ScheduleSpansEditor } from "./ScheduleSpansEditor";
 import { ScheduleWeekEditor } from "./ScheduleWeekEditor";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 const dayNames = [
   "Domingo",
   "Lunes",
@@ -155,12 +156,14 @@ export function InlineRotationForm({
   onBusy,
   onCreated,
   onBack,
+  onDirtyChange,
 }: {
   businessId: string;
   templates: ShiftTemplate[];
   onBusy: (busy: boolean) => void;
   onCreated: (template: ShiftTemplate) => void;
   onBack: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   return (
     <TemplateForm
@@ -172,6 +175,7 @@ export function InlineRotationForm({
       initialArchive={false}
       initialKind="CYCLE"
       onCreated={onCreated}
+      onDirtyChange={onDirtyChange}
     />
   );
 }
@@ -215,10 +219,7 @@ function TemplateForm({
   );
   const dirty = JSON.stringify({ name, kind, pattern }) !== initial;
   const [pendingKind, setPendingKind] = useState<"DAY" | "CYCLE" | null>(null);
-  useEffect(() => {
-    onDirtyChange?.(dirty);
-    return () => onDirtyChange?.(false);
-  }, [dirty, onDirtyChange]);
+  useUnsavedChanges(dirty, onDirtyChange);
   async function save() {
     if (lock.current) return;
     lock.current = true;
@@ -257,7 +258,11 @@ function TemplateForm({
     <Stack>
       <Group justify="space-between">
         <Text fw={600}>
-          {editing ? `Editar ${editing.name}` : initialKind ? "Nueva rotación" : "Nueva plantilla"}
+          {editing
+            ? `Editar ${editing.name}`
+            : initialKind
+              ? "Nueva rotación"
+              : "Nueva plantilla"}
         </Text>
         <Button
           variant="subtle"
@@ -448,7 +453,11 @@ function TemplateForm({
           color={archive ? "red" : undefined}
           onClick={() => void save()}
         >
-          {archive ? "Confirmar archivo" : initialKind ? "Guardar rotación y volver" : "Guardar plantilla"}
+          {archive
+            ? "Confirmar archivo"
+            : initialKind
+              ? "Guardar rotación y volver"
+              : "Guardar plantilla"}
         </Button>
       </Group>
     </Stack>

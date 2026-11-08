@@ -1,9 +1,41 @@
-import { createTheme, Select } from "@mantine/core";
+import {
+  Alert,
+  createTheme,
+  Drawer,
+  Modal,
+  PasswordInput,
+  Select,
+  type CSSVariablesResolver,
+} from "@mantine/core";
+
+export const bukiooCssVariablesResolver: CSSVariablesResolver = () => ({
+  variables: {},
+  light: {
+    "--mantine-color-dimmed": "#64748b",
+    "--mantine-color-placeholder": "#64748b",
+  },
+  dark: {},
+});
 
 export const bukiooTheme = createTheme({
   primaryColor: "bukioo",
   defaultRadius: "md",
   components: {
+    PasswordInput: PasswordInput.extend({
+      defaultProps: {
+        visibilityToggleFocusable: true,
+        visibilityToggleButtonProps: {
+          "aria-label": "Mostrar u ocultar contraseña",
+        },
+      },
+    }),
+    Modal: Modal.extend({
+      defaultProps: { closeButtonProps: { "aria-label": "Cerrar" } },
+    }),
+    Drawer: Drawer.extend({
+      defaultProps: { closeButtonProps: { "aria-label": "Cerrar menú" } },
+    }),
+    Alert: Alert.extend({ defaultProps: { closeButtonLabel: "Cerrar aviso" } }),
     Select: Select.extend({
       defaultProps: {
         checkIconPosition: "right",

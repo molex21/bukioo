@@ -1,0 +1,21 @@
+.schedule-week-layout { display: grid; gap: 1rem; align-items: start; }
+.schedule-week-days { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+.schedule-day-card { min-width: 0; overflow-wrap: anywhere; }
+.schedule-day-card[data-selected="true"] { border-color: var(--mantine-primary-color-filled); background: var(--mantine-color-bukioo-0); }
+.schedule-turn-editor { min-width: 0; }
+.schedule-week-toolbar { display: grid; grid-template-columns: auto minmax(9rem,1fr) auto auto; align-items: end; gap: .5rem; width: 100%; max-width: 30rem; }
+.schedule-week-toolbar > :nth-child(2) { min-width: 0; }
+.schedule-quadrant-summary { font-variant-numeric: tabular-nums; }
+.schedule-quadrant-detail { margin-top: .25rem; font-size: .75rem; }
+.schedule-quadrant-detail summary { cursor: pointer; color: var(--color-text-muted); }
+@media (min-width: 48rem) { .schedule-week-days { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media (min-width: 64rem) {
+ .schedule-week-layout[data-editing="true"] { grid-template-columns: minmax(0,1fr) minmax(0,1.5fr); }
+ .schedule-week-layout[data-editing="true"] .schedule-week-days { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .schedule-week-layout[data-editing="false"] .schedule-week-days { grid-template-columns: repeat(7,minmax(0,1fr)); }
+}
+@media (max-width: 47.99rem) {
+ .schedule-week-toolbar { grid-template-columns: auto minmax(0,1fr) auto; }
+ .schedule-week-toolbar > :nth-child(3) { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+ .schedule-week-layout[data-editing="true"] .schedule-turn-editor { grid-row: 1; }
+}

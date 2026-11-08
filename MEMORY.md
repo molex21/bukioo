@@ -1,8 +1,37 @@
 # Memoria de BUKIOO
 
-Actualizada: 02/11/2026. Estado real, decisiones y continuidad; sin secretos.
+Actualizada: 08/11/2026. Estado real, decisiones y continuidad; sin secretos.
 
-## Primer paso de la próxima sesión: revisar antes de avanzar
+## Primer paso de la próxima sesión: validar las correcciones
+
+Acuerdo de cierre del 08/11: preparar commit de esta entrega y dedicar la
+próxima sesión a probarla con la guía, antes de continuar con otros puntos.
+Priorizar guardado real y recarga, conflictos con citas, borradores y móvil.
+
+08/11: el usuario pidió resolver todos los hallazgos del repaso frontend.
+F01–F14 implementados: borrador único, vigencia independiente, avisos de
+descarte/recarga, accesibilidad, contraste, enlaces, semana/día móvil, selector
+buscable de empleados con versiones individuales y estado de consulta en URL.
+Plan: specs/008-cuadrante-equipo/frontend-review-fixes.md.
+Informe histórico: docs/frontend-review-2026-11-08.md.
+Revisar paso a paso: docs/frontend-review-checklist-2026-11-08.md.
+
+Controles completos correctos: 12 pruebas de scripts, 459 backend, 28 frontend,
+lint y builds. Repetido frontend tras últimos ajustes. Playwright: escritorio
+1440×900 y móvil emulado 390×844; cambios de selección/fecha conservan horas,
+guardado interceptado comprueba/envía el mismo borrador, cierre con descarte,
+ausencias sin Pausa y URL tras recarga. Texto secundario: 4,55:1 medido.
+Sin escrituras reales durante estas pruebas. Persistencia, conflictos con citas,
+roles alternativos, lector de pantalla, zoom y móvil físico pendientes.
+No se añadieron dependencias ni migraciones. Logo aplazado y sin modo oscuro.
+Sin commit/push de estos cambios. Último commit a19c4fc; consultar Git.
+Capturas/helpers en tmp/frontend-review y .playwright-cli: no incluirlos en Git.
+
+Retirada "Pausa" de nuevas ausencias. Las pausas de turnos/plantillas y los
+bloqueos BREAK anteriores se conservan; su opción antigua queda deshabilitada
+al editar. Comprobado que no se ofrece para crear una nueva ausencia.
+
+### Entregas anteriores (histórico)
 
 ### Entrega de usabilidad, 02/11/2026
 

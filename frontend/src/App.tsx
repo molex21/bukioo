@@ -73,8 +73,8 @@ function NotFoundPage() {
     <main className="placeholder-page">
       <section className="placeholder-card" aria-labelledby="not-found-title">
         <p className="eyebrow">Error 404</p>
-        <h1 id="not-found-title">Esta pagina no existe</h1>
-        <p className="placeholder-description">Comprueba la direccion o vuelve a iniciar sesion.</p>
+        <h1 id="not-found-title">Esta página no existe</h1>
+        <p className="placeholder-description">Comprueba la dirección o vuelve a iniciar sesión.</p>
       </section>
     </main>
   );
@@ -84,7 +84,7 @@ function StaffEntryRoute() {
   const { session, isInitializing } = useAuth();
   const { organizationSlug } = useParams();
 
-  if (isInitializing) return <main className="placeholder-page"><p className="placeholder-description">Comprobando sesion...</p></main>;
+  if (isInitializing) return <main className="placeholder-page"><p className="placeholder-description">Comprobando sesión…</p></main>;
   return <Navigate replace to={session ? "/app" : `/${organizationSlug ?? ""}/staff/login`} />;
 }
 
@@ -99,11 +99,11 @@ function App() {
         <Route path="/:organizationSlug/staff" element={<StaffEntryRoute />} />
         <Route path="/:organizationSlug/staff/login" element={<OrganizationStaffLoginPage />} />
         <Route path="/app/*" element={<ProtectedRoute><WorkspacePage /></ProtectedRoute>} />
-        <Route path="/book/:organizationSlug/:businessSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Este sera el flujo publico de reserva para la empresa seleccionada." />} />
-        <Route path="/book/:organizationSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva publica" title="Reserva tu cita" description="Elige una empresa para continuar con tu reserva." />} />
-        <Route path="/customer/:organizationSlug/*" element={<PlaceholderPage icon={CalendarDays} eyebrow="Area cliente" title="Tus citas" description="Aqui se gestionara la sesion y las reservas de cada cliente." />} />
+        <Route path="/book/:organizationSlug/:businessSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva pública" title="Reserva tu cita" description="La reserva de citas estará disponible próximamente." />} />
+        <Route path="/book/:organizationSlug" element={<PlaceholderPage icon={CalendarDays} eyebrow="Reserva pública" title="Reserva tu cita" description="Elige una empresa para continuar con tu reserva." />} />
+        <Route path="/customer/:organizationSlug/*" element={<PlaceholderPage icon={CalendarDays} eyebrow="Área de cliente" title="Tus citas" description="Próximamente podrás consultar y gestionar tus citas." />} />
         <Route path="/platform/*" element={<ProtectedRoute requiresSuperadmin redirectTo="/platform/access"><PlatformPage /></ProtectedRoute>} />
-        <Route path="/appointments/reschedule" element={<PlaceholderPage icon={CalendarDays} eyebrow="Cambio de cita" title="Reprogramacion de cita" description="Aqui se mostrara la propuesta enviada por la empresa." />} />
+        <Route path="/appointments/reschedule" element={<PlaceholderPage icon={CalendarDays} eyebrow="Cambio de cita" title="Cambio de cita" description="Aquí podrás consultar la propuesta de cambio enviada por la empresa." />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>

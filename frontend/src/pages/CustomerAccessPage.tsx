@@ -22,7 +22,7 @@ export function CustomerAccessPage() {
           </div>
           {error && <Alert color="red" title="Enlace no disponible">{error}</Alert>}
           <Alert color="blue" icon={<CalendarDays size={18} />} title="Acceso de clientes">
-            La pantalla está preparada. Conectaremos aquí el registro, acceso y gestión de citas del cliente en el siguiente bloque.
+            Próximamente podrás acceder a tus citas desde esta página.
           </Alert>
           <Button disabled fullWidth>Iniciar sesión como cliente</Button>
           </Stack>

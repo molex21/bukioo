@@ -12,8 +12,16 @@ import {
   Table,
   Text,
   Title,
+  TextInput,
 } from "@mantine/core";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  isScheduleDate,
+  schedulePage,
+  updateScheduleSearch,
+} from "../lib/scheduling-view";
 import { ApiError } from "../lib/api-client";
 import { workspaceBusinessesApi } from "../lib/workspace-businesses-api";
 import type { WorkspaceEmployee } from "../lib/workspace-employees-api";
@@ -23,7 +31,7 @@ import {
   type ScheduleQuadrant,
   type ShiftTemplate,
 } from "../lib/scheduling-api";
-import { dateInZone, weekDates } from "../lib/team-quadrant";
+import { addCalendarDays, dateInZone, weekDates } from "../lib/team-quadrant";
 import { EmployeeAvatar } from "./EmployeeAvatar";
 import { ScheduleDayEditor } from "./ScheduleDayEditor";
 import { absenceTypes } from "../lib/scheduling-api";
@@ -31,6 +39,7 @@ import { ScheduleAssignmentEditor } from "./ScheduleAssignmentEditor";
 import { ScheduleTemplateManager } from "./ScheduleTemplateManager";
 import { ScheduleDatesEditor } from "./ScheduleDatesEditor";
 import { formatWorkMinutes } from "../lib/schedule-editor";
+import "./Scheduling.css";
 
 type Data = {
   key: string;
@@ -59,20 +68,29 @@ export function SchedulingQuadrant({
   organizationId: string;
   employees: WorkspaceEmployee[];
 }) {
-  const [week, setWeek] = useState(0),
-    [page, setPage] = useState(1),
-    [filter, setFilter] = useState<string | null>(null),
-    [version, setVersion] = useState(0);
+  const [params, setParams] = useSearchParams();
+  const requestedWeek = params.get("week");
+  const week = isScheduleDate(requestedWeek) ? requestedWeek : null;
+  const page = schedulePage(params.get("teamPage"));
+  const filter = employees.some((e) => e.id === params.get("employee"))
+    ? params.get("employee")
+    : null;
+  const [version, setVersion] = useState(0);
+  const updateView = (updates: Record<string, string | null>) =>
+    setParams((current) => updateScheduleSearch(current, updates));
   const [data, setData] = useState<Data | null>(null),
     [error, setError] = useState<{ key: string; text: string } | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null),
     [busy, setBusy] = useState(false);
   const [templateDirty, setTemplateDirty] = useState(false),
     [discardTemplate, setDiscardTemplate] = useState(false);
-  const onTemplateDirty = useCallback((dirty: boolean) => {
-    setTemplateDirty(dirty);
-    if (!dirty) setDiscardTemplate(false);
-  }, []);
+  const onTemplateDirty = useCallback(
+    (dirty: boolean) => {
+      setTemplateDirty(dirty);
+      if (!dirty) setDiscardTemplate(false);
+    },
+    [setTemplateDirty, setDiscardTemplate],
+  );
   const employeeKey = employees
     .map((item) => `${item.id}:${item.updated_at}`)
     .join();
@@ -103,8 +121,7 @@ export function SchedulingQuadrant({
         const business = businesses.find((item) => item.id === businessId);
         if (!business) throw new Error("La empresa ya no está disponible.");
         const dates = weekDates(
-          dateInZone(new Date(), business.timezone),
-          week,
+          week ?? dateInZone(new Date(), business.timezone),
         );
         const [quadrant, templates] = await Promise.all([
           schedulingApi.quadrant(businessId, dates[0], dates[6], filter, page),
@@ -141,6 +158,19 @@ export function SchedulingQuadrant({
       day: "numeric",
       month: "short",
     }).format(new Date(`${day}T12:00Z`));
+  const mobileDay = current?.dates.includes(params.get("day") ?? "")
+    ? params.get("day")!
+    : (current?.dates.find(
+        (day) => day === dateInZone(new Date(), current.quadrant.timezone),
+      ) ?? current?.dates[0]);
+  function moveWeek(offset: number) {
+    if (current)
+      updateView({
+        week: addCalendarDays(current.dates[0], offset * 7),
+        day: null,
+        teamPage: null,
+      });
+  }
   function cell(employee: ScheduleQuadrant["employees"][number], day: string) {
     if (!current) return null;
     const entry = current.quadrant.days.find(
@@ -156,7 +186,7 @@ export function SchedulingQuadrant({
         hourCycle: "h23",
       }).format(new Date(instant));
     return (
-      <Stack gap={5}>
+      <Stack gap={5} className="schedule-quadrant-summary">
         <Checkbox
           size="xs"
           label="Seleccionar"
@@ -192,44 +222,53 @@ export function SchedulingQuadrant({
             Día libre
           </Text>
         )}
-        {entry.attention.length > 0 &&
-          Number(entry.attentionMinutes) !== Number(entry.presenceMinutes) && (
-            <Stack gap={0}>
-              <Text size="xs" c="dimmed">
-                Atención prevista
-              </Text>
-              {entry.attention.map((span, index) => (
-                <Text size="xs" key={index}>
-                  {time(span.startAt)}–
-                  {dateInZone(new Date(span.endAt), timezone) > day
-                    ? "24:00"
-                    : time(span.endAt)}
-                </Text>
-              ))}
-            </Stack>
-          )}
         {entry.blocks.map((block) => (
-          <Text key={block.id} size="xs" c="orange">
+          <Text key={block.id} size="xs" fw={600}>
             {absenceTypes.find((item) => item.value === block.type)?.label ??
               "No disponible"}
           </Text>
         ))}
+        <details className="schedule-quadrant-detail">
+          <summary>Detalle del horario</summary>
+          {entry.attention.length > 0 &&
+            Number(entry.attentionMinutes) !==
+              Number(entry.presenceMinutes) && (
+              <Stack gap={0}>
+                <Text size="xs" c="dimmed">
+                  Atención prevista
+                </Text>
+                {entry.attention.map((span, index) => (
+                  <Text size="xs" key={index}>
+                    {time(span.startAt)}–
+                    {dateInZone(new Date(span.endAt), timezone) > day
+                      ? "24:00"
+                      : time(span.endAt)}
+                  </Text>
+                ))}
+              </Stack>
+            )}
+          {entry.ambiguous && (
+            <Text c="red" size="xs">
+              Revisa este día: el cambio de hora afecta a los turnos.
+            </Text>
+          )}
+          <Text c="dimmed" size="xs">
+            {entry.origin === "exception"
+              ? "Horario de este día"
+              : entry.origin === "cycle"
+                ? "Ciclo asignado"
+                : "Horario habitual"}
+          </Text>
+          <Text c="dimmed" size="xs">
+            Presencia: {formatWorkMinutes(Number(entry.presenceMinutes))} ·
+            Atención: {formatWorkMinutes(Number(entry.attentionMinutes))}
+          </Text>
+        </details>
         {entry.ambiguous && (
           <Text c="red" size="xs">
-            Revisa este día: el cambio de hora afecta a los turnos.
+            Revisa las horas de este día.
           </Text>
         )}
-        <Text c="dimmed" size="xs">
-          {entry.origin === "exception"
-            ? "Horario de este día"
-            : entry.origin === "cycle"
-              ? "Ciclo asignado"
-              : "Horario habitual"}
-        </Text>
-        <Text c="dimmed" size="xs">
-          Presencia: {(Number(entry.presenceMinutes) / 60).toFixed(1)} h ·
-          Atención: {(Number(entry.attentionMinutes) / 60).toFixed(1)} h
-        </Text>
         <Text size="xs" fw={600}>
           Trabajo estimado:{" "}
           {formatWorkMinutes(
@@ -237,7 +276,7 @@ export function SchedulingQuadrant({
           )}
         </Text>
         <Button
-          size="compact-xs"
+          size="xs"
           variant="subtle"
           disabled={day < dateInZone(new Date(), timezone)}
           aria-label={`Editar ${employee.first_name} ${employee.last_name}, ${dateLabel(day)}`}
@@ -264,29 +303,49 @@ export function SchedulingQuadrant({
     <Stack gap="md">
       <Group justify="space-between">
         <Title order={2}>Cuadrante semanal</Title>
-        <Group gap="xs">
+        <div className="schedule-week-toolbar">
           <Button
             variant="default"
-            onClick={() => setWeek((value) => value - 1)}
+            aria-label="Semana anterior"
+            disabled={!current}
+            onClick={() => moveWeek(-1)}
           >
-            Semana anterior
+            <ChevronLeft size={18} aria-hidden="true" />
           </Button>
+          <TextInput
+            type="date"
+            label="Semana que quieres consultar"
+            leftSection={<CalendarDays size={16} aria-hidden="true" />}
+            value={current?.dates[0] ?? week ?? ""}
+            disabled={!current}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (isScheduleDate(value))
+                updateView({
+                  week: weekDates(value)[0],
+                  day: null,
+                  teamPage: null,
+                });
+            }}
+          />
           <Button
             variant="light"
             onClick={() => {
-              setWeek(0);
+              updateView({ week: null, day: null, teamPage: null });
               setVersion((value) => value + 1);
             }}
           >
-            Esta semana
+            Hoy
           </Button>
           <Button
             variant="default"
-            onClick={() => setWeek((value) => value + 1)}
+            aria-label="Semana siguiente"
+            disabled={!current}
+            onClick={() => moveWeek(1)}
           >
-            Semana siguiente
+            <ChevronRight size={18} aria-hidden="true" />
           </Button>
-        </Group>
+        </div>
       </Group>
       <Text c="dimmed" size="sm">
         Organiza turnos, pausas y ausencias. Las horas de atención indican el
@@ -300,8 +359,7 @@ export function SchedulingQuadrant({
           placeholder="Todos los empleados"
           value={filter}
           onChange={(value) => {
-            setFilter(value);
-            setPage(1);
+            updateView({ employee: value, teamPage: null });
           }}
           data={employees.map((item) => ({
             value: item.id,
@@ -423,26 +481,40 @@ export function SchedulingQuadrant({
             </Table>
           </Table.ScrollContainer>
           <Stack hiddenFrom="md">
-            {current.dates.map((day) => (
-              <Paper key={day} withBorder p="md">
-                <Stack gap="md">
-                  <Title order={3} size="h5">
-                    {dateLabel(day)}
-                  </Title>
-                  {current.quadrant.employees.map((employee) => (
-                    <Stack key={employee.id} gap="xs">
-                      {name(employee)}
-                      {cell(employee, day)}
-                    </Stack>
-                  ))}
-                </Stack>
-              </Paper>
-            ))}
+            <Select
+              label="Día del cuadrante"
+              allowDeselect={false}
+              value={mobileDay ?? null}
+              data={current.dates.map((day) => ({
+                value: day,
+                label: dateLabel(day),
+              }))}
+              onChange={(value) => updateView({ day: value })}
+            />
+            {current.dates
+              .filter((day) => day === mobileDay)
+              .map((day) => (
+                <Paper key={day} withBorder p="md">
+                  <Stack gap="md">
+                    <Title order={3} size="h5">
+                      {dateLabel(day)}
+                    </Title>
+                    {current.quadrant.employees.map((employee) => (
+                      <Stack key={employee.id} gap="xs">
+                        {name(employee)}
+                        {cell(employee, day)}
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Paper>
+              ))}
           </Stack>
           {current.quadrant.total > 10 && (
             <Pagination
               value={page}
-              onChange={setPage}
+              onChange={(value) =>
+                updateView({ teamPage: value === 1 ? null : String(value) })
+              }
               total={Math.ceil(current.quadrant.total / 10)}
               aria-label="Páginas de empleados"
             />
@@ -464,8 +536,7 @@ export function SchedulingQuadrant({
         }
         onClose={() => {
           if (!busy) {
-            if (editor?.type === "templates" && templateDirty)
-              setDiscardTemplate(true);
+            if (templateDirty) setDiscardTemplate(true);
             else setEditor(null);
           }
         }}
@@ -473,7 +544,7 @@ export function SchedulingQuadrant({
         closeOnClickOutside={!busy}
         withCloseButton={!busy}
       >
-        {discardTemplate && editor?.type === "templates" && (
+        {discardTemplate && editor !== null && (
           <Alert color="yellow" title="Hay cambios sin guardar" mb="md">
             <Group>
               <Button
@@ -499,6 +570,7 @@ export function SchedulingQuadrant({
         )}
         {current && editor?.type === "dates" && (
           <ScheduleDatesEditor
+            onDirtyChange={onTemplateDirty}
             key={`${editor.employee.id}:${editor.days.map((d) => d.date).join()}`}
             businessId={businessId}
             employee={editor.employee}
@@ -511,6 +583,7 @@ export function SchedulingQuadrant({
         )}
         {current && editor?.type === "day" && (
           <ScheduleDayEditor
+            onDirtyChange={onTemplateDirty}
             key={`${editor.employee.id}:${editor.day.date}:${editor.employee.version}`}
             businessId={businessId}
             employee={editor.employee}
@@ -532,6 +605,10 @@ export function SchedulingQuadrant({
         )}
         {current && editor?.type === "assign" && (
           <ScheduleAssignmentEditor
+            onDirtyChange={onTemplateDirty}
+            allEmployees={employees.filter(
+              (employee) => employee.is_active && !employee.archived_at,
+            )}
             onTemplateCreated={(template) =>
               setData((value) =>
                 value?.key === key

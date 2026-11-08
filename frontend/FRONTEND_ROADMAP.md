@@ -6,6 +6,13 @@ el estado real del repositorio y de la API.
 
 ## Principios de implementacion
 
+08/11: hallazgos F01–F14 del repaso corregidos por petición del usuario.
+Borradores, accesibilidad, contraste y ajustes del cuadrante/selectores listos
+para validación manual. Guía y evidencia: [comprobación paso a paso](../docs/frontend-review-checklist-2026-11-08.md).
+Controles completos correctos; revisión visual de escritorio/móvil emulado.
+Persistencia real, citas afectadas, roles y accesibilidad asistida pendientes.
+Las notas de entregas anteriores siguientes son históricas.
+
 Segunda revisión del 02/11: biblioteca de plantillas, semana seleccionable,
 pausas computables y rotaciones con intervalo obligatorio implementados.
 Migración 20261102150000 probada y aplicada en desarrollo con permiso separado;

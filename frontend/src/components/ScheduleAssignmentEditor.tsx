@@ -1,7 +1,7 @@
 import {
   Alert,
   Button,
-  Checkbox,
+  MultiSelect,
   Group,
   NumberInput,
   Select,
@@ -9,8 +9,15 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
-import { useState } from "react";
-import type { ScheduleQuadrant, ShiftTemplate } from "../lib/scheduling-api";
+import { useEffect, useRef, useState } from "react";
+import { loadScheduleEmployeeVersions } from "../lib/schedule-selection";
+import {
+  schedulingApi,
+  type ScheduleQuadrant,
+  type ShiftTemplate,
+} from "../lib/scheduling-api";
+import type { WorkspaceEmployee } from "../lib/workspace-employees-api";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { ScheduleChangeConfirm } from "./ScheduleChangeConfirm";
 import { dateInZone } from "../lib/team-quadrant";
 import { InlineRotationForm } from "./ScheduleTemplateLibrary";
@@ -28,6 +35,8 @@ export function ScheduleAssignmentEditor({
   onSaved,
   onBusy,
   onTemplateCreated,
+  allEmployees,
+  onDirtyChange,
 }: {
   businessId: string;
   employees: ScheduleQuadrant["employees"];
@@ -36,6 +45,8 @@ export function ScheduleAssignmentEditor({
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
   onTemplateCreated?: (template: ShiftTemplate) => void;
+  allEmployees?: Pick<WorkspaceEmployee, "id" | "first_name" | "last_name">[];
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const today = dateInZone(new Date(), timezone);
   const [selected, setSelected] = useState<string[]>([]),
@@ -53,9 +64,71 @@ export function ScheduleAssignmentEditor({
   ];
   const templates = allTemplates.filter((item) => item.kind === "CYCLE");
   const template = templates.find((item) => item.id === templateId);
+  const choices = allEmployees ?? employees;
+  const [rotationDirty, setRotationDirty] = useState(false);
+  const selectionKey = JSON.stringify([...selected].sort());
+  const [versions, setVersions] = useState<{
+    key: string;
+    values: Record<string, number>;
+    error?: string;
+  } | null>(null);
+  const versionRequests = useRef(
+    new Map<string, Promise<{ id: string; version: number } | undefined>>(),
+  );
+  useEffect(() => {
+    let active = true;
+    const ids = JSON.parse(selectionKey) as string[];
+    if (!ids.length) return;
+    void loadScheduleEmployeeVersions(ids, (id) => {
+      const key = `${businessId}:${id}`;
+      let request = versionRequests.current.get(key);
+      if (!request) {
+        request = schedulingApi
+          .quadrant(businessId, today, today, id, 1)
+          .then((result) => result.employees.find((e) => e.id === id))
+          .catch((error) => {
+            versionRequests.current.delete(key);
+            throw error;
+          });
+        versionRequests.current.set(key, request);
+      }
+      return request;
+    }).then(
+      (values) => {
+        if (active)
+          setVersions({
+            key: `${businessId}:${selectionKey}`,
+            values,
+          });
+      },
+      () => {
+        if (active)
+          setVersions({
+            key: `${businessId}:${selectionKey}`,
+            values: {},
+            error:
+              "No se pudo comprobar el equipo seleccionado. Cierra y actualiza para intentarlo de nuevo.",
+          });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [businessId, today, selectionKey]);
+  const versionsReady =
+    versions?.key === `${businessId}:${selectionKey}` && !versions.error;
+  useUnsavedChanges(
+    !!selected.length ||
+      !!templateId ||
+      from !== today ||
+      !!to ||
+      rotationDirty,
+    onDirtyChange,
+  );
   if (creating)
     return (
       <InlineRotationForm
+        onDirtyChange={setRotationDirty}
         businessId={businessId}
         templates={allTemplates}
         onBusy={(value) => {
@@ -83,18 +156,29 @@ export function ScheduleAssignmentEditor({
           fechas.
         </Alert>
       )}
-      <Checkbox.Group label="Empleados" value={selected} onChange={setSelected}>
-        <Stack gap="xs">
-          {employees.map((employee) => (
-            <Checkbox
-              key={employee.id}
-              value={employee.id}
-              disabled={busy}
-              label={`${employee.first_name} ${employee.last_name}`}
-            />
-          ))}
-        </Stack>
-      </Checkbox.Group>
+      <MultiSelect
+        label="Empleados"
+        description={`${selected.length} seleccionados · Puedes elegir hasta 50 personas de esta empresa.`}
+        placeholder="Busca por nombre…"
+        searchable
+        clearable
+        maxValues={50}
+        limit={50}
+        disabled={busy}
+        value={selected}
+        onChange={setSelected}
+        data={choices.map((e) => ({
+          value: e.id,
+          label: `${e.first_name} ${e.last_name}`,
+        }))}
+      />
+      {selected.length > 0 && !versionsReady && (
+        <Text size="sm" role="status">
+          {versions?.key === `${businessId}:${selectionKey}` && versions.error
+            ? versions.error
+            : "Comprobando el equipo seleccionado…"}
+        </Text>
+      )}
       <Select
         label="Plantilla"
         searchable
@@ -135,7 +219,7 @@ export function ScheduleAssignmentEditor({
             {selected.map((id) => (
               <NumberInput
                 key={id}
-                label={`Semana inicial de ${employees.find((item) => item.id === id)?.first_name}`}
+                label={`Semana inicial de ${choices.find((item) => item.id === id)?.first_name}`}
                 description="Permite que cada empleado empiece en una semana distinta del ciclo."
                 min={1}
                 max={template.pattern.length}
@@ -163,7 +247,7 @@ export function ScheduleAssignmentEditor({
             <Alert
               color="blue"
               key={`summary:${id}`}
-              title={employees.find((e) => e.id === id)?.first_name}
+              title={choices.find((e) => e.id === id)?.first_name}
             >
               <Text size="sm">
                 {estimate.count} días · Estimación nominal del intervalo:{" "}
@@ -194,6 +278,7 @@ export function ScheduleAssignmentEditor({
         })}
       {template &&
         selected.length > 0 &&
+        versionsReady &&
         to >= from &&
         from >= today &&
         selected.every(
@@ -212,11 +297,7 @@ export function ScheduleAssignmentEditor({
             command={{
               type: "assignment",
               employeeIds: selected,
-              expectedVersions: Object.fromEntries(
-                employees
-                  .filter((item) => selected.includes(item.id))
-                  .map((item) => [item.id, item.version]),
-              ),
+              expectedVersions: versions.values,
               templateId,
               templateVersion: template.version,
               from,

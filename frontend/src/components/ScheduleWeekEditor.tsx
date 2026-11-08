@@ -5,7 +5,6 @@ import {
   Group,
   Paper,
   Select,
-  SimpleGrid,
   Stack,
   Text,
 } from "@mantine/core";
@@ -21,6 +20,7 @@ import {
   type DayDraft,
 } from "../lib/schedule-editor";
 import { ScheduleSpansEditor } from "./ScheduleSpansEditor";
+import "./Scheduling.css";
 
 export function ScheduleWeekEditor({
   days,
@@ -36,161 +36,130 @@ export function ScheduleWeekEditor({
   initialSelected?: string[];
 }) {
   const [selected, setSelected] = useState<string[]>(initialSelected);
-  const [draft, setDraft] = useState<ScheduleSpan[] | null>(null);
   const chosen = selected.filter((id) => days.some((d) => d.id === id));
   const common = commonDaySpans(days, chosen);
-  const visibleDraft = draft ?? common ?? [];
-  function select(ids: string[]) {
-    setSelected(ids);
-    setDraft(null);
-  }
-  function apply(spans: ScheduleSpan[]) {
+  function change(spans: ScheduleSpan[]) {
     onChange(replaceSelectedDays(days, chosen, spans));
-    setDraft(null);
   }
   return (
     <Stack gap="sm">
       <Group justify="space-between">
-        <Text fw={600}>Selecciona los días que quieres cambiar</Text>
+        <Text fw={600}>Días de trabajo</Text>
         <Group gap="xs">
           <Button
             variant="subtle"
             disabled={disabled}
-            onClick={() => select(days.map((d) => d.id))}
+            onClick={() => setSelected(days.map((d) => d.id))}
           >
             Seleccionar todos
           </Button>
           <Button
             variant="subtle"
             disabled={disabled || !chosen.length}
-            onClick={() => select([])}
+            onClick={() => setSelected([])}
           >
             Quitar selección
           </Button>
         </Group>
       </Group>
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 7 }} spacing="xs">
-        {days.map((day) => (
-          <Paper
-            key={day.id}
-            withBorder
-            p="sm"
-            style={{
-              borderColor: chosen.includes(day.id)
-                ? "var(--mantine-primary-color-filled)"
-                : undefined,
-            }}
-          >
-            <Stack gap="xs">
+      <div className="schedule-week-layout" data-editing={!!chosen.length}>
+        <div className="schedule-week-days">
+          {days.map((day) => (
+            <Paper
+              withBorder
+              p="sm"
+              key={day.id}
+              className="schedule-day-card"
+              data-selected={chosen.includes(day.id)}
+            >
               <Checkbox
                 label={day.label}
                 checked={chosen.includes(day.id)}
                 disabled={disabled}
                 onChange={(event) =>
-                  select(
+                  setSelected(
                     event.currentTarget.checked
                       ? [...chosen, day.id]
                       : chosen.filter((id) => id !== day.id),
                   )
                 }
               />
-              {!day.spans.length && (
-                <Text size="sm" c="dimmed">
-                  Día libre
-                </Text>
-              )}
-              {day.spans.map((span, i) => (
-                <Stack key={i} gap={2}>
-                  <Text size="sm">{spanLabel(span)}</Text>
-                  {span.pauses.map((p, j) => (
-                    <Text size="xs" c="dimmed" key={j}>
-                      Pausa {spanLabel(p)} ·{" "}
-                      {p.countsAsWork ? "computa" : "no computa"}
+              <Stack gap={3} mt="xs">
+                {!day.spans.length ? (
+                  <Text size="sm" c="dimmed">
+                    Día libre
+                  </Text>
+                ) : (
+                  day.spans.map((span, i) => (
+                    <Text size="sm" key={i}>
+                      {spanLabel(span)}
                     </Text>
-                  ))}
-                </Stack>
-              ))}
-              <Text size="xs" fw={600}>
-                {formatWorkMinutes(nominalMinutes(day.spans))}
+                  ))
+                )}
+                <Text size="xs" fw={600}>
+                  {formatWorkMinutes(nominalMinutes(day.spans))}
+                </Text>
+              </Stack>
+            </Paper>
+          ))}
+        </div>
+        {!!chosen.length && (
+          <Paper withBorder p="md" className="schedule-turn-editor">
+            <Stack gap="sm">
+              <Text fw={600}>
+                Turnos de{" "}
+                {chosen.length === 1
+                  ? days.find((d) => d.id === chosen[0])?.label
+                  : `${chosen.length} días seleccionados`}
               </Text>
+              <Text size="sm" c="dimmed">
+                Los cambios se incluyen directamente en el borrador. Pulsa
+                "Confirmar y guardar" al terminar.
+              </Text>
+              {common === null && (
+                <Alert color="blue" role="status">
+                  Los días tienen horarios distintos. Añadir un turno, elegir
+                  una plantilla o dejarlos libres sustituirá los turnos de los
+                  días seleccionados.
+                </Alert>
+              )}
+              <Group align="flex-end">
+                <Select
+                  label="Plantilla de turno"
+                  placeholder="Elige una plantilla…"
+                  value={null}
+                  disabled={disabled}
+                  data={templates
+                    .filter((t) => t.kind === "DAY")
+                    .map((t) => ({ value: t.id, label: t.name }))}
+                  onChange={(id) => {
+                    const t = templates.find(
+                      (t) => t.id === id && t.kind === "DAY",
+                    );
+                    if (t) change(t.pattern[0][0]);
+                  }}
+                />
+                <Button
+                  variant="subtle"
+                  disabled={disabled}
+                  onClick={() => change([])}
+                >
+                  Dejar libres
+                </Button>
+              </Group>
+              <ScheduleSpansEditor
+                value={common ?? []}
+                onChange={change}
+                disabled={disabled}
+              />
             </Stack>
           </Paper>
-        ))}
-      </SimpleGrid>
-      <Text size="sm" fw={600}>
+        )}
+      </div>
+      <Text size="sm" fw={600} role="status">
         Horas programadas estimadas:{" "}
         {formatWorkMinutes(totalNominalMinutes(days.map((d) => d.spans)))}
       </Text>
-      {!!chosen.length && (
-        <Paper withBorder p="md">
-          <Stack gap="sm">
-            <Alert color="blue">
-              Se sustituirán los turnos de:{" "}
-              {days
-                .filter((d) => chosen.includes(d.id))
-                .map((d) => d.label)
-                .join(", ")}
-              . Los demás días se mantienen. Todavía no se guardará.
-            </Alert>
-            {common === null && (
-              <Text size="sm">
-                Horarios distintos. Elige una plantilla o define los turnos que
-                tendrán estos días.
-              </Text>
-            )}
-            <Group align="flex-end">
-              <Select
-                label="Aplicar plantilla de turno"
-                placeholder="Selecciona una plantilla"
-                value={null}
-                disabled={disabled}
-                data={templates
-                  .filter((t) => t.kind === "DAY")
-                  .map((t) => ({ value: t.id, label: t.name }))}
-                onChange={(id) => {
-                  const t = templates.find(
-                    (t) => t.id === id && t.kind === "DAY",
-                  );
-                  if (t) apply(t.pattern[0][0]);
-                }}
-              />
-              <Button
-                variant="subtle"
-                disabled={disabled}
-                onClick={() => apply([])}
-              >
-                Dejar días libres
-              </Button>
-            </Group>
-            <>
-              <ScheduleSpansEditor
-                value={visibleDraft}
-                onChange={setDraft}
-                disabled={disabled}
-              />
-              <Group>
-                <Button
-                  disabled={
-                    disabled ||
-                    nominalMinutes(visibleDraft) === null ||
-                    (common === null && draft === null)
-                  }
-                  onClick={() => apply(visibleDraft)}
-                >
-                  Aplicar a los días seleccionados
-                </Button>
-                <Button
-                  variant="default"
-                  disabled={disabled || draft === null}
-                  onClick={() => setDraft(null)}
-                >
-                  Cancelar edición
-                </Button>
-              </Group>
-            </>
-          </Stack>
-        </Paper>
-      )}
     </Stack>
   );
 }

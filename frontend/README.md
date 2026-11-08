@@ -242,6 +242,13 @@ npm run lint
 
 El script `lint:check` también está definido, pero usa un patrón pensado para fuentes TypeScript sin incluir archivos `.tsx`; para comprobar el frontend completo utiliza `npm run lint`.
 
+Los turnos se editan en un borrador compartido: cambiar de selección o fecha
+de aplicación conserva las horas. Al cerrar con cambios se pide confirmar el
+descarte; al recargar se utiliza el aviso del navegador. El cuadrante conserva
+vista, semana, filtro y página en la URL; en móvil muestra el día elegido.
+La asignación permite buscar empleados de toda la empresa y comprueba sus
+versiones antes de guardar.
+
 ## Perfil y administración de plataforma
 
 En Equipo, "Cuadrante" permite seleccionar varias fechas de un empleado y

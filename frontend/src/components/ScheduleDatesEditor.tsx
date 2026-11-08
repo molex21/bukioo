@@ -3,6 +3,8 @@ import { useState } from "react";
 import type { ScheduleDay, ShiftTemplate } from "../lib/scheduling-api";
 import { ScheduleWeekEditor } from "./ScheduleWeekEditor";
 import { ScheduleChangeConfirm } from "./ScheduleChangeConfirm";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { totalNominalMinutes } from "../lib/schedule-editor";
 export function ScheduleDatesEditor({
   businessId,
   employee,
@@ -11,6 +13,7 @@ export function ScheduleDatesEditor({
   timezone,
   onSaved,
   onBusy,
+  onDirtyChange,
 }: {
   businessId: string;
   employee: { id: string; version: number };
@@ -19,6 +22,7 @@ export function ScheduleDatesEditor({
   timezone: string;
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [draft, setDraft] = useState(() =>
     days.map((d) => ({
@@ -33,6 +37,11 @@ export function ScheduleDatesEditor({
     })),
   );
   const [busy, setBusy] = useState(false);
+  useUnsavedChanges(
+    JSON.stringify(draft.map((d) => ({ date: d.id, spans: d.spans }))) !==
+      JSON.stringify(days.map((d) => ({ date: d.date, spans: d.draft }))),
+    onDirtyChange,
+  );
   return (
     <Stack>
       <Alert color="blue">
@@ -47,6 +56,7 @@ export function ScheduleDatesEditor({
         initialSelected={draft.map((d) => d.id)}
       />
       <ScheduleChangeConfirm
+        disabled={totalNominalMinutes(draft.map((d) => d.spans)) === null}
         businessId={businessId}
         timezone={timezone}
         command={{

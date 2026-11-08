@@ -19,6 +19,8 @@ import type {
 import { ScheduleSpansEditor } from "./ScheduleSpansEditor";
 import { ScheduleChangeConfirm } from "./ScheduleChangeConfirm";
 import { absenceTypes } from "../lib/scheduling-api";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { nominalMinutes } from "../lib/schedule-editor";
 
 export function ScheduleDayEditor({
   businessId,
@@ -28,6 +30,7 @@ export function ScheduleDayEditor({
   timezone,
   onSaved,
   onBusy,
+  onDirtyChange,
 }: {
   businessId: string;
   day: ScheduleDay;
@@ -36,6 +39,7 @@ export function ScheduleDayEditor({
   timezone: string;
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [mode, setMode] = useState("day"),
     [spans, setSpans] = useState(day.draft);
@@ -103,6 +107,40 @@ export function ScheduleDayEditor({
     setMode("absence");
   }
   const template = templates.find((item) => item.id === templateId);
+  const absenceChanged = block
+    ? blockType !== block.type ||
+      reason !== (block.reason ?? "") ||
+      from !== dateInZone(new Date(block.startAt), timezone) ||
+      to !== dateInZone(new Date(block.endAt), timezone) ||
+      fullDays ||
+      start !==
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: timezone,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(new Date(block.startAt)) ||
+      end !==
+        new Intl.DateTimeFormat("en-GB", {
+          timeZone: timezone,
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(new Date(block.endAt))
+    : blockType !== "VACATION" ||
+      from !== day.date ||
+      to !== day.date ||
+      !fullDays ||
+      start !== "09:00" ||
+      end !== "10:00" ||
+      !!reason;
+  useUnsavedChanges(
+    JSON.stringify(spans) !== JSON.stringify(day.draft) ||
+      mode === "resetDay" ||
+      mode === "deleteBlock" ||
+      (mode === "absence" && absenceChanged),
+    onDirtyChange,
+  );
   return (
     <Stack gap="md">
       <SegmentedControl
@@ -111,6 +149,7 @@ export function ScheduleDayEditor({
         onChange={(value) => {
           setMode(value);
           setBlock(null);
+          if (blockType === "BREAK") setBlockType("VACATION");
         }}
         data={[
           { value: "day", label: "Turnos del día" },
@@ -226,7 +265,14 @@ export function ScheduleDayEditor({
                 value={blockType}
                 allowDeselect={false}
                 disabled={busy}
-                data={absenceTypes}
+                data={absenceTypes
+                  .filter(
+                    (type) => type.value !== "BREAK" || block?.type === "BREAK",
+                  )
+                  .map((type) => ({
+                    ...type,
+                    disabled: type.value === "BREAK",
+                  }))}
                 onChange={(value) => setBlockType(value ?? "VACATION")}
               />
               <Checkbox
@@ -286,6 +332,7 @@ export function ScheduleDayEditor({
                     disabled={busy}
                     onClick={() => {
                       setBlock(null);
+                      if (blockType === "BREAK") setBlockType("VACATION");
                       setFrom(day.date);
                       setTo(day.date);
                       setReason("");
@@ -308,6 +355,7 @@ export function ScheduleDayEditor({
         </>
       )}
       <ScheduleChangeConfirm
+        disabled={mode === "day" && nominalMinutes(spans) === null}
         businessId={businessId}
         timezone={timezone}
         command={command}

@@ -1,6 +1,7 @@
 import { Button, Modal } from "@mantine/core";
 import { useState } from "react";
 import { EmployeeWeeklyBaseEditor } from "./EmployeeWeeklyBaseEditor";
+import { DiscardChangesPrompt } from "./DiscardChangesPrompt";
 
 export function EmployeeWorkingHours({
   businessId,
@@ -15,6 +16,8 @@ export function EmployeeWorkingHours({
 }) {
   const [opened, setOpened] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false),
+    [discard, setDiscard] = useState(false);
   return (
     <>
       <Button
@@ -22,7 +25,10 @@ export function EmployeeWorkingHours({
         variant="subtle"
         disabled={disabled || busy}
         aria-label={`Horario semanal de ${employeeName}`}
-        onClick={() => setOpened(true)}
+        onClick={() => {
+          setDiscard(false);
+          setOpened(true);
+        }}
       >
         Horario semanal
       </Button>
@@ -32,19 +38,34 @@ export function EmployeeWorkingHours({
         centered
         title={`Horario semanal de ${employeeName}`}
         onClose={() => {
-          if (!busy) setOpened(false);
+          if (!busy) {
+            if (dirty) setDiscard(true);
+            else setOpened(false);
+          }
         }}
         withCloseButton={!busy}
         closeOnClickOutside={!busy}
         closeOnEscape={!busy}
       >
+        {discard && (
+          <DiscardChangesPrompt
+            disabled={busy}
+            onDiscard={() => {
+              setDiscard(false);
+              setOpened(false);
+            }}
+            onContinue={() => setDiscard(false)}
+          />
+        )}
         {opened && (
           <EmployeeWeeklyBaseEditor
             key={`${businessId}:${employeeId}`}
             businessId={businessId}
             employeeId={employeeId}
             onBusy={setBusy}
+            onDirtyChange={setDirty}
             onSaved={() => {
+              setDiscard(false);
               setOpened(false);
             }}
           />

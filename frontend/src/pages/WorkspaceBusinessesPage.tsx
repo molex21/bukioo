@@ -100,7 +100,7 @@ export function WorkspaceBusinessesPage({ activeBusinessId, defaultTimezone, onB
     <form onSubmit={(event) => void submit(event)}><Stack gap="md">
       {error && <Alert color="red" icon={<CircleAlert size={18} />}>{error}</Alert>}
       <TextInput label="Nombre" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, name: value, slug: current.slug || toSlug(value) })); }} required value={form.name} />
-      <TextInput description="Minúsculas, números y guiones; será la dirección pública de la empresa. No puede terminar en guion." label="Slug" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, slug: value })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required value={form.slug} />
+      <TextInput description="Forma parte del enlace de la empresa. Usa letras minúsculas, números y guiones entre palabras." label="Dirección pública" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, slug: value })); }} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" required value={form.slug} />
       <TextInput label="Correo de contacto" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, email: value })); }} type="email" value={form.email} />
       <TextInput label="Teléfono" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, phone: value })); }} value={form.phone} />
       <TextInput description="Por ejemplo, Atlantic/Canary o Europe/Madrid." label="Zona horaria" onChange={(event) => { const value = event.currentTarget.value; setForm((current) => ({ ...current, timezone: value })); }} required value={form.timezone} />

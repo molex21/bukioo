@@ -7,6 +7,9 @@ import {
   type WeeklyBase,
   type ScheduleSpan,
 } from "../lib/scheduling-api";
+import { totalNominalMinutes } from "../lib/schedule-editor";
+import { isScheduleDate } from "../lib/scheduling-view";
+import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 import { ScheduleWeekEditor } from "./ScheduleWeekEditor";
 import { ScheduleChangeConfirm } from "./ScheduleChangeConfirm";
 const names = [
@@ -24,13 +27,15 @@ export function EmployeeWeeklyBaseEditor({
   employeeId,
   onSaved,
   onBusy,
+  onDirtyChange,
 }: {
   businessId: string;
   employeeId: string;
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
-  const [from, setFrom] = useState("");
+  const [from, setFrom] = useState<string | null>(null);
   const [data, setData] = useState<{
     key: string;
     base: WeeklyBase;
@@ -41,12 +46,18 @@ export function EmployeeWeeklyBaseEditor({
     null,
   );
   const [busy, setBusy] = useState(false);
-  const key = JSON.stringify([businessId, employeeId, from]);
+  const key = JSON.stringify([businessId, employeeId]);
   const current = data?.key === key ? data : null;
+  const effectiveFrom = from ?? current?.base.from ?? "";
+  const dirty =
+    !!current &&
+    (effectiveFrom !== current.base.from ||
+      JSON.stringify(current.week) !== JSON.stringify(current.base.week));
+  useUnsavedChanges(dirty, onDirtyChange);
   useEffect(() => {
     let active = true;
     void Promise.all([
-      schedulingApi.weeklyBase(businessId, employeeId, from),
+      schedulingApi.weeklyBase(businessId, employeeId, ""),
       schedulingApi.templates(businessId),
     ]).then(
       ([base, templates]) => {
@@ -67,28 +78,30 @@ export function EmployeeWeeklyBaseEditor({
     return () => {
       active = false;
     };
-  }, [businessId, employeeId, from, key]);
+  }, [businessId, employeeId, key]);
   if (error?.key === key) return <Alert color="red">{error.text}</Alert>;
   if (!current) return <Skeleton height={240} />;
+  const invalid =
+    totalNominalMinutes(current.week) === null ||
+    !isScheduleDate(effectiveFrom) ||
+    effectiveFrom < current.base.today;
   return (
     <Stack>
       <Text size="sm">
-        Semana de referencia que se repite desde la fecha elegida. Las
+        Este horario se repite cada semana desde la fecha elegida. Las
         rotaciones y los cambios de fechas concretas tienen prioridad. Las
         ausencias se mantienen.
       </Text>
       <TextInput
         type="date"
         label="Aplicar este horario al empleado desde"
-        description="Cambiar la fecha carga otro horario y descarta el borrador actual."
-        value={current.base.from}
+        description="Puedes cambiar la fecha sin perder los turnos que estás preparando."
+        value={effectiveFrom}
         min={current.base.today}
         disabled={busy}
-        onChange={(event) => {
-          if (event.currentTarget.value) setFrom(event.currentTarget.value);
-        }}
+        onChange={(event) => setFrom(event.currentTarget.value)}
       />
-      {current.base.nextDate && (
+      {current.base.nextDate && current.base.nextDate > effectiveFrom && (
         <Alert color="yellow">
           Se conservará el siguiente horario programado desde{" "}
           {new Date(`${current.base.nextDate}T12:00Z`).toLocaleDateString(
@@ -120,17 +133,19 @@ export function EmployeeWeeklyBaseEditor({
           )
         }
       />
-      <Alert color="blue">
-        Revisa los días seleccionados y el resumen semanal. Las horas son
-        estimadas; las pausas siempre bloquean citas, aunque cuenten como
-        trabajo.
-      </Alert>
+      {invalid && (
+        <Alert color="red">
+          Revisa la fecha y completa las horas de los turnos y sus pausas antes
+          de guardar.
+        </Alert>
+      )}
       <ScheduleChangeConfirm
+        disabled={invalid}
         businessId={businessId}
         timezone={current.base.timezone}
         command={{
           type: "weekly",
-          from: current.base.from,
+          from: effectiveFrom,
           week: current.week,
           employeeIds: [employeeId],
           expectedVersions: { [employeeId]: current.base.version },

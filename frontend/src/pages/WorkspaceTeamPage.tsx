@@ -20,6 +20,8 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { CircleAlert, Pencil, Plus, RefreshCw, UsersRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import {useSearchParams} from "react-router";
+import {updateScheduleSearch} from "../lib/scheduling-view";
 import { ApiError } from "../lib/api-client";
 import { WorkspaceEmployeeActions } from "../components/WorkspaceEmployeeActions";
 import { EmployeeWorkingHours } from "../components/EmployeeWorkingHours";
@@ -86,7 +88,9 @@ export function WorkspaceTeamPage({
   const [form, setForm] = useState<EmployeeForm>(emptyEmployee);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [view, setView] = useState<"list" | "quadrant">("list");
+  const [searchParams,setSearchParams]=useSearchParams();
+  const view=searchParams.get("teamView")==="quadrant"?"quadrant":"list";
+  const setView=(value:"list"|"quadrant")=>setSearchParams(current=>updateScheduleSearch(current,{teamView:value==="quadrant"?value:null}));
   const dark = useComputedColorScheme("light") === "dark";
   const colorContrast = employeeColorContrast(form.color, dark);
 

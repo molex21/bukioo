@@ -31,7 +31,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth/useAuth";
 import {
   staffAuth,
@@ -377,20 +377,22 @@ export function WorkspacePage() {
   const navigation = (
     <nav aria-label="Navegación de la empresa" className="workspace-nav">
       {visibleNavigationItems.map((item) => (
-        <button
+        <Link
           className={
             activeSection === item.path
               ? "workspace-nav__link workspace-nav__link--active"
               : "workspace-nav__link"
           }
           key={item.path}
-          onClick={() => navigateTo(item.path)}
+          to={`${item.path==="dashboard"?"/app":`/app/${item.path}`}?business=${selectedBusinessId}`}
+          onClick={closeDrawer}
+          aria-label={item.label}
+          aria-current={activeSection===item.path?"page":undefined}
           title={collapsed ? item.label : undefined}
-          type="button"
         >
           {item.icon}
           <span>{item.label}</span>
-        </button>
+        </Link>
       ))}
     </nav>
   );
@@ -458,7 +460,7 @@ export function WorkspacePage() {
               <div>
                 <Text fw={700}>Catálogo de servicios</Text>
                 <Text c="dimmed" size="sm">
-                  Organiza categorías, duración, precio, buffers y confirmación
+                  Organiza categorías, duración, precio, márgenes entre citas y confirmación
                   de tus servicios.
                 </Text>
               </div>
@@ -485,9 +487,9 @@ export function WorkspacePage() {
                   ?.icon
               }
             </ThemeIcon>
-            <Text fw={700}>{currentSection.title} preparada</Text>
+            <Text fw={700}>{currentSection.title}: próximamente</Text>
             <Text c="dimmed" maw={420} size="sm" ta="center">
-              El siguiente bloque conectará esta sección con los datos reales de{" "}
+              Esta sección estará disponible próximamente en{" "}
               {selectedBusiness.business.name}.
             </Text>
           </Stack>
@@ -504,7 +506,7 @@ export function WorkspacePage() {
           : "workspace-layout"
       }
     >
-      <aside className="workspace-sidebar">
+      <a className="skip-link" href="#workspace-main-content">Saltar al contenido</a><aside className="workspace-sidebar">
         <Group
           className="workspace-sidebar__top"
           justify={collapsed ? "center" : "flex-end"}
@@ -631,7 +633,7 @@ export function WorkspacePage() {
             </Menu.Dropdown>
           </Menu>
         </header>
-        <main className="workspace-content">{content}</main>
+        <main id="workspace-main-content" tabIndex={-1} className="workspace-content">{content}</main>
       </div>
       <Drawer
         classNames={{

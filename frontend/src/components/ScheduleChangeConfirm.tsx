@@ -17,6 +17,7 @@ export function ScheduleChangeConfirm({
   onSaved,
   onBusy,
   reviewBeforeSave = false,
+  disabled = false,
 }: {
   businessId: string;
   timezone: string;
@@ -24,6 +25,7 @@ export function ScheduleChangeConfirm({
   onSaved: () => void;
   onBusy: (busy: boolean) => void;
   reviewBeforeSave?: boolean;
+  disabled?: boolean;
 }) {
   const [checked, setChecked] = useState<{
     key: string;
@@ -42,7 +44,7 @@ export function ScheduleChangeConfirm({
   const preview = checked?.key === key ? checked.result : null;
   const restoring = command.type === "resetDay";
   useEffect(() => {
-    if (!restoring && !reviewBeforeSave) return;
+    if (disabled || (!restoring && !reviewBeforeSave)) return;
     let active = true;
     void schedulingApi.change(businessId, JSON.parse(key), true).then(
       (result) => {
@@ -58,10 +60,11 @@ export function ScheduleChangeConfirm({
     return () => {
       active = false;
     };
-  }, [businessId, key, restoring, reviewBeforeSave]);
+  }, [businessId, key, restoring, reviewBeforeSave, disabled]);
   async function run() {
     if (
       lock.current ||
+      disabled ||
       uncertain ||
       (restoring && !preview?.restoredDay) ||
       (reviewBeforeSave && !preview)
@@ -257,6 +260,7 @@ export function ScheduleChangeConfirm({
         <Button
           loading={saving}
           disabled={
+            disabled ||
             uncertain ||
             (restoring && !preview?.restoredDay) ||
             (reviewBeforeSave && !preview)
